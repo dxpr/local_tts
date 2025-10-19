@@ -1,0 +1,8 @@
+player:
+  version: 1.x
+  js:
+    js/ai-tts-player.js: {}
+  dependencies:
+    - core/drupal
+    - core/drupalSettings
+    - core/once

@@ -1,0 +1,7 @@
+services:
+  ai_tts.commands:
+    class: \Drupal\ai_tts\Drush\Commands\AiTtsCommands
+    arguments:
+      - '@ai_tts.tts_service'
+    tags:
+      - { name: drush.command }

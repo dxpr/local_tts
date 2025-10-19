@@ -1,0 +1,4 @@
+administer ai tts settings:
+  title: 'Administer AI TTS settings'
+  description: 'Configure AI text-to-speech module settings.'
+  restrict access: true

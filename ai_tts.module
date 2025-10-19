@@ -1,0 +1,28 @@
+<?php
+
+/**
+ * @file
+ * AI Text-to-Speech module.
+ */
+
+use Drupal\Core\Routing\RouteMatchInterface;
+
+
+/**
+ * Implements hook_help().
+ */
+function ai_tts_help($route_name, RouteMatchInterface $route_match) {
+  switch ($route_name) {
+    case 'help.page.ai_tts':
+      $output = '';
+      $output .= '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t('The AI Text-to-Speech module provides high-quality AI-powered text-to-speech functionality using the Kokoro TTS engine (Rust implementation).') . '</p>';
+      $output .= '<h3>' . t('Requirements') . '</h3>';
+      $output .= '<p>' . t('This module requires the Kokoro binary (koko) to be installed on the server. Download from: <a href="@url">@url</a>', [
+        '@url' => 'https://github.com/lucasjinreal/Kokoros',
+      ]) . '</p>';
+      $output .= '<h3>' . t('Configuration') . '</h3>';
+      $output .= '<p>' . t('Configure the module at Administration > Configuration > Media > AI TTS.') . '</p>';
+      return $output;
+  }
+}

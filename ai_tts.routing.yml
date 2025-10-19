@@ -1,0 +1,16 @@
+ai_tts.settings:
+  path: '/admin/config/media/ai-tts'
+  defaults:
+    _form: '\Drupal\ai_tts\Form\AiTtsSettingsForm'
+    _title: 'AI TTS Settings'
+  requirements:
+    _permission: 'administer ai tts settings'
+
+ai_tts.generate:
+  path: '/ai-tts/generate'
+  defaults:
+    _controller: '\Drupal\ai_tts\Controller\TtsController::generate'
+  requirements:
+    _permission: 'access content'
+  options:
+    no_cache: TRUE

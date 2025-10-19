@@ -1,0 +1,4 @@
+services:
+  ai_tts.tts_service:
+    class: Drupal\ai_tts\TtsService
+    arguments: ['@config.factory', '@file_system', '@logger.factory']

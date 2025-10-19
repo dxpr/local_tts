@@ -1,0 +1,236 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the AI TTS module.
+ */
+
+use Drupal\Core\File\FileSystemInterface;
+
+/**
+ * Implements hook_requirements().
+ */
+function ai_tts_requirements($phase) {
+  $requirements = [];
+
+  if ($phase === 'runtime') {
+    $config = \Drupal::config('ai_tts.settings');
+    $file_system = \Drupal::service('file_system');
+
+    // Check 1: Kokoro Binary Status.
+    $binary_path = $config->get('koko_binary_path');
+
+    if (empty($binary_path)) {
+      $requirements['ai_tts_binary'] = [
+        'title' => t('AI TTS: Kokoro Binary'),
+        'value' => t('Not configured'),
+        'description' => t('The Kokoro binary path has not been configured. Visit the <a href="@settings">AI TTS settings page</a> to configure it.', [
+          '@settings' => \Drupal\Core\Url::fromRoute('ai_tts.settings')->toString(),
+        ]),
+        'severity' => REQUIREMENT_ERROR,
+      ];
+    }
+    elseif (!file_exists($binary_path)) {
+      $requirements['ai_tts_binary'] = [
+        'title' => t('AI TTS: Kokoro Binary'),
+        'value' => t('Not found'),
+        'description' => t('The Kokoro binary was not found at: @path. Please install the binary or update the path in the <a href="@settings">AI TTS settings</a>.', [
+          '@path' => $binary_path,
+          '@settings' => \Drupal\Core\Url::fromRoute('ai_tts.settings')->toString(),
+        ]),
+        'severity' => REQUIREMENT_ERROR,
+      ];
+    }
+    elseif (!is_executable($binary_path)) {
+      $requirements['ai_tts_binary'] = [
+        'title' => t('AI TTS: Kokoro Binary'),
+        'value' => t('Not executable'),
+        'description' => t('The Kokoro binary at @path is not executable. Run: <code>chmod +x @path</code>', [
+          '@path' => $binary_path,
+        ]),
+        'severity' => REQUIREMENT_ERROR,
+      ];
+    }
+    else {
+      $requirements['ai_tts_binary'] = [
+        'title' => t('AI TTS: Kokoro Binary'),
+        'value' => t('Installed and executable'),
+        'description' => t('Binary location: @path', ['@path' => $binary_path]),
+        'severity' => REQUIREMENT_OK,
+      ];
+    }
+
+    // Check 2: Audio Cache Directory Status.
+    $audio_directory = $config->get('audio_directory') ?: 'public://ai-tts';
+    $real_path = $file_system->realpath($audio_directory);
+
+    if (!$real_path) {
+      // Directory doesn't exist - try to create it.
+      if ($file_system->prepareDirectory($audio_directory, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS)) {
+        $real_path = $file_system->realpath($audio_directory);
+        $requirements['ai_tts_cache_dir'] = [
+          'title' => t('AI TTS: Cache Directory'),
+          'value' => t('Created successfully'),
+          'description' => t('Directory: @path', ['@path' => $real_path]),
+          'severity' => REQUIREMENT_OK,
+        ];
+      }
+      else {
+        $requirements['ai_tts_cache_dir'] = [
+          'title' => t('AI TTS: Cache Directory'),
+          'value' => t('Cannot be created'),
+          'description' => t('Failed to create directory at: @uri. Check web server permissions.', [
+            '@uri' => $audio_directory,
+          ]),
+          'severity' => REQUIREMENT_ERROR,
+        ];
+      }
+    }
+    elseif (!is_writable($real_path)) {
+      $requirements['ai_tts_cache_dir'] = [
+        'title' => t('AI TTS: Cache Directory'),
+        'value' => t('Not writable'),
+        'description' => t('Directory exists at @path but is not writable. Run: <code>chmod 755 @path</code>', [
+          '@path' => $real_path,
+        ]),
+        'severity' => REQUIREMENT_ERROR,
+      ];
+    }
+    else {
+      $perms = substr(sprintf('%o', fileperms($real_path)), -4);
+      $requirements['ai_tts_cache_dir'] = [
+        'title' => t('AI TTS: Cache Directory'),
+        'value' => t('Writable'),
+        'description' => t('Directory: @path<br>Permissions: @perms', [
+          '@path' => $real_path,
+          '@perms' => $perms,
+        ]),
+        'severity' => REQUIREMENT_OK,
+      ];
+    }
+
+    // Check 3: Audio Cache Size.
+    if ($real_path && is_dir($real_path)) {
+      $cache_size = _ai_tts_get_directory_size($real_path);
+      $file_count = _ai_tts_count_files($real_path);
+
+      if ($file_count === 0) {
+        $requirements['ai_tts_cache_size'] = [
+          'title' => t('AI TTS: Cache Size'),
+          'value' => t('Empty'),
+          'description' => t('No cached audio files. Audio will be generated on first use.'),
+          'severity' => REQUIREMENT_INFO,
+        ];
+      }
+      else {
+        $size_formatted = format_size($cache_size);
+
+        // Warning thresholds.
+        $severity = REQUIREMENT_OK;
+        $warning_message = '';
+
+        // Warn if cache is over 100MB.
+        if ($cache_size > 100 * 1024 * 1024) {
+          $severity = REQUIREMENT_WARNING;
+          $warning_message = t('<br><strong>Warning:</strong> Cache is large. Consider running <code>drush ai-tts:cache-clear</code> to free up disk space.');
+        }
+
+        $requirements['ai_tts_cache_size'] = [
+          'title' => t('AI TTS: Cache Size'),
+          'value' => $size_formatted,
+          'description' => t('@count cached audio files<br>Total size: @size@warning', [
+            '@count' => $file_count,
+            '@size' => $size_formatted,
+            '@warning' => $warning_message,
+          ]),
+          'severity' => $severity,
+        ];
+      }
+    }
+    else {
+      $requirements['ai_tts_cache_size'] = [
+        'title' => t('AI TTS: Cache Size'),
+        'value' => t('Unknown'),
+        'description' => t('Cache directory not accessible.'),
+        'severity' => REQUIREMENT_WARNING,
+      ];
+    }
+  }
+
+  return $requirements;
+}
+
+/**
+ * Calculate the total size of a directory recursively.
+ *
+ * @param string $path
+ *   The directory path.
+ *
+ * @return int
+ *   The total size in bytes.
+ */
+function _ai_tts_get_directory_size($path) {
+  $size = 0;
+
+  if (is_dir($path)) {
+    $files = new RecursiveIteratorIterator(
+      new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS),
+      RecursiveIteratorIterator::LEAVES_ONLY
+    );
+
+    foreach ($files as $file) {
+      if ($file->isFile()) {
+        $size += $file->getSize();
+      }
+    }
+  }
+
+  return $size;
+}
+
+/**
+ * Count the number of files in a directory.
+ *
+ * @param string $path
+ *   The directory path.
+ *
+ * @return int
+ *   The number of files.
+ */
+function _ai_tts_count_files($path) {
+  $count = 0;
+
+  if (is_dir($path)) {
+    $files = new RecursiveIteratorIterator(
+      new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS),
+      RecursiveIteratorIterator::LEAVES_ONLY
+    );
+
+    foreach ($files as $file) {
+      if ($file->isFile() && $file->getExtension() === 'wav') {
+        $count++;
+      }
+    }
+  }
+
+  return $count;
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function ai_tts_uninstall() {
+  // Optionally clean up the audio cache on uninstall.
+  $config = \Drupal::config('ai_tts.settings');
+  $audio_directory = $config->get('audio_directory') ?: 'public://ai-tts';
+
+  try {
+    \Drupal::service('file_system')->deleteRecursive($audio_directory);
+    \Drupal::messenger()->addStatus(t('AI TTS audio cache has been deleted.'));
+  }
+  catch (\Exception $e) {
+    \Drupal::logger('ai_tts')->error('Failed to delete audio cache during uninstall: @message', [
+      '@message' => $e->getMessage(),
+    ]);
+  }
+}

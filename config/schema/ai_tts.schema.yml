@@ -1,0 +1,19 @@
+ai_tts.settings:
+  type: config_object
+  label: 'AI TTS settings'
+  mapping:
+    koko_binary_path:
+      type: string
+      label: 'Path to koko binary'
+    default_voice:
+      type: string
+      label: 'Default voice'
+    default_speed:
+      type: float
+      label: 'Default speech speed'
+    cache_audio:
+      type: boolean
+      label: 'Cache generated audio files'
+    audio_directory:
+      type: string
+      label: 'Audio cache directory'

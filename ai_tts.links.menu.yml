@@ -1,0 +1,6 @@
+ai_tts.settings:
+  title: 'AI TTS'
+  route_name: ai_tts.settings
+  description: 'Configure AI text-to-speech settings.'
+  parent: system.admin_config_media
+  weight: 10
