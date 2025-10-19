@@ -11,6 +11,9 @@ ai_tts.settings:
     data_path:
       type: string
       label: 'Path to Kokoro voices data file'
+    espeak_data_path:
+      type: string
+      label: 'Path to espeak-ng-data directory'
     default_voice:
       type: string
       label: 'Default voice'

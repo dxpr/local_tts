@@ -1,6 +1,7 @@
-koko_binary_path: '/Users/jur/www/dxpr-marketing-cms-2024-12/koko'
-model_path: '~/.cache/kokoros/checkpoints/kokoro-v1.0.onnx'
-data_path: '~/.cache/kokoros/data/voices-v1.0.bin'
+koko_binary_path: '/usr/local/bin/koko'
+model_path: '/usr/local/share/kokoro/checkpoints/kokoro-v1.0.onnx'
+data_path: '/usr/local/share/kokoro/data/voices-v1.0.bin'
+espeak_data_path: '/usr/share/espeak-ng-data'
 default_voice: 'af_sky'
 default_speed: '1'
 cache_audio: true
