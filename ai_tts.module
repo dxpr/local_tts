@@ -82,12 +82,9 @@ function ai_tts_entity_delete(EntityInterface $entity) {
  * Clean up audio files where source content has changed.
  */
 function _ai_tts_cleanup_stale_content() {
-  $config = \Drupal::config('ai_tts.settings');
-  $audio_dir = $config->get('audio_directory') ?: 'public://ai-tts';
-  $file_system = \Drupal::service('file_system');
-  $directory = $file_system->realpath($audio_dir);
+  $directory = _ai_tts_get_audio_directory();
 
-  if (!$directory || !is_dir($directory)) {
+  if (!$directory) {
     return;
   }
 
@@ -147,11 +144,9 @@ function _ai_tts_cleanup_stale_content() {
 function _ai_tts_enforce_size_limit() {
   $config = \Drupal::config('ai_tts.settings');
   $max_size = $config->get('cache_max_size') ?: 1073741824;
-  $audio_dir = $config->get('audio_directory') ?: 'public://ai-tts';
-  $file_system = \Drupal::service('file_system');
-  $directory = $file_system->realpath($audio_dir);
+  $directory = _ai_tts_get_audio_directory();
 
-  if (!$directory || !is_dir($directory)) {
+  if (!$directory) {
     return;
   }
 
@@ -208,6 +203,25 @@ function _ai_tts_enforce_size_limit() {
       '@limit' => format_size($max_size),
     ]);
   }
+}
+
+/**
+ * Get the real path to the audio cache directory.
+ *
+ * @return string|null
+ *   Real filesystem path to the audio directory, or NULL if not accessible.
+ */
+function _ai_tts_get_audio_directory() {
+  $config = \Drupal::config('ai_tts.settings');
+  $audio_dir = $config->get('audio_directory') ?: 'public://ai-tts';
+  $file_system = \Drupal::service('file_system');
+  $directory = $file_system->realpath($audio_dir);
+
+  if (!$directory || !is_dir($directory)) {
+    return NULL;
+  }
+
+  return $directory;
 }
 
 /**

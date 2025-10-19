@@ -2,6 +2,8 @@
 
 namespace Drupal\ai_tts\Controller;
 
+use Drupal\ai_tts\Exception\TtsServiceUnavailableException;
+use Drupal\ai_tts\Exception\TtsTimeoutException;
 use Drupal\ai_tts\TtsService;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\File\FileUrlGeneratorInterface;
@@ -106,14 +108,6 @@ class TtsController extends ControllerBase {
    *
    * @return \Symfony\Component\HttpFoundation\JsonResponse|\Symfony\Component\HttpFoundation\BinaryFileResponse
    *   JSON response with file URL or binary audio response.
-   *
-   *   HTTP Status Codes:
-   *   200 - Success
-   *   400 - Bad Request (invalid parameters)
-   *   408 - Request Timeout (generation timeout)
-   *   429 - Too Many Requests (rate limit exceeded)
-   *   500 - Internal Server Error (unexpected error)
-   *   503 - Service Unavailable (binary not found, file system issues)
    */
   public function generate(Request $request) {
     $text = $request->request->get('text') ?: $request->query->get('text');
@@ -155,45 +149,32 @@ class TtsController extends ControllerBase {
       $audio_uri = $this->ttsService->generateSpeech($text, $options);
     }
     catch (\InvalidArgumentException $e) {
-      // HTTP 400: Bad Request - Validation errors.
       return new JsonResponse([
         'error' => 'Bad Request',
         'message' => $e->getMessage(),
       ], 400);
     }
+    catch (TtsTimeoutException $e) {
+      $this->getLogger('ai_tts')->warning('TTS generation timeout: @message', [
+        '@message' => $e->getMessage(),
+      ]);
+      return new JsonResponse([
+        'error' => 'Request Timeout',
+        'message' => 'Audio generation timed out. Try with shorter text.',
+      ], 408);
+    }
+    catch (TtsServiceUnavailableException $e) {
+      $this->getLogger('ai_tts')->error('TTS service unavailable: @message', [
+        '@message' => $e->getMessage(),
+      ]);
+      return new JsonResponse([
+        'error' => 'Service Unavailable',
+        'message' => 'TTS service is temporarily unavailable. Please contact the administrator.',
+      ], 503);
+    }
     catch (\RuntimeException $e) {
-      // Check for specific error conditions based on message.
-      $message = $e->getMessage();
-
-      // HTTP 408: Request Timeout - Generation timeout.
-      if (stripos($message, 'timeout') !== FALSE || stripos($message, 'timed out') !== FALSE) {
-        $this->getLogger('ai_tts')->warning('TTS generation timeout: @message', [
-          '@message' => $message,
-        ]);
-        return new JsonResponse([
-          'error' => 'Request Timeout',
-          'message' => 'Audio generation timed out. Try with shorter text.',
-        ], 408);
-      }
-
-      // HTTP 503: Service Unavailable - Binary or file system issues.
-      if (stripos($message, 'binary') !== FALSE ||
-          stripos($message, 'not found') !== FALSE ||
-          stripos($message, 'not executable') !== FALSE ||
-          stripos($message, 'file system') !== FALSE ||
-          stripos($message, 'directory') !== FALSE) {
-        $this->getLogger('ai_tts')->error('TTS service unavailable: @message', [
-          '@message' => $message,
-        ]);
-        return new JsonResponse([
-          'error' => 'Service Unavailable',
-          'message' => 'TTS service is temporarily unavailable. Please contact the administrator.',
-        ], 503);
-      }
-
-      // HTTP 500: Internal Server Error - Other runtime errors.
       $this->getLogger('ai_tts')->error('TTS generation runtime error: @message', [
-        '@message' => $message,
+        '@message' => $e->getMessage(),
       ]);
       return new JsonResponse([
         'error' => 'Internal Server Error',
@@ -201,7 +182,6 @@ class TtsController extends ControllerBase {
       ], 500);
     }
     catch (\Exception $e) {
-      // HTTP 500: Internal Server Error - Unexpected errors.
       $this->getLogger('ai_tts')->error('TTS generation unexpected error: @message', [
         '@message' => $e->getMessage(),
       ]);
@@ -231,6 +211,16 @@ class TtsController extends ControllerBase {
   }
 
   /**
+   * Get the state key for rate limiting the current user.
+   *
+   * @return string
+   *   The state key for tracking rate limits.
+   */
+  protected function getRateLimitStateKey() {
+    return 'ai_tts.rate_limit.' . $this->currentUser->id();
+  }
+
+  /**
    * Check if current user is within rate limits.
    *
    * @return bool
@@ -245,7 +235,7 @@ class TtsController extends ControllerBase {
 
     $threshold = (int) ($config->get('rate_limit_threshold') ?? 20);
 
-    $state_key = 'ai_tts.rate_limit.' . $this->currentUser->id();
+    $state_key = $this->getRateLimitStateKey();
 
     $attempts = $this->state->get($state_key, []);
 
@@ -274,7 +264,7 @@ class TtsController extends ControllerBase {
    *   Seconds until the user can make another request.
    */
   protected function getRetryAfter() {
-    $state_key = 'ai_tts.rate_limit.' . $this->currentUser->id();
+    $state_key = $this->getRateLimitStateKey();
 
     $attempts = $this->state->get($state_key, []);
 

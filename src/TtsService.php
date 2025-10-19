@@ -2,6 +2,8 @@
 
 namespace Drupal\ai_tts;
 
+use Drupal\ai_tts\Exception\TtsServiceUnavailableException;
+use Drupal\ai_tts\Exception\TtsTimeoutException;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
@@ -138,11 +140,11 @@ class TtsService {
     if (!$directory) {
       if (!$this->fileSystem->prepareDirectory($audio_dir, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS)) {
         $this->logger->error('Failed to create audio directory: @dir', ['@dir' => $audio_dir]);
-        throw new \RuntimeException(sprintf('Failed to create audio directory: %s', $audio_dir));
+        throw new TtsServiceUnavailableException(sprintf('Failed to create audio directory: %s', $audio_dir));
       }
       $directory = $this->fileSystem->realpath($audio_dir);
       if (!$directory) {
-        throw new \RuntimeException(sprintf('Audio directory path could not be resolved: %s', $audio_dir));
+        throw new TtsServiceUnavailableException(sprintf('Audio directory path could not be resolved: %s', $audio_dir));
       }
     }
 
@@ -151,17 +153,17 @@ class TtsService {
 
     if (!file_exists($binary_path)) {
       $this->logger->error('Koko binary not found at: @path', ['@path' => $binary_path]);
-      throw new \RuntimeException(sprintf('TTS binary not found at: %s', $binary_path));
+      throw new TtsServiceUnavailableException(sprintf('TTS binary not found at: %s', $binary_path));
     }
 
     if (!is_executable($binary_path)) {
       $this->logger->error('Koko binary not executable at: @path', ['@path' => $binary_path]);
-      throw new \RuntimeException(sprintf('TTS binary not executable at: %s', $binary_path));
+      throw new TtsServiceUnavailableException(sprintf('TTS binary not executable at: %s', $binary_path));
     }
 
-    // Get model paths from configuration with fallback defaults.
-    $model_path = $config->get('model_path') ?: '~/.cache/kokoros/checkpoints/kokoro-v1.0.onnx';
-    $data_path = $config->get('data_path') ?: '~/.cache/kokoros/data/voices-v1.0.bin';
+    // Get model paths from configuration.
+    $model_path = $config->get('model_path');
+    $data_path = $config->get('data_path');
 
     // Expand tilde in paths.
     $model_path = $this->expandPath($model_path);
@@ -170,11 +172,11 @@ class TtsService {
     // Validate model files exist.
     if (!file_exists($model_path)) {
       $this->logger->error('Model file not found at: @path', ['@path' => $model_path]);
-      throw new \RuntimeException(sprintf('Model file not found at: %s', $model_path));
+      throw new TtsServiceUnavailableException(sprintf('Model file not found at: %s', $model_path));
     }
     if (!file_exists($data_path)) {
       $this->logger->error('Data file not found at: @path', ['@path' => $data_path]);
-      throw new \RuntimeException(sprintf('Data file not found at: %s', $data_path));
+      throw new TtsServiceUnavailableException(sprintf('Data file not found at: %s', $data_path));
     }
 
     $command = sprintf(
@@ -198,7 +200,7 @@ class TtsService {
     if ($result['return_code'] !== 0) {
       if ($result['timeout']) {
         $this->logger->error('Koko TTS timed out after @timeout seconds', ['@timeout' => $timeout]);
-        throw new \RuntimeException(sprintf('TTS generation timed out after %d seconds', $timeout));
+        throw new TtsTimeoutException(sprintf('TTS generation timed out after %d seconds', $timeout));
       }
       $this->logger->error('Koko TTS failed with return code @code. Output: @output', [
         '@code' => $result['return_code'],
@@ -209,7 +211,7 @@ class TtsService {
 
     if (!file_exists($output_file)) {
       $this->logger->error('Audio file was not created at: @path', ['@path' => $output_file]);
-      throw new \RuntimeException(sprintf('TTS audio file was not created at: %s', $output_file));
+      throw new TtsServiceUnavailableException(sprintf('TTS audio file was not created at: %s', $output_file));
     }
 
     $uri = $audio_dir . '/' . $cache_key . '.wav';
