@@ -216,30 +216,33 @@ class AiTtsTestForm extends FormBase {
       else {
         $form['error'] = [
           '#markup' => '<div class="messages messages--error">' .
-          $this->t('Failed to generate audio. Check the error logs for details.') . '</div>',
+          $this->t('Unable to generate audio. Please try again or contact support if this continues.') . '</div>',
         ];
       }
     }
     catch (\InvalidArgumentException $e) {
+      // Validation errors - user can fix these.
       $form['error'] = [
         '#markup' => '<div class="messages messages--error">' .
-        $this->t('Validation error: @message', [
+        $this->t('Please check your input: @message', [
           '@message' => $e->getMessage(),
         ]) . '</div>',
       ];
     }
     catch (\RuntimeException $e) {
+      // Service errors - not user's fault, server-side issues.
       $form['error'] = [
         '#markup' => '<div class="messages messages--error">' .
-        $this->t('Service error: @message', [
+        $this->t('Something went wrong: @message', [
           '@message' => $e->getMessage(),
         ]) . '</div>',
       ];
     }
     catch (\Exception $e) {
+      // Unexpected errors - provide technical detail but reassure user.
       $form['error'] = [
         '#markup' => '<div class="messages messages--error">' .
-        $this->t('Unexpected error: @message', [
+        $this->t('An unexpected error occurred: @message', [
           '@message' => $e->getMessage(),
         ]) . '</div>',
       ];

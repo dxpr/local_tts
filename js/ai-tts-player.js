@@ -96,11 +96,25 @@
             body: formData
           })
             .then(response => {
-              // Parse JSON response regardless of status.
+              // Handle timeout and server errors that may not return JSON.
+              if (response.status === 504) {
+                return {
+                  ok: false,
+                  status: 504,
+                  data: {}
+                };
+              }
+
+              // Parse JSON response for other status codes.
               return response.json().then(data => ({
                 ok: response.ok,
                 status: response.status,
                 data: data
+              })).catch(() => ({
+                // If JSON parsing fails, return response status anyway.
+                ok: response.ok,
+                status: response.status,
+                data: {}
               }));
             })
             .then(result => {
@@ -108,30 +122,37 @@
                 currentAudioUrl = result.data.audio_url;
                 playSpeech(result.data.audio_url);
               } else {
-                // Handle error responses with proper messages.
-                let errorMessage = result.data.message || 'Failed to generate speech';
+                // Handle error responses with user-friendly messages.
+                // Following Nielsen Norman Group UX best practices:
+                // - Be specific about what went wrong
+                // - Don't blame the user
+                // - Provide actionable guidance
+                let errorMessage = result.data.message || Drupal.t('Unable to generate audio');
 
-                // Provide user-friendly messages based on HTTP status code.
+                // Provide context-appropriate messages based on HTTP status code.
                 if (result.status === 400) {
-                  // Bad Request - validation errors.
-                  errorMessage = result.data.message || Drupal.t('Invalid request parameters');
+                  // Bad Request - validation errors (user can fix).
+                  errorMessage = result.data.message || Drupal.t('Please check your text and try again');
                 } else if (result.status === 408) {
-                  // Request Timeout.
-                  errorMessage = Drupal.t('Generation took too long. Try with shorter text.');
+                  // Request Timeout (server-side, during processing).
+                  errorMessage = Drupal.t('Audio generation is taking longer than expected. Please try with shorter text.');
                 } else if (result.status === 429) {
-                  // Too Many Requests - rate limiting.
+                  // Too Many Requests - rate limiting (not user's fault, temporary).
                   let retryMsg = '';
                   if (result.data.retry_after) {
                     const minutes = Math.ceil(result.data.retry_after / 60);
-                    retryMsg = Drupal.t(' Try again in @minutes minutes.', {'@minutes': minutes});
+                    retryMsg = Drupal.t(' Please try again in @minutes minutes.', {'@minutes': minutes});
                   }
-                  errorMessage = Drupal.t('Rate limit exceeded.') + retryMsg;
+                  errorMessage = Drupal.t('Too many requests at once.') + retryMsg;
                 } else if (result.status === 500) {
-                  // Internal Server Error.
-                  errorMessage = Drupal.t('Server error. Please try again later.');
+                  // Internal Server Error (not user's fault).
+                  errorMessage = Drupal.t('Something went wrong on our end. Please try again in a few moments.');
                 } else if (result.status === 503) {
-                  // Service Unavailable.
-                  errorMessage = Drupal.t('Service temporarily unavailable. Please contact support.');
+                  // Service Unavailable (not user's fault, may need support).
+                  errorMessage = Drupal.t('The service is temporarily unavailable. Please try again later or contact support if this continues.');
+                } else if (result.status === 504) {
+                  // Gateway Timeout (server taking too long, not network issue).
+                  errorMessage = Drupal.t('The server is taking too long to process your request. Please try with shorter text or contact support.');
                 }
 
                 updateStatus(errorMessage, 'error');
@@ -141,8 +162,9 @@
               }
             })
             .catch(error => {
-              // Network errors or unexpected failures.
-              updateStatus(Drupal.t('Network error. Please check your connection.'), 'error');
+              // Actual network errors (user's connection or browser issues).
+              // Only reaches here if fetch itself fails (CORS, DNS, no internet, etc.).
+              updateStatus(Drupal.t('Unable to reach the server. Please check your internet connection and try again.'), 'error');
               playButton.disabled = false;
               playButton.classList.remove('loading');
               updateButtonStates();

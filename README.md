@@ -36,6 +36,100 @@ section below).
 
 ## Installation
 
+### File Placement and Security
+
+For production environments, follow these best practices for file
+placement, ownership, and permissions:
+
+**Production (Recommended): System-wide installation**
+
+Install files outside your web root for maximum security:
+
+```bash
+# Download and install the Kokoro binary
+sudo curl -L -o /usr/local/bin/koko \
+  https://github.com/lucasjinreal/Kokoros/releases/download/v1.0/koko-linux-x64
+sudo chmod 755 /usr/local/bin/koko
+
+# Create directory for model and data files
+sudo mkdir -p /usr/local/share/kokoro/checkpoints
+sudo mkdir -p /usr/local/share/kokoro/data
+
+# Download model and data files (replace URLs with actual releases)
+sudo curl -L -o /usr/local/share/kokoro/checkpoints/kokoro-v1.0.onnx \
+  https://github.com/lucasjinreal/Kokoros/releases/download/v1.0/kokoro-v1.0.onnx
+sudo curl -L -o /usr/local/share/kokoro/data/voices-v1.0.bin \
+  https://github.com/lucasjinreal/Kokoros/releases/download/v1.0/voices-v1.0.bin
+
+# Set proper permissions
+sudo chmod 644 /usr/local/share/kokoro/checkpoints/kokoro-v1.0.onnx
+sudo chmod 644 /usr/local/share/kokoro/data/voices-v1.0.bin
+sudo chown root:root /usr/local/bin/koko
+sudo chown -R root:root /usr/local/share/kokoro
+```
+
+Configure in Drupal:
+- Binary path: `/usr/local/bin/koko`
+- Model file: `/usr/local/share/kokoro/checkpoints/kokoro-v1.0.onnx`
+- Data file: `/usr/local/share/kokoro/data/voices-v1.0.bin`
+
+**Development: Drupal libraries directory**
+
+For development environments, use the libraries directory:
+
+```bash
+# Create libraries directory structure
+mkdir -p ../libraries/kokoro/bin
+mkdir -p ../libraries/kokoro/checkpoints
+mkdir -p ../libraries/kokoro/data
+
+# Download binary and make executable
+curl -L -o ../libraries/kokoro/bin/koko \
+  https://github.com/lucasjinreal/Kokoros/releases/download/v1.0/koko-linux-x64
+chmod 755 ../libraries/kokoro/bin/koko
+
+# Download model and data files
+curl -L -o ../libraries/kokoro/checkpoints/kokoro-v1.0.onnx \
+  https://github.com/lucasjinreal/Kokoros/releases/download/v1.0/kokoro-v1.0.onnx
+curl -L -o ../libraries/kokoro/data/voices-v1.0.bin \
+  https://github.com/lucasjinreal/Kokoros/releases/download/v1.0/voices-v1.0.bin
+
+# Set ownership (replace 'myuser' with your username)
+chown -R myuser:www-data ../libraries/kokoro
+chmod 644 ../libraries/kokoro/checkpoints/kokoro-v1.0.onnx
+chmod 644 ../libraries/kokoro/data/voices-v1.0.bin
+```
+
+Configure in Drupal:
+- Binary path: `../libraries/kokoro/bin/koko`
+- Model file: `../libraries/kokoro/checkpoints/kokoro-v1.0.onnx`
+- Data file: `../libraries/kokoro/data/voices-v1.0.bin`
+
+**Testing: Module directory (least secure)**
+
+For quick testing only (not recommended for production):
+
+```bash
+cd web/modules/custom/ai_tts
+composer run download-binary
+```
+
+Configure in Drupal:
+- Binary path: `modules/custom/ai_tts/bin/koko`
+- Model file: `~/.cache/kokoros/checkpoints/kokoro-v1.0.onnx`
+- Data file: `~/.cache/kokoros/data/voices-v1.0.bin`
+
+**Important Security Notes:**
+
+- **Never** store these files in `sites/default/files/` - that
+  directory is for user uploads, not application resources
+- Binary files must be executable (755 permissions)
+- Model and data files should be readable (644) but not writable by
+  the web server
+- For production, files should be owned by root or your deployment
+  user, with group www-data
+- The web server only needs read access, never write access
+
 ### Quick Start (Automated)
 
 **Step 1: Install the module**
@@ -46,28 +140,17 @@ cd web/modules/custom/ai_tts
 composer install
 ```
 
-Or if already part of your project, Composer will run the setup automatically.
+Or if already part of your project, Composer will run the setup
+automatically.
 
 **Step 2: Install the Kokoro binary**
 
-Choose one of these automated options:
+See the "File Placement and Security" section above for recommended
+installation methods. For quick testing, you can use:
 
-**Option A - Download pre-built binary (Recommended - fastest)**
 ```bash
 cd web/modules/custom/ai_tts
 composer run download-binary
-```
-
-**Option B - Build from source (Requires Rust toolchain)**
-```bash
-cd web/modules/custom/ai_tts
-composer run build-binary
-```
-
-**Option C - Use existing system binary**
-```bash
-cd web/modules/custom/ai_tts
-ln -s /usr/local/bin/koko bin/koko
 ```
 
 **Step 3: Enable the module**
@@ -77,7 +160,8 @@ drush en ai_tts -y
 
 **Step 4: Configure the module**
 - Go to: Administration > Configuration > Media > AI TTS
-- Set the binary path to: `modules/custom/ai_tts/bin/koko` (or your custom path)
+- Set file paths according to the "File Placement and Security"
+  section above
 - Choose default voice and speed
 - Configure caching options
 

@@ -367,6 +367,12 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
 
     if ($config['show_speed_control']) {
       $default_speed = $global_config->get('default_speed') ?: '1';
+      // Normalize the speed value to match select options.
+      $default_speed = (string) $default_speed;
+      $available_speeds = ['0.8', '1', '1.2', '1.5', '2'];
+      if (!in_array($default_speed, $available_speeds, TRUE)) {
+        $default_speed = '1';
+      }
       $build['settings']['speed_control'] = [
         '#type' => 'select',
         '#title' => $this->t('Speed'),

@@ -62,14 +62,47 @@ class AiTtsSettingsForm extends ConfigFormBase {
     $form['paths'] = [
       '#type' => 'details',
       '#title' => $this->t('File Paths'),
-      '#description' => $this->t('Paths to Kokoro binary, model, and voice data files. Use <code>~</code> for home directory.'),
       '#open' => TRUE,
+    ];
+
+    $form['paths']['help'] = [
+      '#type' => 'item',
+      '#markup' => $this->t('<p><strong>Where to install files:</strong> For security and best practices, install files outside your web root or in system directories. Use <code>~</code> for home directory expansion.</p>
+<details>
+<summary>Recommended locations (click to expand)</summary>
+<ul>
+<li><strong>Production (Recommended):</strong> System-wide installation
+  <ul>
+    <li>Binary: <code>/usr/local/bin/koko</code></li>
+    <li>Model: <code>/usr/local/share/kokoro/checkpoints/kokoro-v1.0.onnx</code></li>
+    <li>Data: <code>/usr/local/share/kokoro/data/voices-v1.0.bin</code></li>
+    <li>Permissions: Binary 755, model/data 644, owned by root or deployment user</li>
+  </ul>
+</li>
+<li><strong>Development:</strong> Drupal libraries directory
+  <ul>
+    <li>Binary: <code>../libraries/kokoro/bin/koko</code></li>
+    <li>Model: <code>../libraries/kokoro/checkpoints/kokoro-v1.0.onnx</code></li>
+    <li>Data: <code>../libraries/kokoro/data/voices-v1.0.bin</code></li>
+    <li>Permissions: Binary 755, model/data 644, owned by your user, group www-data</li>
+  </ul>
+</li>
+<li><strong>Quick testing:</strong> Module directory (least secure)
+  <ul>
+    <li>Binary: <code>modules/custom/ai_tts/bin/koko</code></li>
+    <li>Model: <code>~/.cache/kokoros/checkpoints/kokoro-v1.0.onnx</code></li>
+    <li>Data: <code>~/.cache/kokoros/data/voices-v1.0.bin</code></li>
+  </ul>
+</li>
+</ul>
+<p><strong>Do not</strong> store these files in <code>sites/default/files/</code> - that directory is for user uploads, not application resources.</p>
+</details>'),
     ];
 
     $form['paths']['koko_binary_path'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Koko executable path'),
-      '#description' => $this->t('Path to the koko binary. Examples: <code>/usr/local/bin/koko</code> or <code>modules/custom/ai_tts/bin/koko</code>'),
+      '#description' => $this->t('Absolute path to the koko binary. Must be executable (755 permissions). Run <code>which koko</code> to find system-installed location.'),
       '#default_value' => $config->get('koko_binary_path'),
       '#required' => TRUE,
       '#attributes' => [
@@ -79,23 +112,23 @@ class AiTtsSettingsForm extends ConfigFormBase {
 
     $form['paths']['model_path'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('ONNX model file'),
-      '#description' => $this->t('Path to kokoro-v1.0.onnx model file'),
+      '#title' => $this->t('Model file path'),
+      '#description' => $this->t('Path to kokoro-v1.0.onnx (~100-200MB). Should be readable (644 permissions) but not writable by web server.'),
       '#default_value' => $config->get('model_path') ?: '~/.cache/kokoros/checkpoints/kokoro-v1.0.onnx',
       '#required' => TRUE,
       '#attributes' => [
-        'placeholder' => '~/.cache/kokoros/checkpoints/kokoro-v1.0.onnx',
+        'placeholder' => '/usr/local/share/kokoro/checkpoints/kokoro-v1.0.onnx',
       ],
     ];
 
     $form['paths']['data_path'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Voices data file'),
-      '#description' => $this->t('Path to voices-v1.0.bin data file'),
+      '#title' => $this->t('Voices data path'),
+      '#description' => $this->t('Path to voices-v1.0.bin (~10-50MB). Should be readable (644 permissions) but not writable by web server.'),
       '#default_value' => $config->get('data_path') ?: '~/.cache/kokoros/data/voices-v1.0.bin',
       '#required' => TRUE,
       '#attributes' => [
-        'placeholder' => '~/.cache/kokoros/data/voices-v1.0.bin',
+        'placeholder' => '/usr/local/share/kokoro/data/voices-v1.0.bin',
       ],
     ];
 
@@ -178,6 +211,14 @@ class AiTtsSettingsForm extends ConfigFormBase {
       '#default_value' => $config->get('default_voice'),
     ];
 
+    // Normalize speed value to match select options.
+    $default_speed = $config->get('default_speed') ?: '1';
+    $default_speed = (string) $default_speed;
+    $available_speeds = ['0.8', '1', '1.2', '1.5', '2'];
+    if (!in_array($default_speed, $available_speeds, TRUE)) {
+      $default_speed = '1';
+    }
+
     $form['voice_settings']['default_speed'] = [
       '#type' => 'select',
       '#title' => $this->t('Default speech speed'),
@@ -189,7 +230,7 @@ class AiTtsSettingsForm extends ConfigFormBase {
         '1.5' => $this->t('1.5x'),
         '2' => $this->t('2x'),
       ],
-      '#default_value' => $config->get('default_speed') ?: '1',
+      '#default_value' => $default_speed,
     ];
 
     $form['caching'] = [
