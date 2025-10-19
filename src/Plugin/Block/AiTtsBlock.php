@@ -356,7 +356,7 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
         '#type' => 'select',
         '#title' => $this->t('Voice'),
         '#options' => $available_voices,
-        '#default_value' => $default_voice,
+        '#value' => $default_voice,
         '#attributes' => [
           'id' => 'ai-tts-voice-select',
           'class' => ['ai-tts-voice-select'],
@@ -383,7 +383,7 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
           '1.5' => $this->t('1.5x'),
           '2' => $this->t('2x'),
         ],
-        '#default_value' => $default_speed,
+        '#value' => $default_speed,
         '#attributes' => [
           'id' => 'ai-tts-speed-input',
           'class' => ['ai-tts-speed-input'],
