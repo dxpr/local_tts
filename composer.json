@@ -19,11 +19,13 @@
     "post-install-cmd": [
       "@setup-directories",
       "@check-binary",
+      "@check-espeak",
       "@display-instructions"
     ],
     "post-update-cmd": [
       "@setup-directories",
-      "@check-binary"
+      "@check-binary",
+      "@check-espeak"
     ],
     "setup-directories": [
       "echo 'Setting up AI TTS directories...'",
@@ -32,6 +34,9 @@
     ],
     "check-binary": [
       "bash -c 'if [ -f bin/koko ]; then echo \"✓ Kokoro binary found at bin/koko\"; chmod +x bin/koko; else echo \"⚠ Kokoro binary not found. See installation instructions.\"; fi'"
+    ],
+    "check-espeak": [
+      "bash -c 'if command -v espeak-ng &> /dev/null; then ESPEAK_PATH=$(find /usr /opt -name \"espeak-ng-data\" -type d 2>/dev/null | head -1); if [ -n \"$ESPEAK_PATH\" ]; then echo \"✓ eSpeak NG found at: $ESPEAK_PATH\"; else echo \"✓ eSpeak NG installed but data directory not found in standard locations\"; fi; else echo \"⚠ eSpeak NG not found. Install it:\"; echo \"  macOS: brew install espeak-ng\"; echo \"  Ubuntu/Debian: sudo apt-get install espeak-ng\"; echo \"  Fedora/RHEL: sudo dnf install espeak-ng\"; fi'"
     ],
     "display-instructions": [
       "echo ''",
@@ -52,12 +57,24 @@
       "echo '   Option C - Use system binary:'",
       "echo '   ln -s /usr/local/bin/koko bin/koko'",
       "echo ''",
-      "echo '2. Enable the module:'",
+      "echo '2. Install eSpeak NG (required for phoneme processing):'",
+      "echo ''",
+      "echo '   macOS:'",
+      "echo '   brew install espeak-ng'",
+      "echo ''",
+      "echo '   Ubuntu/Debian:'",
+      "echo '   sudo apt-get install espeak-ng'",
+      "echo ''",
+      "echo '   Fedora/RHEL:'",
+      "echo '   sudo dnf install espeak-ng'",
+      "echo ''",
+      "echo '3. Enable the module:'",
       "echo '   drush en ai_tts -y'",
       "echo ''",
-      "echo '3. Configure at: /admin/config/media/ai-tts'",
+      "echo '4. Configure at: /admin/config/media/ai-tts'",
+      "echo '   (Set paths for koko binary, model, data, and espeak-ng-data)'",
       "echo ''",
-      "echo '4. Test the installation:'",
+      "echo '5. Test the installation:'",
       "echo '   drush ai-tts:test'",
       "echo ''"
     ],
@@ -80,6 +97,7 @@
   "scripts-descriptions": {
     "setup-directories": "Create necessary directories for the module",
     "check-binary": "Check if Kokoro binary is installed",
+    "check-espeak": "Check if eSpeak NG is installed and find its data directory",
     "download-binary": "Download pre-built Kokoro binary for your platform",
     "build-binary": "Build Kokoro binary from source (requires Rust)",
     "test": "Test the TTS functionality",
