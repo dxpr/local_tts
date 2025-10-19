@@ -215,15 +215,26 @@ accessible to Drupal.
 
 ### Add TTS to Your Pages
 
-1. Go to: Structure > Block layout
-2. Click "Place block" in your desired region
-3. Search for "AI Text-to-Speech"
-4. Configure the block:
-   - Set button text
-   - Choose whether to show voice selector
-   - Choose whether to show speed control
-   - Set CSS selector for content (default: `article .field--name-body`)
-5. Save the block configuration
+#### Option 1: Extra Field (Recommended)
+
+Best for content types. Player appears in "Manage Display" UI.
+
+1. Enable: Configuration > Media > AI TTS > Extra Field
+2. Position: Structure > [Content Type] > Manage display
+3. Drag "AI TTS Player" to desired location
+
+Benefits: Per-view-mode control, automatic field aggregation, follows
+Drupal patterns.
+
+#### Option 2: Block
+
+Best for custom regions (sidebar, header, footer).
+
+1. Structure > Block layout > Place block
+2. Search "AI Text-to-Speech"
+3. Configure fields and visibility
+
+Benefits: Flexible placement, multiple instances, visibility conditions.
 
 ### Available Voices
 

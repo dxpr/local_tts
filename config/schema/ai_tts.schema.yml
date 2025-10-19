@@ -44,3 +44,20 @@ ai_tts.settings:
     rate_limit_threshold:
       type: integer
       label: 'Maximum requests per hour per user'
+    extra_field_enabled_bundles:
+      type: sequence
+      label: 'Entity type/bundles where extra field is enabled'
+      sequence:
+        type: mapping
+        mapping:
+          entity_type:
+            type: string
+            label: 'Entity type ID'
+          bundle:
+            type: string
+            label: 'Bundle ID'
+          fields:
+            type: sequence
+            label: 'Text fields to aggregate for audio'
+            sequence:
+              type: string

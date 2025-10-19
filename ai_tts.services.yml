@@ -2,3 +2,6 @@ services:
   ai_tts.tts_service:
     class: Drupal\ai_tts\TtsService
     arguments: ['@config.factory', '@file_system', '@logger.factory']
+  ai_tts.lazy_builders:
+    class: Drupal\ai_tts\TtsLazyBuilders
+    arguments: ['@entity_type.manager', '@renderer', '@ai_tts.tts_service', '@current_user']
