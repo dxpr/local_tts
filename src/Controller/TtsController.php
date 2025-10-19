@@ -2,6 +2,8 @@
 
 namespace Drupal\ai_tts\Controller;
 
+use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\ai_tts\Exception\TtsServiceUnavailableException;
 use Drupal\ai_tts\Exception\TtsTimeoutException;
 use Drupal\ai_tts\TtsService;
@@ -60,6 +62,13 @@ class TtsController extends ControllerBase {
   protected $time;
 
   /**
+   * The entity type manager.
+   *
+   * @var \Drupal\Core\Entity\EntityTypeManagerInterface
+   */
+  protected $entityTypeManager;
+
+  /**
    * Constructs a TtsController object.
    *
    * @param \Drupal\ai_tts\TtsService $tts_service
@@ -72,6 +81,8 @@ class TtsController extends ControllerBase {
    *   The state service.
    * @param \Drupal\Component\Datetime\TimeInterface $time
    *   The time service.
+   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
+   *   The entity type manager.
    */
   public function __construct(
     TtsService $tts_service,
@@ -79,12 +90,14 @@ class TtsController extends ControllerBase {
     AccountProxyInterface $current_user,
     StateInterface $state,
     TimeInterface $time,
+    EntityTypeManagerInterface $entity_type_manager,
   ) {
     $this->ttsService = $tts_service;
     $this->fileUrlGenerator = $file_url_generator;
     $this->currentUser = $current_user;
     $this->state = $state;
     $this->time = $time;
+    $this->entityTypeManager = $entity_type_manager;
   }
 
   /**
@@ -96,7 +109,8 @@ class TtsController extends ControllerBase {
       $container->get('file_url_generator'),
       $container->get('current_user'),
       $container->get('state'),
-      $container->get('datetime.time')
+      $container->get('datetime.time'),
+      $container->get('entity_type.manager')
     );
   }
 
@@ -110,17 +124,76 @@ class TtsController extends ControllerBase {
    *   JSON response with file URL or binary audio response.
    */
   public function generate(Request $request) {
-    $text = $request->request->get('text') ?: $request->query->get('text');
     $voice = $request->request->get('voice') ?: $request->query->get('voice');
     $speed = $request->request->get('speed') ?: $request->query->get('speed');
-    $language = $request->request->get('language') ?: $request->query->get('language');
+    $entity_type = $request->request->get('entity_type') ?: $request->query->get('entity_type');
+    $entity_id = $request->request->get('entity_id') ?: $request->query->get('entity_id');
+    $language_from_request = $request->request->get('language') ?: $request->query->get('language');
+    $fields_json = $request->request->get('fields') ?: $request->query->get('fields');
 
-    // HTTP 400: Bad Request - Missing required parameters.
-    if (empty($text)) {
+    // HTTP 400: Bad Request - Entity reference required.
+    // SECURITY: Never accept text from client.
+    if (empty($entity_type) || empty($entity_id)) {
       return new JsonResponse([
         'error' => 'Bad Request',
-        'message' => 'No text provided',
+        'message' => 'Entity reference required',
       ], 400);
+    }
+
+    // Load and validate entity server-side (SECURITY).
+    try {
+      $storage = $this->entityTypeManager->getStorage($entity_type);
+      $entity = $storage->load($entity_id);
+
+      // Load specific translation if language provided.
+      // Follow Drupal core pattern: try exact match, then base language.
+      if ($entity && $language_from_request) {
+        if ($entity->hasTranslation($language_from_request)) {
+          $entity = $entity->getTranslation($language_from_request);
+        }
+        // Fallback: Try base language (e.g., 'pt' from 'pt-br').
+        elseif (strpos($language_from_request, '-') !== FALSE) {
+          $base_lang = explode('-', $language_from_request)[0];
+          if ($entity->hasTranslation($base_lang)) {
+            $entity = $entity->getTranslation($base_lang);
+          }
+        }
+      }
+
+      if (!$entity) {
+        return new JsonResponse([
+          'error' => 'Not Found',
+          'message' => 'Entity not found',
+        ], 404);
+      }
+
+      // Check access control.
+      if (!$entity->access('view', $this->currentUser())) {
+        return new JsonResponse([
+          'error' => 'Forbidden',
+          'message' => 'Access denied',
+        ], 403);
+      }
+
+      // Extract text from entity fields.
+      $text = $this->extractTextFromEntity($entity, $fields_json);
+
+      if (empty(trim($text))) {
+        return new JsonResponse([
+          'error' => 'Bad Request',
+          'message' => 'No text content found in entity',
+        ], 400);
+      }
+
+      // Detect language from entity.
+      $language = method_exists($entity, 'language') ? $entity->language()->getId() : 'en';
+    }
+    catch (\Exception $e) {
+      $this->getLogger('ai_tts')->error('Error loading entity: @message', ['@message' => $e->getMessage()]);
+      return new JsonResponse([
+        'error' => 'Internal Server Error',
+        'message' => 'Failed to load entity',
+      ], 500);
     }
 
     // HTTP 429: Too Many Requests - Rate limiting.
@@ -133,7 +206,10 @@ class TtsController extends ControllerBase {
       ], 429, ['Retry-After' => $retry_after]);
     }
 
-    $options = [];
+    $options = [
+      'entity_type' => $entity_type,
+      'entity_id' => $entity_id,
+    ];
     if ($voice) {
       $options['voice'] = $voice;
     }
@@ -301,6 +377,99 @@ class TtsController extends ControllerBase {
     $retry_after = ($oldest_attempt + self::RATE_LIMIT_WINDOW) - $current_time;
 
     return max(0, $retry_after);
+  }
+
+  /**
+   * Extract text content from entity fields (server-side only).
+   *
+   * SECURITY: This method validates and sanitizes all text extraction.
+   * Never trust client-provided text.
+   *
+   * @param \Drupal\Core\Entity\EntityInterface $entity
+   *   The entity to extract text from.
+   * @param string|null $fields_json
+   *   JSON-encoded array of field names to extract (optional).
+   *
+   * @return string
+   *   The extracted and sanitized text content.
+   */
+  protected function extractTextFromEntity($entity, $fields_json = NULL) {
+    $allowed_field_types = [
+      'string',
+      'string_long',
+      'text',
+      'text_long',
+      'text_with_summary',
+      'text_plain',
+      'email',
+      'telephone',
+    ];
+
+    $excluded_base_fields = [
+      'nid', 'uuid', 'vid', 'langcode', 'type', 'revision_timestamp',
+      'revision_uid', 'revision_log', 'status', 'uid', 'created', 'changed',
+      'promote', 'sticky', 'default_langcode', 'revision_default',
+      'revision_translation_affected', 'metatag', 'path', 'menu_link',
+      'tid', 'weight', 'parent', 'description__format',
+    ];
+
+    $selected_fields = [];
+    if ($fields_json) {
+      $decoded = json_decode($fields_json, TRUE);
+      if (is_array($decoded)) {
+        $selected_fields = $decoded;
+      }
+    }
+
+    $content = '';
+
+    if (!($entity instanceof FieldableEntityInterface)) {
+      return $content;
+    }
+
+    foreach ($entity->getFieldDefinitions() as $field_name => $field_definition) {
+      // Skip excluded base fields.
+      if (in_array($field_name, $excluded_base_fields, TRUE)) {
+        continue;
+      }
+
+      // If specific fields were requested, only process those.
+      if (!empty($selected_fields) && !in_array($field_name, $selected_fields, TRUE)) {
+        continue;
+      }
+
+      if ($entity->hasField($field_name)) {
+        $field = $entity->get($field_name);
+
+        // Check field-level access.
+        if (!$field->access('view', $this->currentUser())) {
+          continue;
+        }
+
+        if (!$field->isEmpty() && in_array($field_definition->getType(), $allowed_field_types)) {
+          foreach ($field as $item) {
+            // Get the actual value - handle different item types.
+            if (isset($item->value)) {
+              $text = $item->value;
+            }
+            elseif (is_string($item)) {
+              $text = $item;
+            }
+            else {
+              continue;
+            }
+
+            // SECURITY: Strip all HTML tags and decode entities.
+            $text = html_entity_decode(strip_tags($text ?? ''), ENT_QUOTES | ENT_HTML5);
+            if (!empty(trim($text))) {
+              $content .= (strlen($content) > 0 ? ' ' : '') . $text;
+            }
+          }
+        }
+      }
+    }
+
+    return $content;
   }
 
 }

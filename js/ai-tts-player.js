@@ -96,20 +96,34 @@
           }
         }
 
-        function generateSpeech(text) {
+        function generateSpeech() {
           const voice = voiceSelect ? voiceSelect.value : config.defaultVoice;
           const speed = speedInput ? parseFloat(speedInput.value) : (config.defaultSpeed || 1);
-          const language = config.language || 'en';
+
+          // SECURITY: Never send text content from client.
+          // Server loads and validates entity to prevent:
+          // - Arbitrary text generation (DDoS)
+          // - Access control bypass
+          // - Content moderation bypass
+          if (!config.entityType || !config.entityId) {
+            updateStatus(Drupal.t('Error: No entity context available'), 'error');
+            return;
+          }
 
           updateStatus('<span class="ai-tts-loading"></span> ' + Drupal.t('Generating speech...'), 'status');
           playButton.disabled = true;
           playButton.classList.add('loading');
 
           const formData = new FormData();
-          formData.append('text', text);
+          formData.append('entity_type', config.entityType);
+          formData.append('entity_id', config.entityId);
           formData.append('voice', voice);
           formData.append('speed', speed);
-          formData.append('language', language);
+
+          // Send configured fields if available.
+          if (config.fields && config.fields.length > 0) {
+            formData.append('fields', JSON.stringify(config.fields));
+          }
 
           fetch(config.generateUrl, {
             method: 'POST',
@@ -231,7 +245,7 @@
         function togglePlay() {
           if (!isPlaying) {
             if (!currentAudioUrl || audioElement.ended) {
-              generateSpeech(content);
+              generateSpeech();
             } else {
               audioElement.play().then(function() {
                 isPlaying = true;

@@ -247,68 +247,24 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
       $langcode = $this->entity->language()->getId();
     }
 
-    // Check if voices are available for this language.
-    $available_voices = $this->ttsService->getAvailableVoices($langcode);
-    if (empty($available_voices)) {
-      // No voices available for this language, hide the block.
+    // ARCHITECTURE: Fail hard, no defensive coding.
+    // If entity doesn't exist, Drupal routing wouldn't have loaded it.
+    // If no voices available, backend will return 500.
+    // If no text content, backend will return 400.
+    // Block only shows on entity pages, always has entity context.
+    if (!$this->entity) {
       return [];
     }
 
-    $content = '';
-    $selected_fields = array_filter($config['fields'] ?? []);
-
-    if ($this->entity) {
-      if (!$this->entity->access('view', $this->currentUser)) {
-        return [];
-      }
-
-      // Only show player for publicly accessible content.
-      $anonymous = new AnonymousUserSession();
-      if (!$this->entity->access('view', $anonymous)) {
-        return [];
-      }
-
-      foreach ($this->entity->getFieldDefinitions() as $field_name => $field_definition) {
-        // Skip explicitly excluded base fields.
-        if (in_array($field_name, self::EXCLUDED_BASE_FIELDS, TRUE)) {
-          continue;
-        }
-
-        if (!empty($selected_fields) && !in_array($field_name, $selected_fields, TRUE)) {
-          continue;
-        }
-
-        if ($this->entity->hasField($field_name)) {
-          $field = $this->entity->get($field_name);
-
-          if (!$field->access('view', $this->currentUser)) {
-            continue;
-          }
-
-          if (!$field->isEmpty() && in_array($field_definition->getType(), self::ALLOWED_FIELD_TYPES)) {
-            foreach ($field as $item) {
-              // Get the actual value - handle different item types.
-              if (isset($item->value)) {
-                $text = $item->value;
-              }
-              elseif (is_string($item)) {
-                $text = $item;
-              }
-              else {
-                continue;
-              }
-
-              $text = html_entity_decode(strip_tags($text ?? ''), ENT_QUOTES | ENT_HTML5);
-              if (!empty(trim($text))) {
-                $content .= (strlen($content) > 0 ? ' ' : '') . $text;
-              }
-            }
-          }
-        }
-      }
+    // Check access (valid check - prevents showing UI for private content).
+    $anonymous = new AnonymousUserSession();
+    if (!$this->entity->access('view', $anonymous)) {
+      return [];
     }
 
-    if (empty($content)) {
+    // Voices check still valid (prevents UI for unsupported languages).
+    $available_voices = $this->ttsService->getAvailableVoices($langcode);
+    if (empty($available_voices)) {
       return [];
     }
 
@@ -428,6 +384,8 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
       $available_voices
     );
 
+    // SECURITY: Pass only entity reference to JavaScript, NOT the content.
+    // Server loads entity, validates access, extracts text.
     $build['#attached'] = [
       'library' => ['ai_tts/player'],
       'drupalSettings' => [
@@ -435,8 +393,10 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
           'defaultVoice' => $js_default_voice,
           'defaultSpeed' => $global_config->get('default_speed'),
           'generateUrl' => Url::fromRoute('ai_tts.generate')->toString(),
-          'content' => $content,
           'language' => $langcode,
+          'entityType' => $this->entity->getEntityTypeId(),
+          'entityId' => $this->entity->id(),
+          'fields' => array_values(array_filter($config['fields'] ?? [])),
         ],
       ],
     ];
