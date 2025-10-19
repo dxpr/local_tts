@@ -167,9 +167,22 @@ class TtsController extends ControllerBase {
       $this->getLogger('ai_tts')->error('TTS service unavailable: @message', [
         '@message' => $e->getMessage(),
       ]);
+
+      // Provide user-friendly message from exception if available.
+      $user_message = $e->getMessage();
+
+      // If it's a generic message, provide more helpful default.
+      if (strpos($user_message, 'TTS binary not found') !== FALSE ||
+          strpos($user_message, 'not executable') !== FALSE ||
+          strpos($user_message, 'Model file not found') !== FALSE ||
+          strpos($user_message, 'Data file not found') !== FALSE ||
+          strpos($user_message, 'Failed to create audio directory') !== FALSE) {
+        $user_message = 'TTS service is not properly configured. Please contact the administrator.';
+      }
+
       return new JsonResponse([
         'error' => 'Service Unavailable',
-        'message' => 'TTS service is temporarily unavailable. Please contact the administrator.',
+        'message' => $user_message,
       ], 503);
     }
     catch (\RuntimeException $e) {

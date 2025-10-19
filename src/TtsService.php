@@ -94,33 +94,40 @@ class TtsService {
   public function generateSpeech($text, array $options = []) {
     $config = $this->configFactory->get('ai_tts.settings');
 
+    // CRITICAL: Entity context is REQUIRED for generateSpeech().
+    // This prevents orphaned files with NULL entity_type/entity_id that
+    // cannot be deleted.
+    // For non-entity usage (API endpoints, tests), use
+    // generateTransientSpeech() instead.
+    if (empty($options['entity_type']) || empty($options['entity_id'])) {
+      throw new \InvalidArgumentException('generateSpeech() requires entity_type and entity_id in $options. Use generateTransientSpeech() for non-entity audio generation.');
+    }
+
+    $entity_type = $options['entity_type'];
+    $entity_id = $options['entity_id'];
+
     // Security: Only generate audio for publicly accessible content.
-    if (!empty($options['entity_type']) && !empty($options['entity_id'])) {
-      $entity_type = $options['entity_type'];
-      $entity_id = $options['entity_id'];
+    try {
+      $entity = \Drupal::entityTypeManager()
+        ->getStorage($entity_type)
+        ->load($entity_id);
 
-      try {
-        $entity = \Drupal::entityTypeManager()
-          ->getStorage($entity_type)
-          ->load($entity_id);
-
-        if ($entity) {
-          $anonymous = new AnonymousUserSession();
-          if (!$entity->access('view', $anonymous)) {
-            $this->logger->warning('Refusing to cache audio for non-public content: @type:@id', [
-              '@type' => $entity_type,
-              '@id' => $entity_id,
-            ]);
-            throw new \RuntimeException('Cannot generate audio for private content. Only content viewable by anonymous users can be cached.');
-          }
+      if ($entity) {
+        $anonymous = new AnonymousUserSession();
+        if (!$entity->access('view', $anonymous)) {
+          $this->logger->warning('Refusing to cache audio for non-public content: @type:@id', [
+            '@type' => $entity_type,
+            '@id' => $entity_id,
+          ]);
+          throw new \RuntimeException('Cannot generate audio for private content. Only content viewable by anonymous users can be cached.');
         }
       }
-      catch (\RuntimeException $e) {
-        throw $e;
-      }
-      catch (\Exception $e) {
-        $this->logger->error('Error checking entity access: @message', ['@message' => $e->getMessage()]);
-      }
+    }
+    catch (\RuntimeException $e) {
+      throw $e;
+    }
+    catch (\Exception $e) {
+      $this->logger->error('Error checking entity access: @message', ['@message' => $e->getMessage()]);
     }
 
     // Security: Validate text length.
