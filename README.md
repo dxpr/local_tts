@@ -23,25 +23,42 @@ using the Kokoro TTS engine (Rust implementation).
 **Public Content Only**
 
 Audio files are cached to the public file system for performance. To prevent
-private content from being exposed, the module enforces this rule:
+private content from being exposed, the module enforces this security policy:
 
-- **Audio generation is only allowed for content viewable by anonymous users**
-- The TTS player will not appear on private/unpublished content
-- Attempting to generate audio for private content returns an error
+**The Rule:**
+- Audio generation only works for content that anonymous users can view
+- This means content must be:
+  - Published (status = 1)
+  - Have appropriate view permissions for anonymous role
 
-This ensures cached audio files never contain sensitive information.
+**What Happens:**
+- **UI**: TTS player does not display on private/unpublished content
+- **API**: Audio generation returns HTTP 403 error
+- **Drush**: Shows error message with solution
 
-**Streaming Mode for Private Content**
+**Example Error Message:**
+```
+Cannot generate audio for private content. Only content viewable by
+anonymous users can be cached.
+Solution: Use --stream flag to play without caching, or publish the content.
+```
 
-If you need to test TTS on private content during development:
+**Automatic Cache Cleanup:**
+When you update or delete content, associated audio files are automatically
+removed from the cache. This ensures the cache stays synchronized with your
+content.
+
+**Development Workaround:**
+
+For testing TTS on private content during development, use streaming mode:
 
 ```bash
-# Use --stream flag (no caching, immediate playback)
+# Streaming: no files cached, immediate playback
 drush ai-tts:read node 123 --stream
 ```
 
-Streaming mode does not create cached files and bypasses the public
-access check.
+Streaming mode bypasses the public access check and does not create cached
+files.
 
 ## Requirements
 
