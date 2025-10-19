@@ -78,7 +78,6 @@ function ai_tts_schema() {
     ],
     'indexes' => [
       'entity' => ['entity_type', 'entity_id'],
-      'entity_language' => ['entity_type', 'entity_id', 'language'],
       'accessed' => ['accessed'],
     ],
   ];
@@ -387,6 +386,16 @@ function _ai_tts_count_files($path) {
 function ai_tts_update_10002() {
   $schema = ai_tts_schema();
   \Drupal::database()->schema()->createTable('ai_tts_cache', $schema['ai_tts_cache']);
+}
+
+/**
+ * Remove entity_language index (language is in cache key, not for filtering).
+ */
+function ai_tts_update_10003() {
+  $schema = \Drupal::database()->schema();
+  if ($schema->indexExists('ai_tts_cache', 'entity_language')) {
+    $schema->dropIndex('ai_tts_cache', 'entity_language');
+  }
 }
 
 /**

@@ -152,10 +152,13 @@ class TtsService {
       throw new \InvalidArgumentException(sprintf('Invalid speed: %s (must be between 0.5 and 2.0)', $speed));
     }
 
-    // Convert to espeak-ng language identifier.
     $espeak_lang = $this->mapLanguageToEspeak($language);
 
-    // Include language in cache key to prevent wrong pronunciation.
+    // Cache key strategy (following Drupal core pattern):
+    // Language is part of the cache KEY (creates separate files per language),
+    // not a cache TAG (would trigger invalidation). This matches how
+    // EntityViewBuilder handles translatable entities.
+    // When entity updates, ALL language versions are deleted.
     $cache_key = md5($text . $voice . $speed . $espeak_lang);
     $audio_dir = $config->get('audio_directory') ?: 'public://ai-tts';
 
@@ -575,19 +578,21 @@ class TtsService {
   }
 
   /**
-   * Delete audio files for a specific entity.
+   * Delete all audio files for a specific entity (all languages).
+   *
+   * When an entity is updated or deleted, we delete ALL cached audio files
+   * for that entity across all languages, since the language is part of the
+   * cache key and creates separate files.
    *
    * @param string $entity_type
    *   The entity type.
    * @param int|string $entity_id
    *   The entity ID.
-   * @param string|null $language
-   *   Optional language code to delete only specific language files.
    *
    * @return int
    *   The number of files deleted.
    */
-  public function deleteAudioForEntity($entity_type, $entity_id, $language = NULL) {
+  public function deleteAudioForEntity($entity_type, $entity_id) {
     $config = $this->configFactory->get('ai_tts.settings');
     $audio_dir = $config->get('audio_directory') ?: 'public://ai-tts';
     $directory = $this->fileSystem->realpath($audio_dir);
@@ -596,16 +601,12 @@ class TtsService {
       return 0;
     }
 
-    $query = \Drupal::database()->select('ai_tts_cache', 'a')
+    $cache_keys = \Drupal::database()->select('ai_tts_cache', 'a')
       ->fields('a', ['cache_key'])
       ->condition('entity_type', $entity_type)
-      ->condition('entity_id', $entity_id);
-
-    if ($language !== NULL) {
-      $query->condition('language', $language);
-    }
-
-    $cache_keys = $query->execute()->fetchCol();
+      ->condition('entity_id', $entity_id)
+      ->execute()
+      ->fetchCol();
 
     if (empty($cache_keys)) {
       return 0;
