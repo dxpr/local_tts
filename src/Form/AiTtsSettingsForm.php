@@ -67,36 +67,50 @@ class AiTtsSettingsForm extends ConfigFormBase {
 
     $form['paths']['help'] = [
       '#type' => 'item',
-      '#markup' => $this->t('<p><strong>Where to install files:</strong> For security and best practices, install files outside your web root or in system directories. Use <code>~</code> for home directory expansion.</p>
-<details>
-<summary>Recommended locations (click to expand)</summary>
+      '#markup' => '<p>' . $this->t('For security and best practices, install files outside your web root or in system directories. Use <code>~</code> for home directory expansion.') . '</p>',
+    ];
+
+    $form['paths']['installation_guide'] = [
+      '#type' => 'details',
+      '#title' => $this->t('Recommended installation locations'),
+      '#open' => FALSE,
+    ];
+
+    $form['paths']['installation_guide']['production'] = [
+      '#type' => 'item',
+      '#markup' => '<strong>' . $this->t('Production (Recommended): System-wide installation') . '</strong>
 <ul>
-<li><strong>Production (Recommended):</strong> System-wide installation
-  <ul>
-    <li>Binary: <code>/usr/local/bin/koko</code></li>
-    <li>Model: <code>/usr/local/share/kokoro/checkpoints/kokoro-v1.0.onnx</code></li>
-    <li>Data: <code>/usr/local/share/kokoro/data/voices-v1.0.bin</code></li>
-    <li>Permissions: Binary 755, model/data 644, owned by root or deployment user</li>
-  </ul>
-</li>
-<li><strong>Development:</strong> Drupal libraries directory
-  <ul>
-    <li>Binary: <code>../libraries/kokoro/bin/koko</code></li>
-    <li>Model: <code>../libraries/kokoro/checkpoints/kokoro-v1.0.onnx</code></li>
-    <li>Data: <code>../libraries/kokoro/data/voices-v1.0.bin</code></li>
-    <li>Permissions: Binary 755, model/data 644, owned by your user, group www-data</li>
-  </ul>
-</li>
-<li><strong>Quick testing:</strong> Module directory (least secure)
-  <ul>
-    <li>Binary: <code>modules/custom/ai_tts/bin/koko</code></li>
-    <li>Model: <code>~/.cache/kokoros/checkpoints/kokoro-v1.0.onnx</code></li>
-    <li>Data: <code>~/.cache/kokoros/data/voices-v1.0.bin</code></li>
-  </ul>
-</li>
-</ul>
-<p><strong>Do not</strong> store these files in <code>sites/default/files/</code> - that directory is for user uploads, not application resources.</p>
-</details>'),
+  <li>' . $this->t('Binary: <code>/usr/local/bin/koko</code>') . '</li>
+  <li>' . $this->t('Model: <code>/usr/local/share/kokoro/checkpoints/kokoro-v1.0.onnx</code>') . '</li>
+  <li>' . $this->t('Data: <code>/usr/local/share/kokoro/data/voices-v1.0.bin</code>') . '</li>
+  <li>' . $this->t('Permissions: Binary 755, model/data 644, owned by root or deployment user') . '</li>
+</ul>',
+    ];
+
+    $form['paths']['installation_guide']['development'] = [
+      '#type' => 'item',
+      '#markup' => '<strong>' . $this->t('Development: Drupal libraries directory') . '</strong>
+<ul>
+  <li>' . $this->t('Binary: <code>../libraries/kokoro/bin/koko</code>') . '</li>
+  <li>' . $this->t('Model: <code>../libraries/kokoro/checkpoints/kokoro-v1.0.onnx</code>') . '</li>
+  <li>' . $this->t('Data: <code>../libraries/kokoro/data/voices-v1.0.bin</code>') . '</li>
+  <li>' . $this->t('Permissions: Binary 755, model/data 644, owned by your user, group www-data') . '</li>
+</ul>',
+    ];
+
+    $form['paths']['installation_guide']['testing'] = [
+      '#type' => 'item',
+      '#markup' => '<strong>' . $this->t('Quick testing: Module directory (least secure)') . '</strong>
+<ul>
+  <li>' . $this->t('Binary: <code>modules/custom/ai_tts/bin/koko</code>') . '</li>
+  <li>' . $this->t('Model: <code>~/.cache/kokoros/checkpoints/kokoro-v1.0.onnx</code>') . '</li>
+  <li>' . $this->t('Data: <code>~/.cache/kokoros/data/voices-v1.0.bin</code>') . '</li>
+</ul>',
+    ];
+
+    $form['paths']['installation_guide']['warning'] = [
+      '#type' => 'item',
+      '#markup' => '<p><strong>' . $this->t('Security warning:') . '</strong> ' . $this->t('Do not store these files in <code>sites/default/files/</code> - that directory is for user uploads, not application resources.') . '</p>',
     ];
 
     $form['paths']['koko_binary_path'] = [
