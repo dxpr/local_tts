@@ -19,12 +19,12 @@ function ai_tts_requirements($phase) {
 
     // Check 1: File Paths (Binary + Model Files).
     $binary_path = $config->get('koko_binary_path');
-    $model_path = $config->get('model_path') ?: '~/.cache/kokoros/checkpoints/kokoro-v1.0.onnx';
-    $data_path = $config->get('data_path') ?: '~/.cache/kokoros/data/voices-v1.0.bin';
+    $model_path = $config->get('model_path');
+    $data_path = $config->get('data_path');
 
     // Expand tilde in paths.
-    $model_real = _ai_tts_expand_path($model_path);
-    $data_real = _ai_tts_expand_path($data_path);
+    $model_real = $model_path ? _ai_tts_expand_path($model_path) : NULL;
+    $data_real = $data_path ? _ai_tts_expand_path($data_path) : NULL;
 
     // Check all files.
     $issues = [];
@@ -45,7 +45,10 @@ function ai_tts_requirements($phase) {
     }
 
     // Model file checks.
-    if (!file_exists($model_real)) {
+    if (!$model_path) {
+      $issues[] = t('Model path not configured');
+    }
+    elseif (!file_exists($model_real)) {
       $issues[] = t('Model not found: @path', ['@path' => $model_real]);
     }
     else {
@@ -57,7 +60,10 @@ function ai_tts_requirements($phase) {
     }
 
     // Data file checks.
-    if (!file_exists($data_real)) {
+    if (!$data_path) {
+      $issues[] = t('Data path not configured');
+    }
+    elseif (!file_exists($data_real)) {
       $issues[] = t('Data not found: @path', ['@path' => $data_real]);
     }
     else {
