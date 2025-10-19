@@ -58,14 +58,15 @@ class AiTtsSettingsForm extends ConfigFormBase {
   public function buildForm(array $form, FormStateInterface $form_state) {
     $config = $this->config('ai_tts.settings');
 
-    // Binary Configuration.
-    $form['binary'] = [
+    // File Paths Configuration.
+    $form['paths'] = [
       '#type' => 'details',
-      '#title' => $this->t('Binary Configuration'),
+      '#title' => $this->t('File Paths'),
+      '#description' => $this->t('Paths to Kokoro binary, model, and voice data files. Use <code>~</code> for home directory.'),
       '#open' => TRUE,
     ];
 
-    $form['binary']['koko_binary_path'] = [
+    $form['paths']['koko_binary_path'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Koko executable path'),
       '#description' => $this->t('Path to the koko binary. Examples: <code>/usr/local/bin/koko</code> or <code>modules/custom/ai_tts/bin/koko</code>'),
@@ -76,46 +77,7 @@ class AiTtsSettingsForm extends ConfigFormBase {
       ],
     ];
 
-    // Binary status check.
-    $binary_path = $config->get('koko_binary_path');
-    if ($binary_path) {
-      $binary_exists = file_exists($binary_path);
-      $binary_executable = $binary_exists && is_executable($binary_path);
-
-      if ($binary_executable) {
-        $form['binary']['binary_status'] = [
-          '#markup' => '<div class="messages messages--status">✓ ' .
-          $this->t('Binary found and executable') . '<br><small>' .
-          $this->t('Location: @path', ['@path' => $binary_path]) . '</small></div>',
-        ];
-      }
-      elseif ($binary_exists) {
-        $form['binary']['binary_status'] = [
-          '#markup' => '<div class="messages messages--error">✗ ' .
-          $this->t('Binary found but not executable') . '<br><small>' .
-          $this->t('Run: <code>chmod +x @path</code>', ['@path' => $binary_path]) . '</small></div>',
-        ];
-      }
-      else {
-        $form['binary']['binary_status'] = [
-          '#markup' => '<div class="messages messages--error">✗ ' .
-          $this->t('Binary not found at: @path', ['@path' => $binary_path]) . '<br><small>' .
-          $this->t('Install using: <code>cd @module && composer run download-binary</code>', [
-            '@module' => 'modules/custom/ai_tts',
-          ]) . '</small></div>',
-        ];
-      }
-    }
-
-    // Model Files Configuration.
-    $form['models'] = [
-      '#type' => 'details',
-      '#title' => $this->t('Model Files'),
-      '#description' => $this->t('Paths to Kokoro AI model and voice data files. Use <code>~</code> for home directory.'),
-      '#open' => TRUE,
-    ];
-
-    $form['models']['model_path'] = [
+    $form['paths']['model_path'] = [
       '#type' => 'textfield',
       '#title' => $this->t('ONNX model file'),
       '#description' => $this->t('Path to kokoro-v1.0.onnx model file'),
@@ -126,7 +88,7 @@ class AiTtsSettingsForm extends ConfigFormBase {
       ],
     ];
 
-    $form['models']['data_path'] = [
+    $form['paths']['data_path'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Voices data file'),
       '#description' => $this->t('Path to voices-v1.0.bin data file'),
@@ -137,9 +99,30 @@ class AiTtsSettingsForm extends ConfigFormBase {
       ],
     ];
 
-    // Model files status check.
+    // Status checks.
+    $binary_path = $config->get('koko_binary_path');
     $model_path = $config->get('model_path');
     $data_path = $config->get('data_path');
+
+    $status_messages = [];
+
+    // Binary status.
+    if ($binary_path) {
+      $binary_exists = file_exists($binary_path);
+      $binary_executable = $binary_exists && is_executable($binary_path);
+
+      if ($binary_executable) {
+        $status_messages[] = '✓ ' . $this->t('Binary found and executable at: <code>@path</code>', ['@path' => $binary_path]);
+      }
+      elseif ($binary_exists) {
+        $status_messages[] = '✗ ' . $this->t('Binary found but not executable. Run: <code>chmod +x @path</code>', ['@path' => $binary_path]);
+      }
+      else {
+        $status_messages[] = '✗ ' . $this->t('Binary not found at: <code>@path</code>', ['@path' => $binary_path]);
+      }
+    }
+
+    // Model files status.
     if ($model_path && $data_path) {
       $model_real = $this->expandPath($model_path);
       $data_real = $this->expandPath($data_path);
@@ -150,34 +133,36 @@ class AiTtsSettingsForm extends ConfigFormBase {
       if ($model_exists && $data_exists) {
         $model_size = filesize($model_real);
         $data_size = filesize($data_real);
-        $form['models']['model_status'] = [
-          '#markup' => '<div class="messages messages--status">✓ ' .
-          $this->t('Model files found') . '<br><small>' .
-          $this->t('Model: @model (@size)<br>Data: @data (@data_size)', [
-            '@model' => $model_real,
-            '@size' => format_size($model_size),
-            '@data' => $data_real,
-            '@data_size' => format_size($data_size),
-          ]) . '</small></div>',
-        ];
+        $status_messages[] = '✓ ' . $this->t('Model files found (@model_size, @data_size)', [
+          '@model_size' => format_size($model_size),
+          '@data_size' => format_size($data_size),
+        ]);
       }
       else {
-        $messages = [];
         if (!$model_exists) {
-          $messages[] = '✗ ' . $this->t('Model not found: <code>@path</code>', ['@path' => $model_real]);
+          $status_messages[] = '✗ ' . $this->t('Model not found: <code>@path</code>', ['@path' => $model_real]);
         }
         if (!$data_exists) {
-          $messages[] = '✗ ' . $this->t('Data not found: <code>@path</code>', ['@path' => $data_real]);
+          $status_messages[] = '✗ ' . $this->t('Data not found: <code>@path</code>', ['@path' => $data_real]);
         }
-        $messages[] = $this->t('Install using: <code>cd @module && composer run download-binary</code>', [
+      }
+    }
+
+    // Display status if any messages.
+    if (!empty($status_messages)) {
+      $has_errors = strpos(implode(' ', $status_messages), '✗') !== FALSE;
+      $message_class = $has_errors ? 'messages--error' : 'messages--status';
+
+      if ($has_errors) {
+        $status_messages[] = $this->t('Install using: <code>cd @module && composer run download-binary</code>', [
           '@module' => 'modules/custom/ai_tts',
         ]);
-
-        $form['models']['model_status'] = [
-          '#markup' => '<div class="messages messages--error">' .
-          implode('<br>', $messages) . '</div>',
-        ];
       }
+
+      $form['paths']['status'] = [
+        '#markup' => '<div class="messages ' . $message_class . '">' .
+        implode('<br>', $status_messages) . '</div>',
+      ];
     }
 
     $form['voice_settings'] = [
