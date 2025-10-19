@@ -76,6 +76,33 @@ This module requires the Kokoro Rust binary to be installed. The
 installation process is automated via Composer scripts (see Installation
 section below).
 
+**eSpeak NG**
+
+The Kokoro binary requires eSpeak NG for text-to-phoneme conversion across
+multiple languages. This must be installed separately:
+
+```bash
+# macOS
+brew install espeak-ng
+
+# Ubuntu/Debian
+sudo apt-get install espeak-ng
+
+# Fedora/RHEL
+sudo dnf install espeak-ng
+
+# Arch Linux
+sudo pacman -S espeak-ng
+```
+
+After installation, note the location of the `espeak-ng-data` directory:
+- macOS (Homebrew):
+  `/opt/homebrew/Cellar/espeak-ng/[version]/share/espeak-ng-data`
+- Linux: Usually `/usr/share/espeak-ng-data` or
+  `/usr/local/share/espeak-ng-data`
+
+You'll need to configure this path in the module settings.
+
 ## Installation
 
 ### File Placement and Security
@@ -107,8 +134,11 @@ sudo chown -R root:root /usr/local/share/kokoro
 
 **Configure in Drupal:**
 - Binary path: `/usr/local/bin/koko`
-- Model file: `/usr/local/share/kokoro/checkpoints/kokoro-v1.0.onnx`
+- Model file:
+  `/usr/local/share/kokoro/checkpoints/kokoro-v1.0.onnx`
 - Data file: `/usr/local/share/kokoro/data/voices-v1.0.bin`
+- eSpeak NG data path: `/usr/share/espeak-ng-data`
+  (or appropriate path for your system)
 
 **Security:**
 - Binary: 755 permissions, owned by root or deployment user
@@ -523,6 +553,10 @@ language.
 ### Global Settings (Admin Form)
 
 - **Koko Binary Path** - Absolute path to koko executable
+- **Model Path** - Absolute path to kokoro-v1.0.onnx file
+- **Data Path** - Absolute path to voices-v1.0.bin file
+- **eSpeak NG Data Path** - Absolute path to espeak-ng-data directory
+  (required for phoneme processing)
 - **Default Voice** - Voice to use when none specified
 - **Default Speed** - Speech speed (0.5 - 2.0)
 - **Cache Audio** - Enable/disable audio file caching
@@ -688,8 +722,29 @@ modules/custom/ai_tts/bin/koko"
 **Solutions:**
 1. Clear Drupal cache: `drush cr`
 2. Verify the module is enabled: `drush pm:list | grep ai_tts`
-3. Check that Drush can find the commands: `drush list | grep tts`
+3. Check that Drush can find the commands:
+   `drush list | grep tts`
 4. Ensure `drush.services.yml` exists in the module directory
+
+### eSpeak NG errors
+
+**Error:** "Failed to initialize eSpeak-ng" or
+"Error processing file 'espeak-ng-data/phontab'"
+
+**Solutions:**
+1. Install eSpeak NG:
+   - macOS: `brew install espeak-ng`
+   - Ubuntu/Debian: `sudo apt-get install espeak-ng`
+   - Fedora/RHEL: `sudo dnf install espeak-ng`
+2. Find the espeak-ng-data directory:
+   - macOS: `find /opt/homebrew -name "espeak-ng-data" -type d`
+   - Linux: `find /usr -name "espeak-ng-data" -type d 2>/dev/null`
+3. Configure the path in module settings at `/admin/config/media/ai-tts`
+4. Common paths:
+   - macOS (Homebrew): `/opt/homebrew/Cellar/espeak-ng/[version]/share/espeak-ng-data`
+   - Ubuntu/Debian: `/usr/share/espeak-ng-data`
+   - Fedora/RHEL: `/usr/share/espeak-ng-data`
+5. Verify the path contains files like `phontab`, `phonindex`, etc.
 
 ## Known Limitations
 
