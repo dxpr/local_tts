@@ -130,8 +130,6 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
    */
   public function defaultConfiguration() {
     return [
-      'button_text' => $this->t('Listen to this page'),
-      'stop_button_text' => $this->t('Stop'),
       'show_voice_selector' => TRUE,
       'show_speed_control' => TRUE,
       'fields' => [],
@@ -144,20 +142,6 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
   public function blockForm($form, FormStateInterface $form_state) {
     $form = parent::blockForm($form, $form_state);
     $config = $this->getConfiguration();
-
-    $form['button_text'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Listen Button Text'),
-      '#default_value' => $config['button_text'],
-      '#description' => $this->t('Text displayed on the listen button.'),
-    ];
-
-    $form['stop_button_text'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Stop Button Text'),
-      '#default_value' => $config['stop_button_text'],
-      '#description' => $this->t('Text displayed on the stop button.'),
-    ];
 
     $form['show_voice_selector'] = [
       '#type' => 'checkbox',
@@ -211,8 +195,6 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
    * {@inheritdoc}
    */
   public function blockSubmit($form, FormStateInterface $form_state) {
-    $this->configuration['button_text'] = $form_state->getValue('button_text');
-    $this->configuration['stop_button_text'] = $form_state->getValue('stop_button_text');
     $this->configuration['show_voice_selector'] = $form_state->getValue('show_voice_selector');
     $this->configuration['show_speed_control'] = $form_state->getValue('show_speed_control');
     $this->configuration['fields'] = array_filter($form_state->getValue('fields') ?? []);
@@ -317,7 +299,7 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
 
     $build['controls']['listen_button'] = [
       '#type' => 'button',
-      '#value' => $config['button_text'],
+      '#value' => $this->t('Listen to this page'),
       '#attributes' => [
         'id' => 'ai-tts-play-button',
         'class' => ['ai-tts-button', 'ai-tts-play-button'],
@@ -329,7 +311,7 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
 
     $build['controls']['stop_button'] = [
       '#type' => 'button',
-      '#value' => $config['stop_button_text'],
+      '#value' => $this->t('Stop'),
       '#attributes' => [
         'id' => 'ai-tts-stop-button',
         'class' => ['ai-tts-button', 'ai-tts-stop-button'],
