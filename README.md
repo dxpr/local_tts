@@ -558,6 +558,107 @@ language.
 - **Show Speed Control** - Allow users to adjust speed
 - **Content Selector** - CSS selector for content to read
 
+## Development
+
+### Git Hooks for Code Quality
+
+The module includes git hooks that automatically enforce Drupal coding
+standards on every commit.
+
+**What the hooks do:**
+
+- **pre-commit**: Automatically fixes code style issues and blocks
+  commits with remaining errors
+- **commit-msg**: Validates commit message format (conventional commits
+  recommended)
+
+**Installation:**
+
+```bash
+cd web/modules/custom/ai_tts
+./scripts/install-git-hooks.sh
+```
+
+**How it works:**
+
+1. You stage files: `git add src/Form/MyForm.php`
+2. You commit: `git commit -m "feat: add new feature"`
+3. Pre-commit hook runs automatically:
+   - Auto-fixes code style issues (spacing, indentation, etc.)
+   - Stages the fixed files
+   - Checks for remaining violations
+   - Blocks commit if errors remain
+4. Commit-msg hook validates your commit message format
+5. If all checks pass, commit proceeds
+
+**Example workflow:**
+
+```bash
+# Make changes to a file
+vim src/TtsService.php
+
+# Stage and commit
+git add src/TtsService.php
+git commit -m "fix: resolve caching issue"
+
+# Hook output:
+# ✓ Auto-fixed 5 issues
+# ✓ All checks passed! Proceeding with commit...
+```
+
+**Skipping hooks (not recommended):**
+
+```bash
+git commit --no-verify -m "message"
+```
+
+**Uninstalling hooks:**
+
+```bash
+rm .git/hooks/pre-commit .git/hooks/commit-msg
+```
+
+### Running Linters Manually
+
+The module includes Docker-based linting for CI/CD:
+
+```bash
+# Run all linters (no auto-fix)
+docker compose --profile lint run --rm drupal-lint
+
+# Run with auto-fix
+docker compose --profile lint run --rm drupal-lint-auto-fix
+
+# Run PHPStan static analysis
+docker compose --profile lint run --rm drupal-check
+```
+
+Or use Composer scripts:
+
+```bash
+# Check code style
+composer run lint
+
+# Auto-fix code style
+composer run lint:fix
+```
+
+### Contributing
+
+When contributing to this module:
+
+1. Install git hooks: `./scripts/install-git-hooks.sh`
+2. Follow Drupal coding standards (enforced by hooks)
+3. Use conventional commit messages:
+   - `feat:` - New features
+   - `fix:` - Bug fixes
+   - `docs:` - Documentation changes
+   - `refactor:` - Code refactoring
+   - `test:` - Adding tests
+   - `chore:` - Maintenance tasks
+4. Ensure all linters pass before pushing
+5. Test your changes with `drush ai-tts:test`
+
 ## Troubleshooting
 
 ### Binary installation fails
