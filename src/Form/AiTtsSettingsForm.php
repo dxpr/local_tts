@@ -274,37 +274,18 @@ class AiTtsSettingsForm extends ConfigFormBase {
     $form['cache_management'] = [
       '#type' => 'fieldset',
       '#title' => $this->t('Cache Management'),
-      '#description' => $this->t('Configure automatic cache cleanup to manage disk space and content freshness.'),
-    ];
-
-    $form['cache_management']['cache_size_limit_enabled'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Enable size-based cache cleanup'),
-      '#description' => $this->t('Automatically delete least recently used audio files when cache exceeds size limit.'),
-      '#default_value' => $config->get('cache_size_limit_enabled') ?? TRUE,
+      '#description' => $this->t('Automatic cache cleanup is always enabled: size-based cleanup removes least recently used files when limit is exceeded, and content-based invalidation removes audio when source content is updated.'),
     ];
 
     $form['cache_management']['cache_max_size'] = [
       '#type' => 'number',
       '#title' => $this->t('Maximum cache size (MB)'),
-      '#description' => $this->t('Maximum disk space for cached audio files. Default: 1024 MB (1 GB). Files will be deleted by least recently used when this limit is exceeded.'),
+      '#description' => $this->t('Maximum disk space for cached audio files. Default: 1024 MB (1 GB). Least recently used files will be automatically deleted when this limit is exceeded.'),
       '#default_value' => round(($config->get('cache_max_size') ?? 1073741824) / 1048576),
       '#min' => 10,
       '#max' => 102400,
       '#step' => 1,
       '#field_suffix' => 'MB',
-      '#states' => [
-        'visible' => [
-          ':input[name="cache_size_limit_enabled"]' => ['checked' => TRUE],
-        ],
-      ],
-    ];
-
-    $form['cache_management']['cache_content_tracking_enabled'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Enable content-based cache invalidation'),
-      '#description' => $this->t('Automatically delete audio files when the source content is updated. Tracks entity changes (nodes, taxonomy terms, etc.) and removes associated audio.'),
-      '#default_value' => $config->get('cache_content_tracking_enabled') ?? TRUE,
     ];
 
     $form['security'] = [
@@ -411,9 +392,9 @@ class AiTtsSettingsForm extends ConfigFormBase {
       ->set('default_speed', $form_state->getValue('default_speed'))
       ->set('cache_audio', $form_state->getValue('cache_audio'))
       ->set('audio_directory', $form_state->getValue('audio_directory'))
-      ->set('cache_size_limit_enabled', $form_state->getValue('cache_size_limit_enabled'))
+      ->set('cache_size_limit_enabled', TRUE)
       ->set('cache_max_size', $max_size_bytes)
-      ->set('cache_content_tracking_enabled', $form_state->getValue('cache_content_tracking_enabled'))
+      ->set('cache_content_tracking_enabled', TRUE)
       ->set('max_text_length', $form_state->getValue('max_text_length'))
       ->set('generation_timeout', $form_state->getValue('generation_timeout'))
       ->set('rate_limit_enabled', $form_state->getValue('rate_limit_enabled'))
