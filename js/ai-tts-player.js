@@ -20,6 +20,7 @@
         const voiceSelect = player.querySelector('#ai-tts-voice-select');
         const speedInput = player.querySelector('#ai-tts-speed-input');
         const statusDiv = player.querySelector('#ai-tts-status');
+        const durationDiv = player.querySelector('#ai-tts-duration');
         const audioElement = player.querySelector('#ai-tts-audio');
 
         if (!playButton || !stopButton || !audioElement) {
@@ -55,6 +56,25 @@
         let currentAudioUrl = null;
 
         audioElement.loop = false;
+
+        function formatDuration(seconds) {
+          if (!seconds || !isFinite(seconds)) {
+            return '';
+          }
+          const mins = Math.floor(seconds / 60);
+          const secs = Math.floor(seconds % 60);
+          return mins + ':' + (secs < 10 ? '0' : '') + secs;
+        }
+
+        function updateDuration(duration) {
+          if (durationDiv && duration) {
+            const formatted = formatDuration(duration);
+            if (formatted) {
+              durationDiv.textContent = Drupal.t('Duration: @duration', {'@duration': formatted});
+              durationDiv.style.display = '';
+            }
+          }
+        }
 
         function updateStatus(message, type) {
           type = type || 'info';
@@ -203,6 +223,9 @@
           stopButton.disabled = true;
           updateButtonStates();
           updateStatus('', 'status');
+          if (durationDiv) {
+            durationDiv.style.display = 'none';
+          }
         }
 
         function togglePlay() {
@@ -250,6 +273,10 @@
           isPlaying = false;
           stopButton.disabled = true;
           updateButtonStates();
+        });
+
+        audioElement.addEventListener('loadedmetadata', function() {
+          updateDuration(audioElement.duration);
         });
 
         playButton.addEventListener('click', function(e) {

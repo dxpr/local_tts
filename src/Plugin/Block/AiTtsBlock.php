@@ -404,6 +404,15 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
       ],
     ];
 
+    $build['duration'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'ai-tts-duration',
+        'class' => ['ai-tts-duration'],
+        'style' => 'display: none;',
+      ],
+    ];
+
     $build['audio'] = [
       '#type' => 'html_tag',
       '#tag' => 'audio',
