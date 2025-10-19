@@ -34,9 +34,7 @@ function ai_tts_cron() {
   $config = \Drupal::config('ai_tts.settings');
 
   // Content-based cleanup runs first (more specific).
-  if ($config->get('cache_content_tracking_enabled')) {
-    _ai_tts_cleanup_stale_content();
-  }
+  _ai_tts_cleanup_stale_content();
 
   // Size-based cleanup runs second (enforces limits).
   if ($config->get('cache_size_limit_enabled')) {
@@ -48,12 +46,6 @@ function ai_tts_cron() {
  * Implements hook_entity_update().
  */
 function ai_tts_entity_update(EntityInterface $entity) {
-  $config = \Drupal::config('ai_tts.settings');
-
-  if (!$config->get('cache_content_tracking_enabled')) {
-    return;
-  }
-
   // Delete audio files associated with this entity.
   \Drupal::service('ai_tts.tts_service')->deleteAudioForEntity(
     $entity->getEntityTypeId(),
@@ -65,12 +57,6 @@ function ai_tts_entity_update(EntityInterface $entity) {
  * Implements hook_entity_delete().
  */
 function ai_tts_entity_delete(EntityInterface $entity) {
-  $config = \Drupal::config('ai_tts.settings');
-
-  if (!$config->get('cache_content_tracking_enabled')) {
-    return;
-  }
-
   // Delete audio files associated with this entity.
   \Drupal::service('ai_tts.tts_service')->deleteAudioForEntity(
     $entity->getEntityTypeId(),
