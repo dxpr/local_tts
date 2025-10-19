@@ -29,9 +29,6 @@ ai_tts.settings:
     cache_max_size:
       type: integer
       label: 'Maximum cache size in bytes'
-    cache_content_tracking_enabled:
-      type: boolean
-      label: 'Enable content-based cache invalidation'
     max_text_length:
       type: integer
       label: 'Maximum text length in characters (0 for unlimited)'

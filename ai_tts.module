@@ -33,10 +33,8 @@ function ai_tts_help($route_name, RouteMatchInterface $route_match) {
 function ai_tts_cron() {
   $config = \Drupal::config('ai_tts.settings');
 
-  // Content-based cleanup runs first (more specific).
   _ai_tts_cleanup_stale_content();
 
-  // Size-based cleanup runs second (enforces limits).
   if ($config->get('cache_size_limit_enabled')) {
     _ai_tts_enforce_size_limit();
   }
@@ -46,7 +44,6 @@ function ai_tts_cron() {
  * Implements hook_entity_update().
  */
 function ai_tts_entity_update(EntityInterface $entity) {
-  // Delete audio files associated with this entity.
   \Drupal::service('ai_tts.tts_service')->deleteAudioForEntity(
     $entity->getEntityTypeId(),
     $entity->id()
@@ -57,7 +54,6 @@ function ai_tts_entity_update(EntityInterface $entity) {
  * Implements hook_entity_delete().
  */
 function ai_tts_entity_delete(EntityInterface $entity) {
-  // Delete audio files associated with this entity.
   \Drupal::service('ai_tts.tts_service')->deleteAudioForEntity(
     $entity->getEntityTypeId(),
     $entity->id()
@@ -84,14 +80,11 @@ function _ai_tts_cleanup_stale_content() {
       $metadata = json_decode(file_get_contents($file->getPathname()), TRUE);
 
       if (!empty($metadata['entity_type']) && !empty($metadata['entity_id'])) {
-        // Check if entity still exists and hasn't been modified.
         try {
           $entity = \Drupal::entityTypeManager()
             ->getStorage($metadata['entity_type'])
             ->load($metadata['entity_id']);
 
-          // Delete if entity is missing or has been modified since audio
-          // was generated.
           $should_delete = FALSE;
 
           if (!$entity) {
@@ -109,7 +102,6 @@ function _ai_tts_cleanup_stale_content() {
           }
         }
         catch (\Exception $e) {
-          // Entity type doesn't exist, delete the audio.
           _ai_tts_delete_audio_pair($file->getPathname());
           $deleted++;
         }
@@ -136,14 +128,12 @@ function _ai_tts_enforce_size_limit() {
     return;
   }
 
-  // Calculate current cache size.
   $current_size = _ai_tts_get_directory_size($directory);
 
   if ($current_size <= $max_size) {
     return;
   }
 
-  // Get all WAV files sorted by access time (oldest first).
   $files = [];
   $iterator = new \RecursiveIteratorIterator(
     new \RecursiveDirectoryIterator($directory, \RecursiveDirectoryIterator::SKIP_DOTS)
@@ -159,10 +149,8 @@ function _ai_tts_enforce_size_limit() {
     }
   }
 
-  // Sort by access time (oldest first).
   usort($files, fn($a, $b) => $a['atime'] <=> $b['atime']);
 
-  // Delete files until we're under the limit.
   $bytes_freed = 0;
   $deleted = 0;
 
@@ -171,7 +159,6 @@ function _ai_tts_enforce_size_limit() {
       break;
     }
 
-    // Delete the WAV file and its metadata.
     @unlink($file['path']);
     $metadata_file = substr($file['path'], 0, -4) . '.json';
     if (file_exists($metadata_file)) {

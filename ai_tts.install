@@ -303,47 +303,6 @@ function _ai_tts_count_files($path) {
 }
 
 /**
- * Add missing configuration values and remove deprecated settings.
- */
-function ai_tts_update_10001() {
-  $config_factory = \Drupal::configFactory();
-  $config = $config_factory->getEditable('ai_tts.settings');
-
-  // Define default values for missing config keys.
-  $defaults = [
-    'cache_size_limit_enabled' => TRUE,
-    'cache_max_size' => 1073741824,
-    'max_text_length' => 1000000,
-    'generation_timeout' => 900,
-    'rate_limit_enabled' => TRUE,
-    'rate_limit_threshold' => 20,
-  ];
-
-  // Add missing keys.
-  $updated = FALSE;
-  foreach ($defaults as $key => $value) {
-    if ($config->get($key) === NULL) {
-      $config->set($key, $value);
-      $updated = TRUE;
-    }
-  }
-
-  // Remove deprecated cache_content_tracking_enabled setting.
-  // Content tracking is now always enabled for data consistency.
-  if ($config->get('cache_content_tracking_enabled') !== NULL) {
-    $config->clear('cache_content_tracking_enabled');
-    $updated = TRUE;
-  }
-
-  if ($updated) {
-    $config->save();
-    return t('Updated AI TTS configuration: added missing values and removed deprecated settings.');
-  }
-
-  return t('AI TTS configuration is up to date.');
-}
-
-/**
  * Implements hook_uninstall().
  */
 function ai_tts_uninstall() {

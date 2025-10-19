@@ -338,7 +338,6 @@ class AiTtsSettingsForm extends ConfigFormBase {
       ->set('audio_directory', $form_state->getValue('audio_directory'))
       ->set('cache_size_limit_enabled', TRUE)
       ->set('cache_max_size', $max_size_bytes)
-      ->set('cache_content_tracking_enabled', TRUE)
       ->set('max_text_length', $form_state->getValue('max_text_length'))
       ->set('generation_timeout', $form_state->getValue('generation_timeout'))
       ->set('rate_limit_enabled', $form_state->getValue('rate_limit_enabled'))

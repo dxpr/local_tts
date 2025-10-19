@@ -246,10 +246,7 @@ class TtsService {
 
     $uri = $audio_dir . '/' . $cache_key . '.wav';
 
-    // Save metadata for content tracking if enabled.
-    if ($config->get('cache_content_tracking_enabled')) {
-      $this->saveMetadata($cache_key, $text, $voice, $speed, $options);
-    }
+    $this->saveMetadata($cache_key, $text, $voice, $speed, $options);
 
     return $uri;
   }
