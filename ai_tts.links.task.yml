@@ -11,9 +11,3 @@ ai_tts.test:
   title: 'Test'
   base_route: ai_tts.settings
   weight: 10
-
-ai_tts.extra_field_settings:
-  route_name: ai_tts.extra_field_settings
-  title: 'Extra Field'
-  base_route: ai_tts.settings
-  weight: 20

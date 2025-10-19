@@ -14,14 +14,6 @@ ai_tts.test:
   requirements:
     _permission: 'administer ai tts settings'
 
-ai_tts.extra_field_settings:
-  path: '/admin/config/media/ai-tts/extra-field'
-  defaults:
-    _form: '\Drupal\ai_tts\Form\ExtraFieldSettingsForm'
-    _title: 'TTS Extra Field Settings'
-  requirements:
-    _permission: 'administer ai tts settings'
-
 ai_tts.generate:
   path: '/ai-tts/generate'
   defaults:

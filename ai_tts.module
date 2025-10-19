@@ -5,7 +5,6 @@
  * AI Text-to-Speech module.
  */
 
-use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
@@ -118,83 +117,6 @@ function _ai_tts_text_content_changed($entity, $original) {
   }
 
   return FALSE;
-}
-
-/**
- * Implements hook_entity_extra_field_info().
- *
- * Register "AI TTS Player" extra field for configured entity bundles.
- * Follows Drupal core pattern from comment and node modules.
- *
- * @see comment_entity_extra_field_info()
- * @see node_entity_extra_field_info()
- */
-function ai_tts_entity_extra_field_info() {
-  $extra = [];
-
-  $config = \Drupal::config('ai_tts.settings');
-  $enabled_bundles = $config->get('extra_field_enabled_bundles') ?? [];
-
-  // Register extra field for each configured bundle.
-  foreach ($enabled_bundles as $bundle_config) {
-    $entity_type = $bundle_config['entity_type'] ?? NULL;
-    $bundle = $bundle_config['bundle'] ?? NULL;
-
-    if ($entity_type && $bundle) {
-      $extra[$entity_type][$bundle]['display']['ai_tts_player'] = [
-        'label' => t('AI TTS Player'),
-        'description' => t('Text-to-speech audio player for this content'),
-        'weight' => 100,
-        'visible' => TRUE,
-      ];
-    }
-  }
-
-  return $extra;
-}
-
-/**
- * Implements hook_entity_view().
- *
- * Render the AI TTS player extra field when enabled in display configuration.
- * Uses lazy builder pattern for performance.
- *
- * @see \Drupal\comment\CommentViewBuilder::buildComponents()
- * @see \Drupal\content_moderation\EntityOperations::entityView()
- */
-function ai_tts_entity_view(array &$build, EntityInterface $entity, EntityViewDisplayInterface $display, $view_mode) {
-  // Check if the extra field component is configured for this display.
-  if (!$display->getComponent('ai_tts_player')) {
-    return;
-  }
-
-  // Don't render in preview mode.
-  if (isset($entity->in_preview) && $entity->in_preview) {
-    return;
-  }
-
-  // Get entity info.
-  $entity_type_id = $entity->getEntityTypeId();
-  $entity_id = $entity->id();
-  $langcode = $entity->language()->getId();
-
-  // Use lazy builder for deferred rendering (performance optimization).
-  // This allows the player to be rendered only when actually needed,
-  // and enables proper caching of the player component separately
-  // from the rest of the entity.
-  $build['ai_tts_player'] = [
-    '#lazy_builder' => [
-      'ai_tts.lazy_builders:renderPlayer',
-      [
-        $entity_type_id,
-        $entity_id,
-        $view_mode,
-        $langcode,
-        !empty($entity->in_preview),
-      ],
-    ],
-    '#create_placeholder' => TRUE,
-  ];
 }
 
 /**
