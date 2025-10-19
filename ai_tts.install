@@ -8,6 +8,85 @@
 use Drupal\Core\File\FileSystemInterface;
 
 /**
+ * Implements hook_schema().
+ */
+function ai_tts_schema() {
+  $schema['ai_tts_cache'] = [
+    'description' => 'Tracks cached TTS audio files',
+    'fields' => [
+      'id' => [
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+      'cache_key' => [
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+      ],
+      'entity_type' => [
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => FALSE,
+      ],
+      'entity_id' => [
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+      ],
+      'language' => [
+        'type' => 'varchar',
+        'length' => 12,
+        'not null' => TRUE,
+        'default' => 'en',
+      ],
+      'text_hash' => [
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+      ],
+      'voice' => [
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+      ],
+      'speed' => [
+        'type' => 'float',
+        'not null' => TRUE,
+        'default' => 1.0,
+      ],
+      'file_size' => [
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ],
+      'created' => [
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+      'accessed' => [
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+    ],
+    'primary key' => ['id'],
+    'unique keys' => [
+      'cache_key' => ['cache_key'],
+    ],
+    'indexes' => [
+      'entity' => ['entity_type', 'entity_id'],
+      'entity_language' => ['entity_type', 'entity_id', 'language'],
+      'accessed' => ['accessed'],
+    ],
+  ];
+
+  return $schema;
+}
+
+/**
  * Implements hook_requirements().
  */
 function ai_tts_requirements($phase) {
@@ -303,10 +382,17 @@ function _ai_tts_count_files($path) {
 }
 
 /**
+ * Install ai_tts_cache table for existing installations.
+ */
+function ai_tts_update_10002() {
+  $schema = ai_tts_schema();
+  \Drupal::database()->schema()->createTable('ai_tts_cache', $schema['ai_tts_cache']);
+}
+
+/**
  * Implements hook_uninstall().
  */
 function ai_tts_uninstall() {
-  // Optionally clean up the audio cache on uninstall.
   $config = \Drupal::config('ai_tts.settings');
   $audio_directory = $config->get('audio_directory') ?: 'public://ai-tts';
 

@@ -61,7 +61,7 @@ function ai_tts_entity_delete(EntityInterface $entity) {
 }
 
 /**
- * Clean up audio files where source content has changed.
+ * Clean up audio files where source content has changed or been deleted.
  */
 function _ai_tts_cleanup_stale_content() {
   $directory = _ai_tts_get_audio_directory();
@@ -71,46 +71,43 @@ function _ai_tts_cleanup_stale_content() {
   }
 
   $deleted = 0;
-  $files = new \RecursiveIteratorIterator(
-    new \RecursiveDirectoryIterator($directory, \RecursiveDirectoryIterator::SKIP_DOTS)
-  );
+  $records = \Drupal::database()->select('ai_tts_cache', 'a')
+    ->fields('a', ['id', 'cache_key', 'entity_type', 'entity_id'])
+    ->isNotNull('entity_type')
+    ->isNotNull('entity_id')
+    ->execute()
+    ->fetchAll();
 
-  foreach ($files as $file) {
-    if ($file->isFile() && $file->getExtension() === 'json') {
-      $metadata = json_decode(file_get_contents($file->getPathname()), TRUE);
+  foreach ($records as $record) {
+    $should_delete = FALSE;
 
-      if (!empty($metadata['entity_type']) && !empty($metadata['entity_id'])) {
-        try {
-          $entity = \Drupal::entityTypeManager()
-            ->getStorage($metadata['entity_type'])
-            ->load($metadata['entity_id']);
+    try {
+      $entity = \Drupal::entityTypeManager()
+        ->getStorage($record->entity_type)
+        ->load($record->entity_id);
 
-          $should_delete = FALSE;
-
-          if (!$entity) {
-            $should_delete = TRUE;
-          }
-          elseif (method_exists($entity, 'getChangedTime') && !empty($metadata['entity_changed'])) {
-            if ($entity->getChangedTime() > $metadata['entity_changed']) {
-              $should_delete = TRUE;
-            }
-          }
-
-          if ($should_delete) {
-            _ai_tts_delete_audio_pair($file->getPathname());
-            $deleted++;
-          }
-        }
-        catch (\Exception $e) {
-          _ai_tts_delete_audio_pair($file->getPathname());
-          $deleted++;
-        }
+      if (!$entity) {
+        $should_delete = TRUE;
       }
+    }
+    catch (\Exception $e) {
+      $should_delete = TRUE;
+    }
+
+    if ($should_delete) {
+      $file_path = $directory . '/' . $record->cache_key . '.wav';
+      if (file_exists($file_path)) {
+        @unlink($file_path);
+      }
+      \Drupal::database()->delete('ai_tts_cache')
+        ->condition('id', $record->id)
+        ->execute();
+      $deleted++;
     }
   }
 
   if ($deleted > 0) {
-    \Drupal::logger('ai_tts')->info('Content-based cleanup: Deleted @count stale audio files.', [
+    \Drupal::logger('ai_tts')->info('Deleted @count stale audio files', [
       '@count' => $deleted,
     ]);
   }
@@ -128,52 +125,43 @@ function _ai_tts_enforce_size_limit() {
     return;
   }
 
-  $current_size = _ai_tts_get_directory_size($directory);
+  $current_size = (int) \Drupal::database()->query('SELECT SUM(file_size) FROM {ai_tts_cache}')->fetchField();
 
   if ($current_size <= $max_size) {
     return;
   }
 
-  $files = [];
-  $iterator = new \RecursiveIteratorIterator(
-    new \RecursiveDirectoryIterator($directory, \RecursiveDirectoryIterator::SKIP_DOTS)
-  );
-
-  foreach ($iterator as $file) {
-    if ($file->isFile() && $file->getExtension() === 'wav') {
-      $files[] = [
-        'path' => $file->getPathname(),
-        'atime' => $file->getATime(),
-        'size' => $file->getSize(),
-      ];
-    }
-  }
-
-  usort($files, fn($a, $b) => $a['atime'] <=> $b['atime']);
+  $records = \Drupal::database()->select('ai_tts_cache', 'a')
+    ->fields('a', ['id', 'cache_key', 'file_size'])
+    ->orderBy('accessed', 'ASC')
+    ->execute()
+    ->fetchAll();
 
   $bytes_freed = 0;
   $deleted = 0;
 
-  foreach ($files as $file) {
+  foreach ($records as $record) {
     if ($current_size - $bytes_freed <= $max_size) {
       break;
     }
 
-    @unlink($file['path']);
-    $metadata_file = substr($file['path'], 0, -4) . '.json';
-    if (file_exists($metadata_file)) {
-      @unlink($metadata_file);
+    $file_path = $directory . '/' . $record->cache_key . '.wav';
+    if (file_exists($file_path)) {
+      @unlink($file_path);
     }
 
-    $bytes_freed += $file['size'];
+    \Drupal::database()->delete('ai_tts_cache')
+      ->condition('id', $record->id)
+      ->execute();
+
+    $bytes_freed += $record->file_size;
     $deleted++;
   }
 
   if ($deleted > 0) {
-    \Drupal::logger('ai_tts')->info('Size-based cleanup: Deleted @count files (@size freed) to maintain @limit limit.', [
+    \Drupal::logger('ai_tts')->info('Deleted @count files (@size freed)', [
       '@count' => $deleted,
       '@size' => format_size($bytes_freed),
-      '@limit' => format_size($max_size),
     ]);
   }
 }
@@ -195,20 +183,4 @@ function _ai_tts_get_audio_directory() {
   }
 
   return $directory;
-}
-
-/**
- * Delete an audio file pair (JSON metadata + WAV file).
- *
- * @param string $json_path
- *   Path to the JSON metadata file.
- *
- * @return bool
- *   TRUE if files were deleted.
- */
-function _ai_tts_delete_audio_pair($json_path) {
-  $base_path = substr($json_path, 0, -5);
-  @unlink($json_path);
-  @unlink($base_path . '.wav');
-  return TRUE;
 }

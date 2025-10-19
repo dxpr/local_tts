@@ -522,35 +522,30 @@ class TtsService {
       return;
     }
 
-    $metadata = [
+    $file_path = $directory . '/' . $cache_key . '.wav';
+    $file_size = file_exists($file_path) ? filesize($file_path) : 0;
+    $now = \Drupal::time()->getRequestTime();
+
+    $record = [
+      'cache_key' => $cache_key,
       'text_hash' => md5($text),
       'voice' => $voice,
       'speed' => $speed,
-      'generated' => \Drupal::time()->getRequestTime(),
+      'language' => $options['language'] ?? 'en',
+      'file_size' => $file_size,
+      'created' => $now,
+      'accessed' => $now,
     ];
 
-    // Add entity tracking if provided.
     if (!empty($options['entity_type']) && !empty($options['entity_id'])) {
-      $metadata['entity_type'] = $options['entity_type'];
-      $metadata['entity_id'] = $options['entity_id'];
-
-      // Get entity changed time if available.
-      try {
-        $entity = \Drupal::entityTypeManager()
-          ->getStorage($options['entity_type'])
-          ->load($options['entity_id']);
-
-        if ($entity && method_exists($entity, 'getChangedTime')) {
-          $metadata['entity_changed'] = $entity->getChangedTime();
-        }
-      }
-      catch (\Exception $e) {
-        // Entity doesn't exist or can't be loaded, skip.
-      }
+      $record['entity_type'] = $options['entity_type'];
+      $record['entity_id'] = $options['entity_id'];
     }
 
-    $metadata_file = $directory . '/' . $cache_key . '.json';
-    file_put_contents($metadata_file, json_encode($metadata, JSON_PRETTY_PRINT));
+    \Drupal::database()->merge('ai_tts_cache')
+      ->key(['cache_key' => $cache_key])
+      ->fields($record)
+      ->execute();
   }
 
   /**
@@ -563,22 +558,20 @@ class TtsService {
    *   The metadata array, or NULL if not found.
    */
   public function loadMetadata($cache_key) {
-    $config = $this->configFactory->get('ai_tts.settings');
-    $audio_dir = $config->get('audio_directory') ?: 'public://ai-tts';
-    $directory = $this->fileSystem->realpath($audio_dir);
+    $result = \Drupal::database()->select('ai_tts_cache', 'a')
+      ->fields('a')
+      ->condition('cache_key', $cache_key)
+      ->execute()
+      ->fetchAssoc();
 
-    if (!$directory) {
-      return NULL;
+    if ($result) {
+      \Drupal::database()->update('ai_tts_cache')
+        ->fields(['accessed' => \Drupal::time()->getRequestTime()])
+        ->condition('cache_key', $cache_key)
+        ->execute();
     }
 
-    $metadata_file = $directory . '/' . $cache_key . '.json';
-
-    if (!file_exists($metadata_file)) {
-      return NULL;
-    }
-
-    $contents = file_get_contents($metadata_file);
-    return json_decode($contents, TRUE);
+    return $result ?: NULL;
   }
 
   /**
@@ -588,11 +581,13 @@ class TtsService {
    *   The entity type.
    * @param int|string $entity_id
    *   The entity ID.
+   * @param string|null $language
+   *   Optional language code to delete only specific language files.
    *
    * @return int
    *   The number of files deleted.
    */
-  public function deleteAudioForEntity($entity_type, $entity_id) {
+  public function deleteAudioForEntity($entity_type, $entity_id, $language = NULL) {
     $config = $this->configFactory->get('ai_tts.settings');
     $audio_dir = $config->get('audio_directory') ?: 'public://ai-tts';
     $directory = $this->fileSystem->realpath($audio_dir);
@@ -601,27 +596,34 @@ class TtsService {
       return 0;
     }
 
+    $query = \Drupal::database()->select('ai_tts_cache', 'a')
+      ->fields('a', ['cache_key'])
+      ->condition('entity_type', $entity_type)
+      ->condition('entity_id', $entity_id);
+
+    if ($language !== NULL) {
+      $query->condition('language', $language);
+    }
+
+    $cache_keys = $query->execute()->fetchCol();
+
+    if (empty($cache_keys)) {
+      return 0;
+    }
+
     $deleted = 0;
-    $files = new \RecursiveIteratorIterator(
-      new \RecursiveDirectoryIterator($directory, \RecursiveDirectoryIterator::SKIP_DOTS)
-    );
-
-    foreach ($files as $file) {
-      if ($file->isFile() && $file->getExtension() === 'json') {
-        $metadata = json_decode(file_get_contents($file->getPathname()), TRUE);
-
-        if (isset($metadata['entity_type']) && isset($metadata['entity_id']) &&
-            $metadata['entity_type'] === $entity_type &&
-            $metadata['entity_id'] == $entity_id) {
-
-          // Delete both the metadata file and the corresponding WAV file.
-          $base_path = substr($file->getPathname(), 0, -5);
-          @unlink($file->getPathname());
-          @unlink($base_path . '.wav');
-          $deleted++;
-        }
+    foreach ($cache_keys as $cache_key) {
+      $file_path = $directory . '/' . $cache_key . '.wav';
+      if (file_exists($file_path)) {
+        @unlink($file_path);
+        $deleted++;
       }
     }
+
+    \Drupal::database()->delete('ai_tts_cache')
+      ->condition('entity_type', $entity_type)
+      ->condition('entity_id', $entity_id)
+      ->execute();
 
     if ($deleted > 0) {
       $this->logger->info('Deleted @count audio files for @type:@id', [
