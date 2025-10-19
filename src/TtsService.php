@@ -94,17 +94,17 @@ class TtsService {
   public function generateSpeech($text, array $options = []) {
     $config = $this->configFactory->get('ai_tts.settings');
 
-    // CRITICAL: Entity context is REQUIRED for generateSpeech().
-    // This prevents orphaned files with NULL entity_type/entity_id that
-    // cannot be deleted.
-    // For non-entity usage (API endpoints, tests), use
-    // generateTransientSpeech() instead.
-    if (empty($options['entity_type']) || empty($options['entity_id'])) {
-      throw new \InvalidArgumentException('generateSpeech() requires entity_type and entity_id in $options. Use generateTransientSpeech() for non-entity audio generation.');
+    // CRITICAL: Entity context is REQUIRED for persistent cached files.
+    // This prevents orphaned files with NULL entity_type/entity_id.
+    // Exception: use_cache=FALSE bypasses this for admin/test forms.
+    $use_cache = $options['use_cache'] ?? $config->get('cache_audio');
+
+    if ($use_cache && (empty($options['entity_type']) || empty($options['entity_id']))) {
+      throw new \InvalidArgumentException('generateSpeech() with use_cache=TRUE requires entity_type and entity_id in $options.');
     }
 
-    $entity_type = $options['entity_type'];
-    $entity_id = $options['entity_id'];
+    $entity_type = $options['entity_type'] ?? NULL;
+    $entity_id = $options['entity_id'] ?? NULL;
 
     // Security: Only generate audio for publicly accessible content.
     try {
@@ -272,7 +272,10 @@ class TtsService {
 
     $uri = $audio_dir . '/' . $cache_key . '.wav';
 
-    $this->saveMetadata($cache_key, $text, $voice, $speed, $options);
+    // Only save metadata for cached files (requires entity context).
+    if ($use_cache) {
+      $this->saveMetadata($cache_key, $text, $voice, $speed, $options);
+    }
 
     return $uri;
   }
