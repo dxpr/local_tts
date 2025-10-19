@@ -252,14 +252,8 @@ function ai_tts_requirements($phase) {
     $max_text_length = $config->get('max_text_length') ?? 1000000;
     $generation_timeout = $config->get('generation_timeout') ?? 900;
     $rate_limit_enabled = $config->get('rate_limit_enabled') ?? TRUE;
-    $audio_dir = $config->get('audio_directory') ?: 'public://ai-tts';
 
     $security_warnings = [];
-
-    // Check if using public directory (potential security concern).
-    if (strpos($audio_dir, 'public://') === 0) {
-      $security_warnings[] = t('Audio files stored in public directory (accessible to all)');
-    }
 
     // Check if text length limit is reasonable.
     if ($max_text_length === 0) {
