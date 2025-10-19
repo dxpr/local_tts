@@ -1,0 +1,29 @@
+services:
+  drupal-lint:
+    image: ${COMPOSER_IMAGE:-composer:2.7}
+    profiles: ["lint"]
+    working_dir: /src
+    command: bash -c "./scripts/linters/run-drupal-lint.sh"
+    environment:
+      TARGET_DRUPAL_CORE_VERSION: ${TARGET_DRUPAL_CORE_VERSION:-11}
+    volumes:
+      - .:/src
+
+  drupal-lint-auto-fix:
+    image: ${COMPOSER_IMAGE:-composer:2.7}
+    profiles: ["lint"]
+    working_dir: /src
+    command: bash -c "./scripts/linters/run-drupal-lint-auto-fix.sh"
+    environment:
+      TARGET_DRUPAL_CORE_VERSION: ${TARGET_DRUPAL_CORE_VERSION:-11}
+    volumes:
+      - .:/src
+
+  drupal-check:
+    image: composer:2.7
+    profiles: ["lint"]
+    working_dir: /
+    command: bash -c "/src/scripts/linters/run-drupal-check.sh"
+    tty: true
+    volumes:
+      - .:/src
