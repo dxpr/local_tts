@@ -6,6 +6,14 @@ ai_tts.settings:
   requirements:
     _permission: 'administer ai tts settings'
 
+ai_tts.test:
+  path: '/admin/config/media/ai-tts/test'
+  defaults:
+    _form: '\Drupal\ai_tts\Form\AiTtsTestForm'
+    _title: 'Test AI TTS'
+  requirements:
+    _permission: 'administer ai tts settings'
+
 ai_tts.generate:
   path: '/ai-tts/generate'
   defaults:
