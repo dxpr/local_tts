@@ -26,6 +26,23 @@
           return;
         }
 
+        // Wrap buttons with icon containers (needed because buttons are input elements)
+        if (!playButton.parentElement.classList.contains('ai-tts-button-wrapper')) {
+          const playWrapper = document.createElement('span');
+          playWrapper.className = 'ai-tts-button-wrapper';
+          playWrapper.innerHTML = '<svg class="ai-tts-icon play-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg><svg class="ai-tts-icon pause-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>';
+          playButton.parentNode.insertBefore(playWrapper, playButton);
+          playWrapper.appendChild(playButton);
+        }
+
+        if (!stopButton.parentElement.classList.contains('ai-tts-button-wrapper')) {
+          const stopWrapper = document.createElement('span');
+          stopWrapper.className = 'ai-tts-button-wrapper';
+          stopWrapper.innerHTML = '<svg class="ai-tts-icon stop-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M6 6h12v12H6z"/></svg>';
+          stopButton.parentNode.insertBefore(stopWrapper, stopButton);
+          stopWrapper.appendChild(stopButton);
+        }
+
         const config = drupalSettings.aiTts || {};
         const content = config.content || '';
 

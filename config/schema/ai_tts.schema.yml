@@ -5,6 +5,12 @@ ai_tts.settings:
     koko_binary_path:
       type: string
       label: 'Path to koko binary'
+    model_path:
+      type: string
+      label: 'Path to Kokoro ONNX model file'
+    data_path:
+      type: string
+      label: 'Path to Kokoro voices data file'
     default_voice:
       type: string
       label: 'Default voice'

@@ -30,30 +30,126 @@ class AiTtsSettingsForm extends ConfigFormBase {
   public function buildForm(array $form, FormStateInterface $form_state) {
     $config = $this->config('ai_tts.settings');
 
-    $form['koko_binary'] = [
-      '#type' => 'fieldset',
-      '#title' => $this->t('Kokoro Binary Configuration'),
+    // Binary Configuration.
+    $form['binary'] = [
+      '#type' => 'details',
+      '#title' => $this->t('Binary Configuration'),
+      '#open' => TRUE,
     ];
 
-    $form['koko_binary']['koko_binary_path'] = [
+    $form['binary']['koko_binary_path'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Path to koko binary'),
-      '#description' => $this->t('Absolute path to the koko executable. Example: /usr/local/bin/koko'),
+      '#title' => $this->t('Koko executable path'),
+      '#description' => $this->t('Path to the koko binary. Examples: <code>/usr/local/bin/koko</code> or <code>modules/custom/ai_tts/bin/koko</code>'),
       '#default_value' => $config->get('koko_binary_path'),
       '#required' => TRUE,
+      '#attributes' => [
+        'placeholder' => '/usr/local/bin/koko',
+      ],
     ];
 
-    // Test the binary.
+    // Binary status check.
     $binary_path = $config->get('koko_binary_path');
-    if ($binary_path && file_exists($binary_path) && is_executable($binary_path)) {
-      $form['koko_binary']['binary_status'] = [
-        '#markup' => '<div class="messages messages--status">' . $this->t('Binary found and executable at: @path', ['@path' => $binary_path]) . '</div>',
-      ];
+    if ($binary_path) {
+      $binary_exists = file_exists($binary_path);
+      $binary_executable = $binary_exists && is_executable($binary_path);
+
+      if ($binary_executable) {
+        $form['binary']['binary_status'] = [
+          '#markup' => '<div class="messages messages--status">✓ ' .
+            $this->t('Binary found and executable') . '<br><small>' .
+            $this->t('Location: @path', ['@path' => $binary_path]) . '</small></div>',
+        ];
+      }
+      elseif ($binary_exists) {
+        $form['binary']['binary_status'] = [
+          '#markup' => '<div class="messages messages--error">✗ ' .
+            $this->t('Binary found but not executable') . '<br><small>' .
+            $this->t('Run: <code>chmod +x @path</code>', ['@path' => $binary_path]) . '</small></div>',
+        ];
+      }
+      else {
+        $form['binary']['binary_status'] = [
+          '#markup' => '<div class="messages messages--error">✗ ' .
+            $this->t('Binary not found at: @path', ['@path' => $binary_path]) . '<br><small>' .
+            $this->t('Install using: <code>cd @module && composer run download-binary</code>', [
+              '@module' => 'modules/custom/ai_tts',
+            ]) . '</small></div>',
+        ];
+      }
     }
-    elseif ($binary_path) {
-      $form['koko_binary']['binary_status'] = [
-        '#markup' => '<div class="messages messages--warning">' . $this->t('Binary not found or not executable at: @path', ['@path' => $binary_path]) . '</div>',
-      ];
+
+    // Model Files Configuration.
+    $form['models'] = [
+      '#type' => 'details',
+      '#title' => $this->t('Model Files'),
+      '#description' => $this->t('Paths to Kokoro AI model and voice data files. Use <code>~</code> for home directory.'),
+      '#open' => TRUE,
+    ];
+
+    $form['models']['model_path'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('ONNX model file'),
+      '#description' => $this->t('Path to kokoro-v1.0.onnx model file'),
+      '#default_value' => $config->get('model_path') ?: '~/.cache/kokoros/checkpoints/kokoro-v1.0.onnx',
+      '#required' => TRUE,
+      '#attributes' => [
+        'placeholder' => '~/.cache/kokoros/checkpoints/kokoro-v1.0.onnx',
+      ],
+    ];
+
+    $form['models']['data_path'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Voices data file'),
+      '#description' => $this->t('Path to voices-v1.0.bin data file'),
+      '#default_value' => $config->get('data_path') ?: '~/.cache/kokoros/data/voices-v1.0.bin',
+      '#required' => TRUE,
+      '#attributes' => [
+        'placeholder' => '~/.cache/kokoros/data/voices-v1.0.bin',
+      ],
+    ];
+
+    // Model files status check.
+    $model_path = $config->get('model_path');
+    $data_path = $config->get('data_path');
+    if ($model_path && $data_path) {
+      $model_real = $this->expandPath($model_path);
+      $data_real = $this->expandPath($data_path);
+
+      $model_exists = file_exists($model_real);
+      $data_exists = file_exists($data_real);
+
+      if ($model_exists && $data_exists) {
+        $model_size = filesize($model_real);
+        $data_size = filesize($data_real);
+        $form['models']['model_status'] = [
+          '#markup' => '<div class="messages messages--status">✓ ' .
+            $this->t('Model files found') . '<br><small>' .
+            $this->t('Model: @model (@size)<br>Data: @data (@data_size)', [
+              '@model' => $model_real,
+              '@size' => format_size($model_size),
+              '@data' => $data_real,
+              '@data_size' => format_size($data_size),
+            ]) . '</small></div>',
+        ];
+      }
+      else {
+        $messages = [];
+        if (!$model_exists) {
+          $messages[] = '✗ ' . $this->t('Model not found: <code>@path</code>', ['@path' => $model_real]);
+        }
+        if (!$data_exists) {
+          $messages[] = '✗ ' . $this->t('Data not found: <code>@path</code>', ['@path' => $data_real]);
+        }
+        $messages[] = $this->t('Install using: <code>cd @module && composer run download-binary</code>', [
+          '@module' => 'modules/custom/ai_tts',
+        ]);
+
+        $form['models']['model_status'] = [
+          '#markup' => '<div class="messages messages--error">' .
+            implode('<br>', $messages) . '</div>',
+        ];
+      }
     }
 
     $form['voice_settings'] = [
@@ -210,6 +306,24 @@ class AiTtsSettingsForm extends ConfigFormBase {
       $form_state->setErrorByName('koko_binary_path', $this->t('The binary file is not executable.'));
     }
 
+    // Validate model path.
+    $model_path = $form_state->getValue('model_path');
+    if ($model_path) {
+      $model_real = $this->expandPath($model_path);
+      if (!file_exists($model_real)) {
+        $form_state->setErrorByName('model_path', $this->t('Model file does not exist at: @path', ['@path' => $model_real]));
+      }
+    }
+
+    // Validate data path.
+    $data_path = $form_state->getValue('data_path');
+    if ($data_path) {
+      $data_real = $this->expandPath($data_path);
+      if (!file_exists($data_real)) {
+        $form_state->setErrorByName('data_path', $this->t('Data file does not exist at: @path', ['@path' => $data_real]));
+      }
+    }
+
     parent::validateForm($form, $form_state);
   }
 
@@ -223,6 +337,8 @@ class AiTtsSettingsForm extends ConfigFormBase {
 
     $this->config('ai_tts.settings')
       ->set('koko_binary_path', $form_state->getValue('koko_binary_path'))
+      ->set('model_path', $form_state->getValue('model_path'))
+      ->set('data_path', $form_state->getValue('data_path'))
       ->set('default_voice', $form_state->getValue('default_voice'))
       ->set('default_speed', $form_state->getValue('default_speed'))
       ->set('cache_audio', $form_state->getValue('cache_audio'))
@@ -248,6 +364,25 @@ class AiTtsSettingsForm extends ConfigFormBase {
   protected function getAvailableVoices() {
     // Get voices from the TTS service.
     return \Drupal::service('ai_tts.tts_service')->getAvailableVoices();
+  }
+
+  /**
+   * Expand path with tilde (~) to full path.
+   *
+   * @param string $path
+   *   Path potentially containing ~.
+   *
+   * @return string
+   *   Expanded path.
+   */
+  protected function expandPath($path) {
+    if (strpos($path, '~') === 0) {
+      $home = getenv('HOME');
+      if ($home) {
+        return str_replace('~', $home, $path);
+      }
+    }
+    return $path;
   }
 
 }

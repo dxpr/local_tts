@@ -10,17 +10,47 @@
   border-radius: 0.5rem;
 }
 
-.ai-tts-controls {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+.ai-tts-container > div {
+  margin-right: 1rem;
 }
 
-.ai-tts-button {
+.ai-tts-controls > * {
+  margin-right: 0.5rem;
+}
+
+.ai-tts-button-wrapper {
   position: relative;
-  padding: 0.5rem 1rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.ai-tts-button-wrapper .ai-tts-button {
+  padding-left: 2.25rem !important;
+  padding-right: 1rem !important;
+}
+
+.ai-tts-button-wrapper .ai-tts-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  pointer-events: none;
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.ai-tts-button-wrapper .pause-icon {
+  display: none;
+}
+
+.ai-tts-button-wrapper:has(.playing) .play-icon {
+  display: none;
+}
+
+.ai-tts-button-wrapper:has(.playing) .pause-icon {
+  display: block;
 }
 
 .ai-tts-button:disabled {
@@ -28,52 +58,76 @@
   cursor: not-allowed;
 }
 
-.ai-tts-button.loading {
-  padding-left: 2.5rem;
-}
-
 .ai-tts-button.loading::before {
-  content: '';
-  position: absolute;
-  left: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 50%;
   animation: ai-tts-spin 0.6s linear infinite;
 }
 
 @keyframes ai-tts-spin {
   to {
-    transform: translateY(-50%) rotate(360deg);
+    transform: rotate(360deg);
   }
 }
 
-.ai-tts-play-button.playing::after {
-  content: ' ⏸';
+.ai-tts-settings .form-item {
+  margin-right: 1rem;
+  margin-bottom: 0;
 }
 
-.ai-tts-settings {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: 1fr 1fr;
+.ai-tts-settings label {
+  font-weight: 500;
+  margin-right: 0.5rem;
+  white-space: nowrap;
+}
+
+/* Add icons to labels using ::before */
+.ai-tts-settings .form-item:has(#ai-tts-voice-select) label::before {
+  content: '';
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  margin-right: 0.375rem;
+  background-image: url('../icons/microphone.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  vertical-align: middle;
+}
+
+.ai-tts-settings .form-item:has(#ai-tts-speed-input) label::before {
+  content: '';
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  margin-right: 0.375rem;
+  background-image: url('../icons/speed.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  vertical-align: middle;
+}
+
+.ai-tts-settings select {
+  min-width: 120px;
 }
 
 @media (max-width: 768px) {
-  .ai-tts-settings {
-    grid-template-columns: 1fr;
+  .ai-tts-container > div {
+    display: block;
+    margin-bottom: 1rem;
   }
 
-  .ai-tts-controls {
-    flex-direction: column;
+  .ai-tts-settings .form-item {
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  .ai-tts-settings select {
+    width: 100%;
   }
 }
 
 .ai-tts-status {
-  margin-top: 1rem;
+  width: 100%;
   min-height: 2rem;
 }
 
@@ -93,19 +147,8 @@
   margin-right: 0.5rem;
 }
 
-/* Improve form element spacing */
-.ai-tts-settings .form-item {
-  margin-bottom: 0;
-}
-
-.ai-tts-settings label {
-  font-weight: 500;
-  margin-bottom: 0.25rem;
-}
-
 .ai-tts-settings .description {
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
+  display: none;
 }
 
 /* Ensure audio element is hidden */

@@ -286,12 +286,12 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
 
     $build = [
       '#type' => 'container',
-      '#attributes' => ['class' => ['ai-tts-container']],
+      '#attributes' => ['class' => ['ai-tts-container', 'container-inline']],
     ];
 
     $build['controls'] = [
       '#type' => 'container',
-      '#attributes' => ['class' => ['ai-tts-controls']],
+      '#attributes' => ['class' => ['ai-tts-controls', 'container-inline']],
     ];
 
     $build['controls']['listen_button'] = [
@@ -320,7 +320,7 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
 
     $build['settings'] = [
       '#type' => 'container',
-      '#attributes' => ['class' => ['ai-tts-settings']],
+      '#attributes' => ['class' => ['ai-tts-settings', 'container-inline']],
     ];
 
     if ($config['show_voice_selector']) {
