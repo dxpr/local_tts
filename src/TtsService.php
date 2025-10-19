@@ -12,6 +12,26 @@ use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 class TtsService {
 
   /**
+   * Language to voice prefix mapping.
+   */
+  const LANGUAGE_MAP = [
+    'en' => ['af_', 'am_', 'bf_', 'bm_'],
+    'en-us' => ['af_', 'am_'],
+    'en-gb' => ['bf_', 'bm_'],
+    'ja' => ['jf_', 'jm_'],
+    'zh' => ['zf_', 'zm_'],
+    'zh-hans' => ['zf_', 'zm_'],
+    'zh-hant' => ['zf_', 'zm_'],
+    'fr' => ['ff_'],
+    'hi' => ['hf_', 'hm_'],
+    'es' => ['ef_', 'em_'],
+    'it' => ['if_', 'im_'],
+    'pt' => ['pf_', 'pm_'],
+    'pt-br' => ['pf_', 'pm_'],
+    'pt-pt' => ['pf_', 'pm_'],
+  ];
+
+  /**
    * The config factory.
    *
    * @var \Drupal\Core\Config\ConfigFactoryInterface
@@ -371,34 +391,16 @@ class TtsService {
    *   Filtered voices for the specified language.
    */
   protected function filterVoicesByLanguage(array $voices, $langcode) {
-    // Map language codes to voice prefixes.
-    $language_map = [
-      'en' => ['af_', 'am_', 'bf_', 'bm_'],
-      'en-us' => ['af_', 'am_'],
-      'en-gb' => ['bf_', 'bm_'],
-      'ja' => ['jf_', 'jm_'],
-      'zh' => ['zf_', 'zm_'],
-      'zh-hans' => ['zf_', 'zm_'],
-      'zh-hant' => ['zf_', 'zm_'],
-      'fr' => ['ff_'],
-      'hi' => ['hf_', 'hm_'],
-      'es' => ['ef_', 'em_'],
-      'it' => ['if_', 'im_'],
-      'pt' => ['pf_', 'pm_'],
-      'pt-br' => ['pf_', 'pm_'],
-      'pt-pt' => ['pf_', 'pm_'],
-    ];
-
     // Normalize language code to lowercase.
     $langcode = strtolower($langcode);
 
     // Get prefixes for this language.
-    $prefixes = $language_map[$langcode] ?? [];
+    $prefixes = self::LANGUAGE_MAP[$langcode] ?? [];
 
     // If no exact match, try base language (e.g., 'en' from 'en-au').
     if (empty($prefixes) && strpos($langcode, '-') !== FALSE) {
       $base_lang = explode('-', $langcode)[0];
-      $prefixes = $language_map[$base_lang] ?? [];
+      $prefixes = self::LANGUAGE_MAP[$base_lang] ?? [];
     }
 
     // If still no match, return empty array.
@@ -423,32 +425,29 @@ class TtsService {
   /**
    * Get list of supported language codes.
    *
-   * This extracts unique language codes from the language map,
-   * ensuring the list stays synchronized with available voices.
-   *
    * @return array
    *   Array of supported language codes (e.g., ['en', 'es', 'ja', ...]).
    */
   public function getSupportedLanguages() {
-    // Language map kept in sync with filterVoicesByLanguage().
-    $language_map = [
-      'en' => ['af_', 'am_', 'bf_', 'bm_'],
-      'en-us' => ['af_', 'am_'],
-      'en-gb' => ['bf_', 'bm_'],
-      'ja' => ['jf_', 'jm_'],
-      'zh' => ['zf_', 'zm_'],
-      'zh-hans' => ['zf_', 'zm_'],
-      'zh-hant' => ['zf_', 'zm_'],
-      'fr' => ['ff_'],
-      'hi' => ['hf_', 'hm_'],
-      'es' => ['ef_', 'em_'],
-      'it' => ['if_', 'im_'],
-      'pt' => ['pf_', 'pm_'],
-      'pt-br' => ['pf_', 'pm_'],
-      'pt-pt' => ['pf_', 'pm_'],
-    ];
+    return array_keys(self::LANGUAGE_MAP);
+  }
 
-    return array_keys($language_map);
+  /**
+   * Normalize speed value to valid select option.
+   *
+   * @param mixed $speed
+   *   The speed value to normalize.
+   *
+   * @return string
+   *   A valid speed value ('0.8', '1', '1.2', '1.5', or '2').
+   */
+  public function normalizeSpeed($speed) {
+    $speed = (string) $speed;
+    $available_speeds = ['0.8', '1', '1.2', '1.5', '2'];
+    if (in_array($speed, $available_speeds, TRUE)) {
+      return $speed;
+    }
+    return '1';
   }
 
   /**

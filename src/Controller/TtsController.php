@@ -18,6 +18,11 @@ use Symfony\Component\HttpFoundation\Request;
 class TtsController extends ControllerBase {
 
   /**
+   * Rate limit time window in seconds (1 hour).
+   */
+  const RATE_LIMIT_WINDOW = 3600;
+
+  /**
    * The TTS service.
    *
    * @var \Drupal\ai_tts\TtsService
@@ -239,7 +244,6 @@ class TtsController extends ControllerBase {
     }
 
     $threshold = (int) ($config->get('rate_limit_threshold') ?? 20);
-    $window = 3600;
 
     $state_key = 'ai_tts.rate_limit.' . $this->currentUser->id();
 
@@ -247,8 +251,8 @@ class TtsController extends ControllerBase {
 
     // Clean old attempts outside the time window.
     $current_time = $this->time->getRequestTime();
-    $attempts = array_filter($attempts, function ($timestamp) use ($current_time, $window) {
-      return ($current_time - $timestamp) < $window;
+    $attempts = array_filter($attempts, function ($timestamp) use ($current_time) {
+      return ($current_time - $timestamp) < self::RATE_LIMIT_WINDOW;
     });
 
     // Check if threshold exceeded.
@@ -270,8 +274,6 @@ class TtsController extends ControllerBase {
    *   Seconds until the user can make another request.
    */
   protected function getRetryAfter() {
-    $window = 3600;
-
     $state_key = 'ai_tts.rate_limit.' . $this->currentUser->id();
 
     $attempts = $this->state->get($state_key, []);
@@ -285,7 +287,7 @@ class TtsController extends ControllerBase {
     $current_time = $this->time->getRequestTime();
 
     // Calculate when the oldest attempt will expire.
-    $retry_after = ($oldest_attempt + $window) - $current_time;
+    $retry_after = ($oldest_attempt + self::RATE_LIMIT_WINDOW) - $current_time;
 
     return max(0, $retry_after);
   }

@@ -444,6 +444,14 @@ final class AiTtsCommands extends DrushCommands {
       return;
     }
 
+    if (!$entity->access('view')) {
+      $this->logger()->error('Access denied to entity: @type:@id', [
+        '@type' => $entity_type,
+        '@id' => $entity_id,
+      ]);
+      return;
+    }
+
     // Get entity label for display.
     $entity_label = $entity->label() ?? "ID $entity_id";
     $this->output()->writeln("📄 Reading: $entity_label ($entity_type:$entity_id)");
@@ -571,6 +579,10 @@ final class AiTtsCommands extends DrushCommands {
     }
 
     $field = $entity->get($field_name);
+
+    if (!$field->access('view')) {
+      return '';
+    }
 
     if ($field->isEmpty()) {
       return '';

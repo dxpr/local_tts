@@ -27,6 +27,31 @@ use Drupal\Core\Session\AccountInterface;
 class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
 
   /**
+   * Allowed field types for TTS processing.
+   */
+  const ALLOWED_FIELD_TYPES = [
+    'string',
+    'string_long',
+    'text',
+    'text_long',
+    'text_with_summary',
+    'text_plain',
+    'email',
+    'telephone',
+  ];
+
+  /**
+   * Base fields to exclude from TTS (administrative/metadata).
+   */
+  const EXCLUDED_BASE_FIELDS = [
+    'nid', 'uuid', 'vid', 'langcode', 'type', 'revision_timestamp',
+    'revision_uid', 'revision_log', 'status', 'uid', 'created', 'changed',
+    'promote', 'sticky', 'default_langcode', 'revision_default',
+    'revision_translation_affected', 'metatag', 'path', 'menu_link',
+    'tid', 'weight', 'parent', 'description__format',
+  ];
+
+  /**
    * The config factory.
    *
    * @var \Drupal\Core\Config\ConfigFactoryInterface
@@ -163,17 +188,7 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
       $definitions = $this->entityFieldManager->getFieldDefinitions('node', $bundle);
       foreach ($definitions as $field_name => $definition) {
         $type = $definition->getType();
-        $allowed_types = [
-          'string',
-          'string_long',
-          'text',
-          'text_long',
-          'text_with_summary',
-          'text_plain',
-          'email',
-          'telephone',
-        ];
-        if (in_array($type, $allowed_types)) {
+        if (in_array($type, self::ALLOWED_FIELD_TYPES)) {
           $field_options[$field_name] = $definition->getLabel() . ' (' . $field_name . ')';
         }
       }
@@ -201,6 +216,24 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
   }
 
   /**
+   * Get a valid default voice for the given language.
+   *
+   * @param string $default_voice
+   *   The configured default voice.
+   * @param array $available_voices
+   *   Available voices for the language.
+   *
+   * @return string
+   *   A valid voice code.
+   */
+  protected function getValidDefaultVoice($default_voice, array $available_voices) {
+    if (isset($available_voices[$default_voice])) {
+      return $default_voice;
+    }
+    return array_key_first($available_voices);
+  }
+
+  /**
    * {@inheritdoc}
    */
   public function build() {
@@ -223,19 +256,14 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
     $content = '';
     $selected_fields = array_filter($config['fields'] ?? []);
 
-    // Base fields to exclude from TTS (administrative/metadata fields).
-    $excluded_base_fields = [
-      'nid', 'uuid', 'vid', 'langcode', 'type', 'revision_timestamp',
-      'revision_uid', 'revision_log', 'status', 'uid', 'created', 'changed',
-      'promote', 'sticky', 'default_langcode', 'revision_default',
-      'revision_translation_affected', 'metatag', 'path', 'menu_link',
-      'tid', 'weight', 'parent', 'description__format',
-    ];
-
     if ($this->entity) {
+      if (!$this->entity->access('view', $this->currentUser)) {
+        return [];
+      }
+
       foreach ($this->entity->getFieldDefinitions() as $field_name => $field_definition) {
         // Skip explicitly excluded base fields.
-        if (in_array($field_name, $excluded_base_fields, TRUE)) {
+        if (in_array($field_name, self::EXCLUDED_BASE_FIELDS, TRUE)) {
           continue;
         }
 
@@ -250,17 +278,7 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
             continue;
           }
 
-          $allowed_types = [
-            'string',
-            'string_long',
-            'text',
-            'text_long',
-            'text_with_summary',
-            'text_plain',
-            'email',
-            'telephone',
-          ];
-          if (!$field->isEmpty() && in_array($field_definition->getType(), $allowed_types)) {
+          if (!$field->isEmpty() && in_array($field_definition->getType(), self::ALLOWED_FIELD_TYPES)) {
             foreach ($field as $item) {
               // Get the actual value - handle different item types.
               if (isset($item->value)) {
@@ -327,12 +345,10 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
     ];
 
     if ($config['show_voice_selector']) {
-      // Ensure default voice is valid for this language.
-      $default_voice = $global_config->get('default_voice');
-      if (!isset($available_voices[$default_voice])) {
-        // Default voice not available, use first available voice.
-        $default_voice = array_key_first($available_voices);
-      }
+      $default_voice = $this->getValidDefaultVoice(
+        $global_config->get('default_voice'),
+        $available_voices
+      );
 
       $build['settings']['voice_select'] = [
         '#type' => 'select',
@@ -348,13 +364,10 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
     }
 
     if ($config['show_speed_control']) {
-      $default_speed = $global_config->get('default_speed') ?: '1';
-      // Normalize the speed value to match select options.
-      $default_speed = (string) $default_speed;
-      $available_speeds = ['0.8', '1', '1.2', '1.5', '2'];
-      if (!in_array($default_speed, $available_speeds, TRUE)) {
-        $default_speed = '1';
-      }
+      $default_speed = $this->ttsService->normalizeSpeed(
+        $global_config->get('default_speed') ?: '1'
+      );
+
       $build['settings']['speed_control'] = [
         '#type' => 'select',
         '#title' => $this->t('Speed'),
@@ -394,10 +407,10 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
     ];
 
     // Use language-aware default voice for JavaScript.
-    $js_default_voice = $global_config->get('default_voice');
-    if (!isset($available_voices[$js_default_voice])) {
-      $js_default_voice = array_key_first($available_voices);
-    }
+    $js_default_voice = $this->getValidDefaultVoice(
+      $global_config->get('default_voice'),
+      $available_voices
+    );
 
     $build['#attached'] = [
       'library' => ['ai_tts/player'],

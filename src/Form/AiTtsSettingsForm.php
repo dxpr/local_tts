@@ -177,14 +177,6 @@ class AiTtsSettingsForm extends ConfigFormBase {
       '#default_value' => $config->get('default_voice'),
     ];
 
-    // Normalize speed value to match select options.
-    $default_speed = $config->get('default_speed') ?: '1';
-    $default_speed = (string) $default_speed;
-    $available_speeds = ['0.8', '1', '1.2', '1.5', '2'];
-    if (!in_array($default_speed, $available_speeds, TRUE)) {
-      $default_speed = '1';
-    }
-
     $form['voice_settings']['default_speed'] = [
       '#type' => 'select',
       '#title' => $this->t('Default speech speed'),
@@ -196,7 +188,7 @@ class AiTtsSettingsForm extends ConfigFormBase {
         '1.5' => $this->t('1.5x'),
         '2' => $this->t('2x'),
       ],
-      '#default_value' => $default_speed,
+      '#default_value' => $this->ttsService->normalizeSpeed($config->get('default_speed') ?: '1'),
     ];
 
     $form['caching'] = [

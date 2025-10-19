@@ -121,17 +121,13 @@ function _ai_tts_cleanup_stale_content() {
           }
 
           if ($should_delete) {
-            $base_path = substr($file->getPathname(), 0, -5);
-            @unlink($file->getPathname());
-            @unlink($base_path . '.wav');
+            _ai_tts_delete_audio_pair($file->getPathname());
             $deleted++;
           }
         }
         catch (\Exception $e) {
           // Entity type doesn't exist, delete the audio.
-          $base_path = substr($file->getPathname(), 0, -5);
-          @unlink($file->getPathname());
-          @unlink($base_path . '.wav');
+          _ai_tts_delete_audio_pair($file->getPathname());
           $deleted++;
         }
       }
@@ -212,4 +208,20 @@ function _ai_tts_enforce_size_limit() {
       '@limit' => format_size($max_size),
     ]);
   }
+}
+
+/**
+ * Delete an audio file pair (JSON metadata + WAV file).
+ *
+ * @param string $json_path
+ *   Path to the JSON metadata file.
+ *
+ * @return bool
+ *   TRUE if files were deleted.
+ */
+function _ai_tts_delete_audio_pair($json_path) {
+  $base_path = substr($json_path, 0, -5);
+  @unlink($json_path);
+  @unlink($base_path . '.wav');
+  return TRUE;
 }
