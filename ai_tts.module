@@ -5,6 +5,7 @@
  * AI Text-to-Speech module.
  */
 
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
 
@@ -42,8 +43,18 @@ function ai_tts_cron() {
 
 /**
  * Implements hook_entity_update().
+ *
+ * Smart invalidation: Only delete audio if text content actually changed.
+ * Compares text hash to avoid unnecessary regeneration.
  */
 function ai_tts_entity_update(EntityInterface $entity) {
+  // Check if any text fields changed by comparing to original.
+  if (!empty($entity->original) && !_ai_tts_text_content_changed($entity, $entity->original)) {
+    // Content unchanged - keep cached audio files.
+    return;
+  }
+
+  // Content changed - invalidate all cached audio for this entity.
   \Drupal::service('ai_tts.tts_service')->deleteAudioForEntity(
     $entity->getEntityTypeId(),
     $entity->id()
@@ -58,6 +69,54 @@ function ai_tts_entity_delete(EntityInterface $entity) {
     $entity->getEntityTypeId(),
     $entity->id()
   );
+}
+
+/**
+ * Check if text content changed between entity versions.
+ *
+ * @param \Drupal\Core\Entity\EntityInterface $entity
+ *   The updated entity.
+ * @param \Drupal\Core\Entity\EntityInterface $original
+ *   The original entity.
+ *
+ * @return bool
+ *   TRUE if text content changed, FALSE otherwise.
+ */
+function _ai_tts_text_content_changed($entity, $original) {
+  // Only check FieldableEntity types.
+  if (!($entity instanceof FieldableEntityInterface)) {
+    return TRUE;
+  }
+
+  $text_field_types = [
+    'string',
+    'string_long',
+    'text',
+    'text_long',
+    'text_with_summary',
+  ];
+
+  foreach ($entity->getFieldDefinitions() as $field_name => $field_definition) {
+    // Only check text fields.
+    if (!in_array($field_definition->getType(), $text_field_types, TRUE)) {
+      continue;
+    }
+
+    // Skip if field doesn't exist on original.
+    if (!$original->hasField($field_name)) {
+      continue;
+    }
+
+    // Compare field values.
+    $current_value = $entity->get($field_name)->value;
+    $original_value = $original->get($field_name)->value;
+
+    if ($current_value !== $original_value) {
+      return TRUE;
+    }
+  }
+
+  return FALSE;
 }
 
 /**
