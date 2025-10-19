@@ -44,13 +44,8 @@
           stopWrapper.appendChild(stopButton);
         }
 
-        const config = drupalSettings.aiTts || {};
-        const content = config.content || '';
-
-        if (!content) {
-          player.style.display = 'none';
-          return;
-        }
+        // ARCHITECTURE: Fail hard. If config missing, block wouldn't render.
+        const config = drupalSettings.aiTts;
 
         let isPlaying = false;
         let currentAudioUrl = null;
@@ -98,29 +93,24 @@
 
         function generateSpeech() {
           const voice = voiceSelect ? voiceSelect.value : config.defaultVoice;
-          const speed = speedInput ? parseFloat(speedInput.value) : (config.defaultSpeed || 1);
-
-          // SECURITY: Never send text content from client.
-          // Server loads and validates entity to prevent:
-          // - Arbitrary text generation (DDoS)
-          // - Access control bypass
-          // - Content moderation bypass
-          if (!config.entityType || !config.entityId) {
-            updateStatus(Drupal.t('Error: No entity context available'), 'error');
-            return;
-          }
+          const speed = speedInput ? parseFloat(speedInput.value) : config.defaultSpeed;
 
           updateStatus('<span class="ai-tts-loading"></span> ' + Drupal.t('Generating speech...'), 'status');
           playButton.disabled = true;
           playButton.classList.add('loading');
 
+          // SECURITY: Only entity reference sent, never content text.
           const formData = new FormData();
           formData.append('entity_type', config.entityType);
           formData.append('entity_id', config.entityId);
           formData.append('voice', voice);
           formData.append('speed', speed);
 
-          // Send configured fields if available.
+          // Send language to load correct translation.
+          if (config.language) {
+            formData.append('language', config.language);
+          }
+
           if (config.fields && config.fields.length > 0) {
             formData.append('fields', JSON.stringify(config.fields));
           }
