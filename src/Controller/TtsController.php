@@ -173,6 +173,14 @@ class TtsController extends ControllerBase {
       ], 503);
     }
     catch (\RuntimeException $e) {
+      // Check if this is an access denied error.
+      if (strpos($e->getMessage(), 'private content') !== FALSE) {
+        return new JsonResponse([
+          'error' => 'Access denied',
+          'message' => $e->getMessage(),
+        ], 403);
+      }
+
       $this->getLogger('ai_tts')->error('TTS generation runtime error: @message', [
         '@message' => $e->getMessage(),
       ]);

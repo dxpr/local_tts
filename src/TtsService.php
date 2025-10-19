@@ -2,6 +2,7 @@
 
 namespace Drupal\ai_tts;
 
+use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\ai_tts\Exception\TtsServiceUnavailableException;
 use Drupal\ai_tts\Exception\TtsTimeoutException;
 use Drupal\Core\Config\ConfigFactoryInterface;
@@ -92,6 +93,35 @@ class TtsService {
    */
   public function generateSpeech($text, array $options = []) {
     $config = $this->configFactory->get('ai_tts.settings');
+
+    // Security: Only generate audio for publicly accessible content.
+    if (!empty($options['entity_type']) && !empty($options['entity_id'])) {
+      $entity_type = $options['entity_type'];
+      $entity_id = $options['entity_id'];
+
+      try {
+        $entity = \Drupal::entityTypeManager()
+          ->getStorage($entity_type)
+          ->load($entity_id);
+
+        if ($entity) {
+          $anonymous = new AnonymousUserSession();
+          if (!$entity->access('view', $anonymous)) {
+            $this->logger->warning('Refusing to cache audio for non-public content: @type:@id', [
+              '@type' => $entity_type,
+              '@id' => $entity_id,
+            ]);
+            throw new \RuntimeException('Cannot generate audio for private content. Only content viewable by anonymous users can be cached.');
+          }
+        }
+      }
+      catch (\RuntimeException $e) {
+        throw $e;
+      }
+      catch (\Exception $e) {
+        $this->logger->error('Error checking entity access: @message', ['@message' => $e->getMessage()]);
+      }
+    }
 
     // Security: Validate text length.
     $max_length = $config->get('max_text_length') ?? 1000000;

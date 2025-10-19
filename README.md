@@ -18,6 +18,31 @@ using the Kokoro TTS engine (Rust implementation).
 - Drush commands for testing and cache management
 - Accessibility-optimized with ARIA labels and keyboard shortcuts
 
+## Security & Privacy
+
+**Public Content Only**
+
+Audio files are cached to the public file system for performance. To prevent
+private content from being exposed, the module enforces this rule:
+
+- **Audio generation is only allowed for content viewable by anonymous users**
+- The TTS player will not appear on private/unpublished content
+- Attempting to generate audio for private content returns an error
+
+This ensures cached audio files never contain sensitive information.
+
+**Streaming Mode for Private Content**
+
+If you need to test TTS on private content during development:
+
+```bash
+# Use --stream flag (no caching, immediate playback)
+drush ai-tts:read node 123 --stream
+```
+
+Streaming mode does not create cached files and bypasses the public
+access check.
+
 ## Requirements
 
 ### Drupal

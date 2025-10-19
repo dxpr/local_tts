@@ -519,6 +519,15 @@ final class AiTtsCommands extends DrushCommands {
           $this->logger()->error('Failed to generate speech.');
         }
       }
+      catch (\RuntimeException $e) {
+        if (strpos($e->getMessage(), 'private content') !== FALSE) {
+          $this->output()->writeln('');
+          $this->output()->writeln('[error] ' . $e->getMessage());
+          $this->output()->writeln('Solution: Use --stream flag to play without caching, or publish the content.');
+          return;
+        }
+        $this->logger()->error('Error generating speech: @message', ['@message' => $e->getMessage()]);
+      }
       catch (\Exception $e) {
         $this->logger()->error('Error generating speech: @message', ['@message' => $e->getMessage()]);
       }

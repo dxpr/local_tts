@@ -2,6 +2,7 @@
 
 namespace Drupal\ai_tts\Plugin\Block;
 
+use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Block\BlockBase;
 use Drupal\Core\Form\FormStateInterface;
@@ -258,6 +259,12 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
 
     if ($this->entity) {
       if (!$this->entity->access('view', $this->currentUser)) {
+        return [];
+      }
+
+      // Only show player for publicly accessible content.
+      $anonymous = new AnonymousUserSession();
+      if (!$this->entity->access('view', $anonymous)) {
         return [];
       }
 
