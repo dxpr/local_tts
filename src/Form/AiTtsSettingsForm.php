@@ -5,6 +5,7 @@ namespace Drupal\ai_tts\Form;
 use Drupal\ai_tts\TtsService;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Language\LanguageManagerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -20,13 +21,26 @@ class AiTtsSettingsForm extends ConfigFormBase {
   protected $ttsService;
 
   /**
+   * The language manager.
+   *
+   * @var \Drupal\Core\Language\LanguageManagerInterface
+   */
+  protected $languageManager;
+
+  /**
    * Constructs an AiTtsSettingsForm object.
    *
    * @param \Drupal\ai_tts\TtsService $tts_service
    *   The TTS service.
+   * @param \Drupal\Core\Language\LanguageManagerInterface $language_manager
+   *   The language manager.
    */
-  public function __construct(TtsService $tts_service) {
+  public function __construct(
+    TtsService $tts_service,
+    LanguageManagerInterface $language_manager,
+  ) {
     $this->ttsService = $tts_service;
+    $this->languageManager = $language_manager;
   }
 
   /**
@@ -34,7 +48,8 @@ class AiTtsSettingsForm extends ConfigFormBase {
    */
   public static function create(ContainerInterface $container) {
     return new static(
-      $container->get('ai_tts.tts_service')
+      $container->get('ai_tts.tts_service'),
+      $container->get('language_manager')
     );
   }
 
@@ -176,17 +191,38 @@ class AiTtsSettingsForm extends ConfigFormBase {
     }
 
     $form['voice_settings'] = [
-      '#type' => 'fieldset',
+      '#type' => 'details',
       '#title' => $this->t('Voice Settings'),
+      '#open' => TRUE,
+      '#tree' => TRUE,
     ];
 
-    $form['voice_settings']['default_voice'] = [
-      '#type' => 'select',
-      '#title' => $this->t('Default voice'),
-      '#description' => $this->t('Select the default voice for speech synthesis.'),
-      '#options' => $this->getAvailableVoices(),
-      '#default_value' => $config->get('default_voice'),
+    // Get enabled languages on the site.
+    $enabled_languages = $this->languageManager->getLanguages();
+    $default_voices = $config->get('default_voices') ?? [];
+
+    $form['voice_settings']['description'] = [
+      '#type' => 'markup',
+      '#markup' => '<p>' . $this->t('Configure default voice for each language. Only languages with available voices are shown.') . '</p>',
     ];
+
+    foreach ($enabled_languages as $langcode => $language) {
+      // Get voices available for this language.
+      $language_voices = $this->ttsService->getAvailableVoices($langcode);
+
+      // Skip if no voices available for this language.
+      if (empty($language_voices)) {
+        continue;
+      }
+
+      $form['voice_settings'][$langcode] = [
+        '#type' => 'select',
+        '#title' => $this->t('Default voice for @language', ['@language' => $language->getName()]),
+        '#description' => $this->t('@count voices available', ['@count' => count($language_voices)]),
+        '#options' => $language_voices,
+        '#default_value' => $default_voices[$langcode] ?? array_key_first($language_voices),
+      ];
+    }
 
     $form['voice_settings']['default_speed'] = [
       '#type' => 'select',
@@ -350,13 +386,21 @@ class AiTtsSettingsForm extends ConfigFormBase {
     $max_size_mb = $form_state->getValue('cache_max_size');
     $max_size_bytes = $max_size_mb * 1048576;
 
+    // Extract voice settings array.
+    $voice_settings = $form_state->getValue('voice_settings');
+
+    // Separate default_speed from language-specific voices.
+    $default_speed = $voice_settings['default_speed'] ?? '1';
+    unset($voice_settings['default_speed']);
+    unset($voice_settings['description']);
+
     $this->config('ai_tts.settings')
       ->set('koko_binary_path', $form_state->getValue('koko_binary_path'))
       ->set('model_path', $form_state->getValue('model_path'))
       ->set('data_path', $form_state->getValue('data_path'))
       ->set('espeak_data_path', $form_state->getValue('espeak_data_path'))
-      ->set('default_voice', $form_state->getValue('default_voice'))
-      ->set('default_speed', $form_state->getValue('default_speed'))
+      ->set('default_voices', $voice_settings)
+      ->set('default_speed', $default_speed)
       ->set('cache_audio', $form_state->getValue('cache_audio'))
       ->set('audio_directory', $form_state->getValue('audio_directory'))
       ->set('cache_size_limit_enabled', TRUE)
@@ -366,6 +410,7 @@ class AiTtsSettingsForm extends ConfigFormBase {
       ->set('rate_limit_enabled', $form_state->getValue('rate_limit_enabled'))
       ->set('rate_limit_threshold', $form_state->getValue('rate_limit_threshold'))
       ->set('max_server_load', $form_state->getValue('max_server_load'))
+      ->clear('default_voice')
       ->save();
 
     parent::submitForm($form, $form_state);

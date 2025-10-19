@@ -219,18 +219,24 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
   /**
    * Get a valid default voice for the given language.
    *
-   * @param string $default_voice
-   *   The configured default voice.
    * @param array $available_voices
    *   Available voices for the language.
+   * @param string $langcode
+   *   The language code.
    *
    * @return string
    *   A valid voice code.
    */
-  protected function getValidDefaultVoice($default_voice, array $available_voices) {
-    if (isset($available_voices[$default_voice])) {
-      return $default_voice;
+  protected function getValidDefaultVoice(array $available_voices, $langcode) {
+    $config = $this->configFactory->get('ai_tts.settings');
+    $default_voices = $config->get('default_voices') ?? [];
+
+    // Check language-specific default first.
+    if (isset($default_voices[$langcode]) && isset($available_voices[$default_voices[$langcode]])) {
+      return $default_voices[$langcode];
     }
+
+    // Fall back to first available voice for this language.
     return array_key_first($available_voices);
   }
 
@@ -309,8 +315,8 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
 
     if ($config['show_voice_selector']) {
       $default_voice = $this->getValidDefaultVoice(
-        $global_config->get('default_voice'),
-        $available_voices
+        $available_voices,
+        $langcode
       );
 
       $build['settings']['voice_select'] = [
@@ -380,8 +386,8 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
 
     // Use language-aware default voice for JavaScript.
     $js_default_voice = $this->getValidDefaultVoice(
-      $global_config->get('default_voice'),
-      $available_voices
+      $available_voices,
+      $langcode
     );
 
     // SECURITY: Pass only entity reference to JavaScript, NOT the content.

@@ -82,9 +82,9 @@ final class AiTtsCommands extends DrushCommands {
     $config = $this->configFactory->get('ai_tts.settings');
 
     // Get configuration.
-    $voice = $options['voice'] ?? $config->get('default_voice') ?? 'af_sky';
+    $language = $options['language'] ?? 'en';
+    $voice = $options['voice'] ?? $this->getDefaultVoiceForLanguage($language);
     $speed = $options['speed'] ?? $config->get('default_speed') ?? 1.0;
-    $language = $options['language'] ?? $this->ttsService->detectLanguageFromVoice($voice);
 
     // Display settings.
     $this->output()->writeln("Text: $text");
@@ -479,9 +479,9 @@ final class AiTtsCommands extends DrushCommands {
     }
 
     $config = $this->configFactory->get('ai_tts.settings');
-    $voice = $options['voice'] ?? $config->get('default_voice') ?? 'af_sky';
+    $language = $options['language'] ?? $entity_language ?? 'en';
+    $voice = $options['voice'] ?? $this->getDefaultVoiceForLanguage($language);
     $speed = $options['speed'] ?? $config->get('default_speed') ?? 1.0;
-    $language = $options['language'] ?? $entity_language ?? $this->ttsService->detectLanguageFromVoice($voice);
 
     $this->output()->writeln("Voice: $voice");
     $this->output()->writeln("Speed: $speed");
@@ -640,6 +640,34 @@ final class AiTtsCommands extends DrushCommands {
     else {
       $this->logger()->error('Failed to clear cache.');
     }
+  }
+
+  /**
+   * Get the default voice for a given language.
+   *
+   * @param string $langcode
+   *   The language code.
+   *
+   * @return string
+   *   The default voice code for the language.
+   */
+  protected function getDefaultVoiceForLanguage(string $langcode): string {
+    $config = $this->configFactory->get('ai_tts.settings');
+    $default_voices = $config->get('default_voices') ?? [];
+
+    // Check language-specific default first.
+    if (isset($default_voices[$langcode])) {
+      return $default_voices[$langcode];
+    }
+
+    // Fall back to first available voice for this language.
+    $available_voices = $this->ttsService->getAvailableVoices($langcode);
+    if (!empty($available_voices)) {
+      return array_key_first($available_voices);
+    }
+
+    // Final fallback to af_sky.
+    return 'af_sky';
   }
 
 }
