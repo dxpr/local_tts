@@ -65,58 +65,10 @@ class AiTtsSettingsForm extends ConfigFormBase {
       '#open' => TRUE,
     ];
 
-    $form['paths']['help'] = [
-      '#type' => 'item',
-      '#markup' => '<p>' . $this->t('For security and best practices, install files outside your web root or in system directories. Use <code>~</code> for home directory expansion.') . '</p>',
-    ];
-
-    $form['paths']['installation_guide'] = [
-      '#type' => 'details',
-      '#title' => $this->t('Recommended installation locations'),
-      '#open' => FALSE,
-    ];
-
-    $form['paths']['installation_guide']['production'] = [
-      '#type' => 'item',
-      '#markup' => '<strong>' . $this->t('Production (Recommended): System-wide installation') . '</strong>
-<ul>
-  <li>' . $this->t('Binary: <code>/usr/local/bin/koko</code>') . '</li>
-  <li>' . $this->t('Model: <code>/usr/local/share/kokoro/checkpoints/kokoro-v1.0.onnx</code>') . '</li>
-  <li>' . $this->t('Data: <code>/usr/local/share/kokoro/data/voices-v1.0.bin</code>') . '</li>
-  <li>' . $this->t('Permissions: Binary 755, model/data 644, owned by root or deployment user') . '</li>
-</ul>',
-    ];
-
-    $form['paths']['installation_guide']['development'] = [
-      '#type' => 'item',
-      '#markup' => '<strong>' . $this->t('Development: Drupal libraries directory') . '</strong>
-<ul>
-  <li>' . $this->t('Binary: <code>../libraries/kokoro/bin/koko</code>') . '</li>
-  <li>' . $this->t('Model: <code>../libraries/kokoro/checkpoints/kokoro-v1.0.onnx</code>') . '</li>
-  <li>' . $this->t('Data: <code>../libraries/kokoro/data/voices-v1.0.bin</code>') . '</li>
-  <li>' . $this->t('Permissions: Binary 755, model/data 644, owned by your user, group www-data') . '</li>
-</ul>',
-    ];
-
-    $form['paths']['installation_guide']['testing'] = [
-      '#type' => 'item',
-      '#markup' => '<strong>' . $this->t('Quick testing: Module directory (least secure)') . '</strong>
-<ul>
-  <li>' . $this->t('Binary: <code>modules/custom/ai_tts/bin/koko</code>') . '</li>
-  <li>' . $this->t('Model: <code>~/.cache/kokoros/checkpoints/kokoro-v1.0.onnx</code>') . '</li>
-  <li>' . $this->t('Data: <code>~/.cache/kokoros/data/voices-v1.0.bin</code>') . '</li>
-</ul>',
-    ];
-
-    $form['paths']['installation_guide']['warning'] = [
-      '#type' => 'item',
-      '#markup' => '<p><strong>' . $this->t('Security warning:') . '</strong> ' . $this->t('Do not store these files in <code>sites/default/files/</code> - that directory is for user uploads, not application resources.') . '</p>',
-    ];
-
     $form['paths']['koko_binary_path'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Koko executable path'),
-      '#description' => $this->t('Absolute path to the koko binary. Must be executable (755 permissions). Run <code>which koko</code> to find system-installed location.'),
+      '#description' => $this->t('Absolute path to koko binary. Must be executable (755 permissions), owned by root or deployment user.'),
       '#default_value' => $config->get('koko_binary_path'),
       '#required' => TRUE,
       '#attributes' => [
@@ -127,8 +79,8 @@ class AiTtsSettingsForm extends ConfigFormBase {
     $form['paths']['model_path'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Model file path'),
-      '#description' => $this->t('Path to kokoro-v1.0.onnx (~100-200MB). Should be readable (644 permissions) but not writable by web server.'),
-      '#default_value' => $config->get('model_path') ?: '~/.cache/kokoros/checkpoints/kokoro-v1.0.onnx',
+      '#description' => $this->t('Path to kokoro-v1.0.onnx file (~100-200MB). Must be readable (644 permissions), owned by root or deployment user.'),
+      '#default_value' => $config->get('model_path'),
       '#required' => TRUE,
       '#attributes' => [
         'placeholder' => '/usr/local/share/kokoro/checkpoints/kokoro-v1.0.onnx',
@@ -138,8 +90,8 @@ class AiTtsSettingsForm extends ConfigFormBase {
     $form['paths']['data_path'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Voices data path'),
-      '#description' => $this->t('Path to voices-v1.0.bin (~10-50MB). Should be readable (644 permissions) but not writable by web server.'),
-      '#default_value' => $config->get('data_path') ?: '~/.cache/kokoros/data/voices-v1.0.bin',
+      '#description' => $this->t('Path to voices-v1.0.bin file (~10-50MB). Must be readable (644 permissions), owned by root or deployment user.'),
+      '#default_value' => $config->get('data_path'),
       '#required' => TRUE,
       '#attributes' => [
         'placeholder' => '/usr/local/share/kokoro/data/voices-v1.0.bin',
