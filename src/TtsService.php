@@ -5,7 +5,6 @@ namespace Drupal\ai_tts;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
-use Drupal\Core\Logger\LoggerChannelInterface;
 
 /**
  * Service for interfacing with Kokoro TTS binary.
@@ -61,7 +60,7 @@ class TtsService {
    *   - language: Language code for G2P (default: detected from voice)
    *   - use_cache: Whether to use cached audio (default: from config)
    *   - entity_type: Entity type for tracking (e.g., 'node')
-   *   - entity_id: Entity ID for tracking
+   *   - entity_id: Entity ID for tracking.
    *
    * @return string|null
    *   The file URI of the generated audio, or NULL on failure.

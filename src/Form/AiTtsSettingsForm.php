@@ -2,13 +2,41 @@
 
 namespace Drupal\ai_tts\Form;
 
+use Drupal\ai_tts\TtsService;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Configure AI TTS settings.
  */
 class AiTtsSettingsForm extends ConfigFormBase {
+
+  /**
+   * The TTS service.
+   *
+   * @var \Drupal\ai_tts\TtsService
+   */
+  protected $ttsService;
+
+  /**
+   * Constructs an AiTtsSettingsForm object.
+   *
+   * @param \Drupal\ai_tts\TtsService $tts_service
+   *   The TTS service.
+   */
+  public function __construct(TtsService $tts_service) {
+    $this->ttsService = $tts_service;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function create(ContainerInterface $container) {
+    return new static(
+      $container->get('ai_tts.tts_service')
+    );
+  }
 
   /**
    * {@inheritdoc}
@@ -57,24 +85,24 @@ class AiTtsSettingsForm extends ConfigFormBase {
       if ($binary_executable) {
         $form['binary']['binary_status'] = [
           '#markup' => '<div class="messages messages--status">✓ ' .
-            $this->t('Binary found and executable') . '<br><small>' .
-            $this->t('Location: @path', ['@path' => $binary_path]) . '</small></div>',
+          $this->t('Binary found and executable') . '<br><small>' .
+          $this->t('Location: @path', ['@path' => $binary_path]) . '</small></div>',
         ];
       }
       elseif ($binary_exists) {
         $form['binary']['binary_status'] = [
           '#markup' => '<div class="messages messages--error">✗ ' .
-            $this->t('Binary found but not executable') . '<br><small>' .
-            $this->t('Run: <code>chmod +x @path</code>', ['@path' => $binary_path]) . '</small></div>',
+          $this->t('Binary found but not executable') . '<br><small>' .
+          $this->t('Run: <code>chmod +x @path</code>', ['@path' => $binary_path]) . '</small></div>',
         ];
       }
       else {
         $form['binary']['binary_status'] = [
           '#markup' => '<div class="messages messages--error">✗ ' .
-            $this->t('Binary not found at: @path', ['@path' => $binary_path]) . '<br><small>' .
-            $this->t('Install using: <code>cd @module && composer run download-binary</code>', [
-              '@module' => 'modules/custom/ai_tts',
-            ]) . '</small></div>',
+          $this->t('Binary not found at: @path', ['@path' => $binary_path]) . '<br><small>' .
+          $this->t('Install using: <code>cd @module && composer run download-binary</code>', [
+            '@module' => 'modules/custom/ai_tts',
+          ]) . '</small></div>',
         ];
       }
     }
@@ -124,13 +152,13 @@ class AiTtsSettingsForm extends ConfigFormBase {
         $data_size = filesize($data_real);
         $form['models']['model_status'] = [
           '#markup' => '<div class="messages messages--status">✓ ' .
-            $this->t('Model files found') . '<br><small>' .
-            $this->t('Model: @model (@size)<br>Data: @data (@data_size)', [
-              '@model' => $model_real,
-              '@size' => format_size($model_size),
-              '@data' => $data_real,
-              '@data_size' => format_size($data_size),
-            ]) . '</small></div>',
+          $this->t('Model files found') . '<br><small>' .
+          $this->t('Model: @model (@size)<br>Data: @data (@data_size)', [
+            '@model' => $model_real,
+            '@size' => format_size($model_size),
+            '@data' => $data_real,
+            '@data_size' => format_size($data_size),
+          ]) . '</small></div>',
         ];
       }
       else {
@@ -147,7 +175,7 @@ class AiTtsSettingsForm extends ConfigFormBase {
 
         $form['models']['model_status'] = [
           '#markup' => '<div class="messages messages--error">' .
-            implode('<br>', $messages) . '</div>',
+          implode('<br>', $messages) . '</div>',
         ];
       }
     }
@@ -170,11 +198,11 @@ class AiTtsSettingsForm extends ConfigFormBase {
       '#title' => $this->t('Default speech speed'),
       '#description' => $this->t('Speech speed multiplier (0.8 = slower, 2 = faster).'),
       '#options' => [
-        '0.8' => '0.8x',
-        '1' => '1x (Normal)',
-        '1.2' => '1.2x',
-        '1.5' => '1.5x',
-        '2' => '2x',
+        '0.8' => $this->t('0.8x'),
+        '1' => $this->t('1x (Normal)'),
+        '1.2' => $this->t('1.2x'),
+        '1.5' => $this->t('1.5x'),
+        '2' => $this->t('2x'),
       ],
       '#default_value' => $config->get('default_speed') ?: '1',
     ];
@@ -363,7 +391,7 @@ class AiTtsSettingsForm extends ConfigFormBase {
    */
   protected function getAvailableVoices() {
     // Get voices from the TTS service.
-    return \Drupal::service('ai_tts.tts_service')->getAvailableVoices();
+    return $this->ttsService->getAvailableVoices();
   }
 
   /**

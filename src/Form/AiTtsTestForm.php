@@ -2,10 +2,12 @@
 
 namespace Drupal\ai_tts\Form;
 
+use Drupal\ai_tts\TtsService;
+use Drupal\Core\File\FileSystemInterface;
+use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\ai_tts\TtsService;
-use Drupal\Core\File\FileUrlGeneratorInterface;
+use Drupal\Core\Url;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -28,16 +30,30 @@ class AiTtsTestForm extends FormBase {
   protected $fileUrlGenerator;
 
   /**
+   * The file system service.
+   *
+   * @var \Drupal\Core\File\FileSystemInterface
+   */
+  protected $fileSystem;
+
+  /**
    * Constructs a new AiTtsTestForm.
    *
    * @param \Drupal\ai_tts\TtsService $tts_service
    *   The TTS service.
    * @param \Drupal\Core\File\FileUrlGeneratorInterface $file_url_generator
    *   The file URL generator.
+   * @param \Drupal\Core\File\FileSystemInterface $file_system
+   *   The file system service.
    */
-  public function __construct(TtsService $tts_service, FileUrlGeneratorInterface $file_url_generator) {
+  public function __construct(
+    TtsService $tts_service,
+    FileUrlGeneratorInterface $file_url_generator,
+    FileSystemInterface $file_system,
+  ) {
     $this->ttsService = $tts_service;
     $this->fileUrlGenerator = $file_url_generator;
+    $this->fileSystem = $file_system;
   }
 
   /**
@@ -46,7 +62,8 @@ class AiTtsTestForm extends FormBase {
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('ai_tts.tts_service'),
-      $container->get('file_url_generator')
+      $container->get('file_url_generator'),
+      $container->get('file_system')
     );
   }
 
@@ -121,7 +138,8 @@ class AiTtsTestForm extends FormBase {
     ];
 
     // Results section.
-    if ($form_state->has('audio_url')) {
+    $storage = $form_state->getStorage();
+    if (!empty($storage['audio_url'])) {
       $form['results'] = [
         '#type' => 'details',
         '#title' => $this->t('Results'),
@@ -130,9 +148,9 @@ class AiTtsTestForm extends FormBase {
 
       $form['results']['status'] = [
         '#markup' => '<div class="messages messages--status">' .
-          $this->t('✓ Audio generated successfully! File size: @size', [
-            '@size' => $form_state->get('file_size'),
-          ]) . '</div>',
+        $this->t('✓ Audio generated successfully! File size: @size', [
+          '@size' => $storage['file_size'],
+        ]) . '</div>',
       ];
 
       $form['results']['player'] = [
@@ -141,7 +159,7 @@ class AiTtsTestForm extends FormBase {
         '#attributes' => [
           'controls' => TRUE,
           'autoplay' => TRUE,
-          'src' => $form_state->get('audio_url'),
+          'src' => $storage['audio_url'],
           'style' => 'width: 100%; max-width: 600px;',
         ],
         '#value' => $this->t('Your browser does not support the audio element.'),
@@ -149,15 +167,15 @@ class AiTtsTestForm extends FormBase {
 
       $form['results']['timing'] = [
         '#markup' => '<p><small>' .
-          $this->t('Generation time: @time seconds', [
-            '@time' => number_format($form_state->get('generation_time'), 2),
-          ]) . '</small></p>',
+        $this->t('Generation time: @time seconds', [
+          '@time' => number_format($storage['generation_time'], 2),
+        ]) . '</small></p>',
       ];
 
       $form['results']['download'] = [
         '#type' => 'link',
         '#title' => $this->t('Download Audio File'),
-        '#url' => \Drupal\Core\Url::fromUri($form_state->get('audio_url')),
+        '#url' => Url::fromUri($storage['audio_url']),
         '#attributes' => [
           'class' => ['button'],
           'download' => TRUE,
@@ -166,10 +184,10 @@ class AiTtsTestForm extends FormBase {
     }
 
     // Show errors if any.
-    if ($form_state->has('error_message')) {
+    if (!empty($storage['error_message'])) {
       $form['error'] = [
         '#markup' => '<div class="messages messages--error">' .
-          $form_state->get('error_message') . '</div>',
+        $storage['error_message'] . '</div>',
       ];
     }
 
@@ -196,42 +214,53 @@ class AiTtsTestForm extends FormBase {
       $generation_time = microtime(TRUE) - $start_time;
 
       if ($audio_uri) {
-        $real_path = \Drupal::service('file_system')->realpath($audio_uri);
+        $real_path = $this->fileSystem->realpath($audio_uri);
         $file_size = file_exists($real_path) ? format_size(filesize($real_path)) : 'unknown';
 
         $audio_url = $this->fileUrlGenerator->generateAbsoluteString($audio_uri);
 
-        $form_state->set('audio_url', $audio_url);
-        $form_state->set('file_size', $file_size);
-        $form_state->set('generation_time', $generation_time);
-        $form_state->unset('error_message');
+        // Store in form storage to persist across AJAX rebuilds.
+        $storage = $form_state->getStorage();
+        $storage['audio_url'] = $audio_url;
+        $storage['file_size'] = $file_size;
+        $storage['generation_time'] = $generation_time;
+        $storage['error_message'] = NULL;
+        $form_state->setStorage($storage);
 
         $this->messenger()->addStatus($this->t('Audio generated successfully in @time seconds!', [
           '@time' => number_format($generation_time, 2),
         ]));
       }
       else {
-        $form_state->set('error_message', $this->t('Failed to generate audio. Check the error logs for details.'));
-        $form_state->unset('audio_url');
+        $storage = $form_state->getStorage();
+        $storage['error_message'] = $this->t('Failed to generate audio. Check the error logs for details.');
+        $storage['audio_url'] = NULL;
+        $form_state->setStorage($storage);
       }
     }
     catch (\InvalidArgumentException $e) {
-      $form_state->set('error_message', $this->t('Validation error: @message', [
+      $storage = $form_state->getStorage();
+      $storage['error_message'] = $this->t('Validation error: @message', [
         '@message' => $e->getMessage(),
-      ]));
-      $form_state->unset('audio_url');
+      ]);
+      $storage['audio_url'] = NULL;
+      $form_state->setStorage($storage);
     }
     catch (\RuntimeException $e) {
-      $form_state->set('error_message', $this->t('Service error: @message', [
+      $storage = $form_state->getStorage();
+      $storage['error_message'] = $this->t('Service error: @message', [
         '@message' => $e->getMessage(),
-      ]));
-      $form_state->unset('audio_url');
+      ]);
+      $storage['audio_url'] = NULL;
+      $form_state->setStorage($storage);
     }
     catch (\Exception $e) {
-      $form_state->set('error_message', $this->t('Unexpected error: @message', [
+      $storage = $form_state->getStorage();
+      $storage['error_message'] = $this->t('Unexpected error: @message', [
         '@message' => $e->getMessage(),
-      ]));
-      $form_state->unset('audio_url');
+      ]);
+      $storage['audio_url'] = NULL;
+      $form_state->setStorage($storage);
     }
 
     $form_state->setRebuild(TRUE);

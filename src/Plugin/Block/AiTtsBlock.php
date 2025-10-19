@@ -2,6 +2,7 @@
 
 namespace Drupal\ai_tts\Plugin\Block;
 
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Block\BlockBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
@@ -100,7 +101,7 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
     // Try to get any fieldable entity from route parameters.
     $this->entity = NULL;
     foreach ($route_match->getParameters() as $parameter) {
-      if ($parameter instanceof \Drupal\Core\Entity\FieldableEntityInterface) {
+      if ($parameter instanceof FieldableEntityInterface) {
         $this->entity = $parameter;
         break;
       }
@@ -178,7 +179,17 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
       $definitions = $this->entityFieldManager->getFieldDefinitions('node', $bundle);
       foreach ($definitions as $field_name => $definition) {
         $type = $definition->getType();
-        if (in_array($type, ['string', 'string_long', 'text', 'text_long', 'text_with_summary', 'text_plain', 'email', 'telephone'])) {
+        $allowed_types = [
+          'string',
+          'string_long',
+          'text',
+          'text_long',
+          'text_with_summary',
+          'text_plain',
+          'email',
+          'telephone',
+        ];
+        if (in_array($type, $allowed_types)) {
           $field_options[$field_name] = $definition->getLabel() . ' (' . $field_name . ')';
         }
       }
@@ -257,7 +268,17 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
             continue;
           }
 
-          if (!$field->isEmpty() && in_array($field_definition->getType(), ['string', 'string_long', 'text', 'text_long', 'text_with_summary', 'text_plain', 'email', 'telephone'])) {
+          $allowed_types = [
+            'string',
+            'string_long',
+            'text',
+            'text_long',
+            'text_with_summary',
+            'text_plain',
+            'email',
+            'telephone',
+          ];
+          if (!$field->isEmpty() && in_array($field_definition->getType(), $allowed_types)) {
             foreach ($field as $item) {
               // Get the actual value - handle different item types.
               if (isset($item->value)) {
@@ -350,11 +371,11 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
         '#type' => 'select',
         '#title' => $this->t('Speed'),
         '#options' => [
-          '0.8' => '0.8x',
-          '1' => '1x (Normal)',
-          '1.2' => '1.2x',
-          '1.5' => '1.5x',
-          '2' => '2x',
+          '0.8' => $this->t('0.8x'),
+          '1' => $this->t('1x (Normal)'),
+          '1.2' => $this->t('1.2x'),
+          '1.5' => $this->t('1.5x'),
+          '2' => $this->t('2x'),
         ],
         '#default_value' => $default_speed,
         '#attributes' => [

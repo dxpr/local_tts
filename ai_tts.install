@@ -5,6 +5,7 @@
  * Install, update and uninstall functions for the AI TTS module.
  */
 
+use Drupal\Core\Url;
 use Drupal\Core\File\FileSystemInterface;
 
 /**
@@ -25,7 +26,7 @@ function ai_tts_requirements($phase) {
         'title' => t('AI TTS: Kokoro Binary'),
         'value' => t('Not configured'),
         'description' => t('The Kokoro binary path has not been configured. Visit the <a href="@settings">AI TTS settings page</a> to configure it.', [
-          '@settings' => \Drupal\Core\Url::fromRoute('ai_tts.settings')->toString(),
+          '@settings' => Url::fromRoute('ai_tts.settings')->toString(),
         ]),
         'severity' => REQUIREMENT_ERROR,
       ];
@@ -36,7 +37,7 @@ function ai_tts_requirements($phase) {
         'value' => t('Not found'),
         'description' => t('The Kokoro binary was not found at: @path. Please install the binary or update the path in the <a href="@settings">AI TTS settings</a>.', [
           '@path' => $binary_path,
-          '@settings' => \Drupal\Core\Url::fromRoute('ai_tts.settings')->toString(),
+          '@settings' => Url::fromRoute('ai_tts.settings')->toString(),
         ]),
         'severity' => REQUIREMENT_ERROR,
       ];
@@ -84,9 +85,9 @@ function ai_tts_requirements($phase) {
         'value' => t('Missing'),
         'description' => [
           '#markup' => implode('<br>', $messages) . '<br>' .
-            t('Download models: <code>cd modules/custom/ai_tts && composer run download-binary</code><br><a href="@settings">Configure paths</a>', [
-              '@settings' => \Drupal\Core\Url::fromRoute('ai_tts.settings')->toString(),
-            ]),
+          t('Download models: <code>cd modules/custom/ai_tts && composer run download-binary</code><br><a href="@settings">Configure paths</a>', [
+            '@settings' => Url::fromRoute('ai_tts.settings')->toString(),
+          ]),
         ],
         'severity' => REQUIREMENT_ERROR,
       ];
@@ -244,7 +245,7 @@ function ai_tts_requirements($phase) {
         'title' => t('AI TTS: Cache Management'),
         'value' => t('Disabled'),
         'description' => t('Automatic cache management is disabled. Cache will grow unbounded. Enable at least one cleanup strategy in the <a href="@settings">settings</a>.', [
-          '@settings' => \Drupal\Core\Url::fromRoute('ai_tts.settings')->toString(),
+          '@settings' => Url::fromRoute('ai_tts.settings')->toString(),
         ]),
         'severity' => REQUIREMENT_WARNING,
       ];
@@ -316,7 +317,7 @@ function ai_tts_requirements($phase) {
         'description' => [
           '#markup' => t('Consider these improvements:<ul><li>@warnings</li></ul><a href="@settings">Configure security settings</a>', [
             '@warnings' => implode('</li><li>', $security_warnings),
-            '@settings' => \Drupal\Core\Url::fromRoute('ai_tts.settings')->toString(),
+            '@settings' => Url::fromRoute('ai_tts.settings')->toString(),
           ]),
         ],
         'severity' => REQUIREMENT_WARNING,

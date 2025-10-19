@@ -2,13 +2,15 @@
 
 namespace Drupal\ai_tts\Controller;
 
+use Drupal\ai_tts\TtsService;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\File\FileUrlGeneratorInterface;
-use Drupal\ai_tts\TtsService;
+use Drupal\Core\Session\AccountProxyInterface;
+use Drupal\Core\State\StateInterface;
+use Drupal\Component\Datetime\TimeInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * Controller for TTS generation endpoints.
@@ -30,16 +32,52 @@ class TtsController extends ControllerBase {
   protected $fileUrlGenerator;
 
   /**
+   * The current user.
+   *
+   * @var \Drupal\Core\Session\AccountProxyInterface
+   */
+  protected $currentUser;
+
+  /**
+   * The state service.
+   *
+   * @var \Drupal\Core\State\StateInterface
+   */
+  protected $state;
+
+  /**
+   * The time service.
+   *
+   * @var \Drupal\Component\Datetime\TimeInterface
+   */
+  protected $time;
+
+  /**
    * Constructs a TtsController object.
    *
    * @param \Drupal\ai_tts\TtsService $tts_service
    *   The TTS service.
    * @param \Drupal\Core\File\FileUrlGeneratorInterface $file_url_generator
    *   The file URL generator.
+   * @param \Drupal\Core\Session\AccountProxyInterface $current_user
+   *   The current user.
+   * @param \Drupal\Core\State\StateInterface $state
+   *   The state service.
+   * @param \Drupal\Component\Datetime\TimeInterface $time
+   *   The time service.
    */
-  public function __construct(TtsService $tts_service, FileUrlGeneratorInterface $file_url_generator) {
+  public function __construct(
+    TtsService $tts_service,
+    FileUrlGeneratorInterface $file_url_generator,
+    AccountProxyInterface $current_user,
+    StateInterface $state,
+    TimeInterface $time,
+  ) {
     $this->ttsService = $tts_service;
     $this->fileUrlGenerator = $file_url_generator;
+    $this->currentUser = $current_user;
+    $this->state = $state;
+    $this->time = $time;
   }
 
   /**
@@ -48,7 +86,10 @@ class TtsController extends ControllerBase {
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('ai_tts.tts_service'),
-      $container->get('file_url_generator')
+      $container->get('file_url_generator'),
+      $container->get('current_user'),
+      $container->get('state'),
+      $container->get('datetime.time')
     );
   }
 
@@ -61,7 +102,7 @@ class TtsController extends ControllerBase {
    * @return \Symfony\Component\HttpFoundation\JsonResponse|\Symfony\Component\HttpFoundation\BinaryFileResponse
    *   JSON response with file URL or binary audio response.
    *
-   * HTTP Status Codes:
+   *   HTTP Status Codes:
    *   200 - Success
    *   400 - Bad Request (invalid parameters)
    *   408 - Request Timeout (generation timeout)
@@ -200,14 +241,12 @@ class TtsController extends ControllerBase {
     $threshold = (int) ($config->get('rate_limit_threshold') ?? 20);
     $window = 3600;
 
-    $current_user = \Drupal::currentUser();
-    $state_key = 'ai_tts.rate_limit.' . $current_user->id();
+    $state_key = 'ai_tts.rate_limit.' . $this->currentUser->id();
 
-    $state = \Drupal::state();
-    $attempts = $state->get($state_key, []);
+    $attempts = $this->state->get($state_key, []);
 
     // Clean old attempts outside the time window.
-    $current_time = \Drupal::time()->getRequestTime();
+    $current_time = $this->time->getRequestTime();
     $attempts = array_filter($attempts, function ($timestamp) use ($current_time, $window) {
       return ($current_time - $timestamp) < $window;
     });
@@ -219,7 +258,7 @@ class TtsController extends ControllerBase {
 
     // Record this attempt.
     $attempts[] = $current_time;
-    $state->set($state_key, $attempts);
+    $this->state->set($state_key, $attempts);
 
     return TRUE;
   }
@@ -231,14 +270,11 @@ class TtsController extends ControllerBase {
    *   Seconds until the user can make another request.
    */
   protected function getRetryAfter() {
-    $config = $this->config('ai_tts.settings');
     $window = 3600;
 
-    $current_user = \Drupal::currentUser();
-    $state_key = 'ai_tts.rate_limit.' . $current_user->id();
+    $state_key = 'ai_tts.rate_limit.' . $this->currentUser->id();
 
-    $state = \Drupal::state();
-    $attempts = $state->get($state_key, []);
+    $attempts = $this->state->get($state_key, []);
 
     if (empty($attempts)) {
       return 0;
@@ -246,7 +282,7 @@ class TtsController extends ControllerBase {
 
     // Get oldest attempt timestamp.
     $oldest_attempt = min($attempts);
-    $current_time = \Drupal::time()->getRequestTime();
+    $current_time = $this->time->getRequestTime();
 
     // Calculate when the oldest attempt will expire.
     $retry_after = ($oldest_attempt + $window) - $current_time;

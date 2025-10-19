@@ -3,9 +3,11 @@
 namespace Drupal\ai_tts\Drush\Commands;
 
 use Drupal\ai_tts\TtsService;
+use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\File\FileSystemInterface;
 use Drush\Attributes as CLI;
 use Drush\Commands\DrushCommands;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * Drush commands for AI TTS module.
@@ -17,15 +19,24 @@ final class AiTtsCommands extends DrushCommands {
    *
    * @param \Drupal\ai_tts\TtsService $ttsService
    *   The TTS service.
+   * @param \Drupal\Core\Config\ConfigFactoryInterface $configFactory
+   *   The config factory.
+   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entityTypeManager
+   *   The entity type manager.
+   * @param \Drupal\Core\File\FileSystemInterface $fileSystem
+   *   The file system service.
    */
   public function __construct(
     private readonly TtsService $ttsService,
+    private readonly ConfigFactoryInterface $configFactory,
+    private readonly EntityTypeManagerInterface $entityTypeManager,
+    private readonly FileSystemInterface $fileSystem,
   ) {
     parent::__construct();
   }
 
   /**
-   * Test TTS generation by speaking "Hello World" (uses streaming for instant playback).
+   * Test TTS generation by speaking "Hello World" (streaming mode).
    *
    * @param string $text
    *   The text to speak (default: "Hello World").
@@ -57,10 +68,18 @@ final class AiTtsCommands extends DrushCommands {
   #[CLI\Usage(name: 'ai-tts:test "Welcome to Drupal" --voice=am_adam --speed=1.2', description: 'Generate and play speech with custom text, voice, and speed')]
   #[CLI\Usage(name: 'ai-tts:test "Hola mundo" --voice=ef_dora --language=es', description: 'Generate Spanish speech with proper Spanish pronunciation')]
   #[CLI\Usage(name: 'ai-tts:test "Hello World" --no-play', description: 'Generate speech without automatic playback')]
-  public function test(string $text = 'Hello World', array $options = ['voice' => NULL, 'speed' => NULL, 'language' => NULL, 'no-play' => FALSE]): void {
+  public function test(
+    string $text = 'Hello World',
+    array $options = [
+      'voice' => NULL,
+      'speed' => NULL,
+      'language' => NULL,
+      'no-play' => FALSE,
+    ],
+  ): void {
     $this->output()->writeln('🔊 Testing AI TTS (streaming mode)...');
 
-    $config = \Drupal::config('ai_tts.settings');
+    $config = $this->configFactory->get('ai_tts.settings');
 
     // Get configuration.
     $voice = $options['voice'] ?? $config->get('default_voice') ?? 'af_sky';
@@ -97,7 +116,7 @@ final class AiTtsCommands extends DrushCommands {
    *   The language code.
    */
   protected function playStreamingAudio(string $text, string $voice, float $speed, string $language): void {
-    $config = \Drupal::config('ai_tts.settings');
+    $config = $this->configFactory->get('ai_tts.settings');
     $binary_path = $config->get('koko_binary_path');
 
     if (!file_exists($binary_path) || !is_executable($binary_path)) {
@@ -148,7 +167,7 @@ final class AiTtsCommands extends DrushCommands {
     $this->output()->writeln('⚡ Time-to-first-audio: ~1-2 seconds');
     $this->output()->writeln('');
 
-    // Build streaming command: echo "text" | koko ... stream | player
+    // Build streaming command: echo "text" | koko ... stream | player.
     $command = sprintf(
       'echo %s | %s --lan %s --model %s --data %s --style %s --speed %s stream 2>/dev/null | %s',
       escapeshellarg($text),
@@ -223,7 +242,7 @@ final class AiTtsCommands extends DrushCommands {
 
     // Detect platform and choose appropriate audio player.
     if ($os === 'Darwin') {
-      // macOS
+      // macOS.
       $player_command = 'afplay';
       $player_name = 'afplay (macOS)';
     }
@@ -244,7 +263,7 @@ final class AiTtsCommands extends DrushCommands {
       }
     }
     elseif ($os === 'Windows') {
-      // Windows - use PowerShell
+      // Windows - use PowerShell.
       $player_command = 'powershell -c (New-Object Media.SoundPlayer';
       $player_name = 'PowerShell SoundPlayer';
     }
@@ -396,10 +415,20 @@ final class AiTtsCommands extends DrushCommands {
   #[CLI\Usage(name: 'ai-tts:read node 123 --voice=am_adam', description: 'Use a specific voice')]
   #[CLI\Usage(name: 'ai-tts:read node 123 --field=field_summary', description: 'Read a specific field')]
   #[CLI\Usage(name: 'ai-tts:read node 123 --stream', description: 'Use streaming mode')]
-  public function readEntity(string $entity_type, string $entity_id, array $options = ['voice' => NULL, 'speed' => NULL, 'language' => NULL, 'field' => NULL, 'stream' => FALSE]): void {
+  public function readEntity(
+    string $entity_type,
+    string $entity_id,
+    array $options = [
+      'voice' => NULL,
+      'speed' => NULL,
+      'language' => NULL,
+      'field' => NULL,
+      'stream' => FALSE,
+    ],
+  ): void {
     // Load the entity.
     try {
-      $entity_storage = \Drupal::entityTypeManager()->getStorage($entity_type);
+      $entity_storage = $this->entityTypeManager->getStorage($entity_type);
       $entity = $entity_storage->load($entity_id);
     }
     catch (\Exception $e) {
@@ -441,7 +470,7 @@ final class AiTtsCommands extends DrushCommands {
       $entity_language = $entity->language()->getId();
     }
 
-    $config = \Drupal::config('ai_tts.settings');
+    $config = $this->configFactory->get('ai_tts.settings');
     $voice = $options['voice'] ?? $config->get('default_voice') ?? 'af_sky';
     $speed = $options['speed'] ?? $config->get('default_speed') ?? 1.0;
     $language = $options['language'] ?? $entity_language ?? $this->ttsService->detectLanguageFromVoice($voice);
@@ -472,7 +501,7 @@ final class AiTtsCommands extends DrushCommands {
         $audio_uri = $this->ttsService->generateSpeech($text, $tts_options);
 
         if ($audio_uri) {
-          $real_path = \Drupal::service('file_system')->realpath($audio_uri);
+          $real_path = $this->fileSystem->realpath($audio_uri);
           $this->output()->writeln("✅ Audio cached at: $audio_uri");
           $this->output()->writeln('');
           $this->output()->writeln('🎵 Playing cached audio...');
