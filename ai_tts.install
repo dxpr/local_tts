@@ -294,6 +294,26 @@ function ai_tts_requirements($phase) {
       ];
     }
 
+    // Check 5: Server Load.
+    $max_server_load = $config->get('max_server_load') ?? 2;
+    if ($max_server_load > 0 && function_exists('sys_getloadavg')) {
+      $load = sys_getloadavg();
+      if ($load !== FALSE && isset($load[0])) {
+        $current_load = (float) $load[0];
+        if ($current_load > $max_server_load) {
+          $requirements['ai_tts_server_load'] = [
+            'title' => t('AI TTS server load'),
+            'value' => t('@current (threshold: @max)', [
+              '@current' => number_format($current_load, 2),
+              '@max' => number_format($max_server_load, 2),
+            ]),
+            'description' => t('Server load exceeds threshold. TTS generation is currently disabled.'),
+            'severity' => REQUIREMENT_WARNING,
+          ];
+        }
+      }
+    }
+
   }
 
   return $requirements;
