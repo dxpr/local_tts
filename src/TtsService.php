@@ -226,6 +226,22 @@ class TtsService {
 
     $this->logger->info('Executing command: @command', ['@command' => $command]);
 
+    // Security: Check server load before executing binary.
+    $max_load = $config->get('max_server_load') ?? 2;
+    if ($max_load > 0 && function_exists('sys_getloadavg')) {
+      $load = sys_getloadavg();
+      if ($load !== FALSE && isset($load[0])) {
+        $current_load = (float) $load[0];
+        if ($current_load > $max_load) {
+          $this->logger->warning('TTS generation blocked due to high server load: current @current exceeds threshold @max', [
+            '@current' => number_format($current_load, 2),
+            '@max' => number_format($max_load, 2),
+          ]);
+          throw new TtsServiceUnavailableException('Server is experiencing high load. Audio generation is temporarily disabled to maintain performance.');
+        }
+      }
+    }
+
     // Security: Execute with timeout to prevent hanging.
     $timeout = $config->get('generation_timeout') ?? 900;
     $result = $this->execWithTimeout($command, $timeout);
@@ -677,7 +693,18 @@ class TtsService {
       2 => ['pipe', 'w'],
     ];
 
-    $process = proc_open($command, $descriptors, $pipes);
+    // Set up environment variables.
+    $env = NULL;
+    $config = $this->configFactory->get('ai_tts.settings');
+    $espeak_data_path = $config->get('espeak_data_path');
+
+    if ($espeak_data_path) {
+      // Get parent directory that contains espeak-ng-data.
+      $espeak_parent = dirname($espeak_data_path);
+      $env = array_merge($_SERVER, ['PIPER_ESPEAKNG_DATA_DIRECTORY' => $espeak_parent]);
+    }
+
+    $process = proc_open($command, $descriptors, $pipes, NULL, $env);
 
     if (!is_resource($process)) {
       return [
