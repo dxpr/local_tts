@@ -9,7 +9,7 @@ ai_tts.settings:
       type: string
       label: 'Default voice'
     default_speed:
-      type: float
+      type: string
       label: 'Default speech speed'
     cache_audio:
       type: boolean
@@ -17,3 +17,12 @@ ai_tts.settings:
     audio_directory:
       type: string
       label: 'Audio cache directory'
+    cache_size_limit_enabled:
+      type: boolean
+      label: 'Enable size-based cache cleanup'
+    cache_max_size:
+      type: integer
+      label: 'Maximum cache size in bytes'
+    cache_content_tracking_enabled:
+      type: boolean
+      label: 'Enable content-based cache invalidation'

@@ -70,13 +70,17 @@ class AiTtsSettingsForm extends ConfigFormBase {
     ];
 
     $form['voice_settings']['default_speed'] = [
-      '#type' => 'number',
+      '#type' => 'select',
       '#title' => $this->t('Default speech speed'),
-      '#description' => $this->t('Speech speed multiplier (0.5 = half speed, 2.0 = double speed).'),
-      '#default_value' => $config->get('default_speed'),
-      '#min' => 0.5,
-      '#max' => 2.0,
-      '#step' => 0.1,
+      '#description' => $this->t('Speech speed multiplier (0.8 = slower, 2 = faster).'),
+      '#options' => [
+        '0.8' => '0.8x',
+        '1' => '1x (Normal)',
+        '1.2' => '1.2x',
+        '1.5' => '1.5x',
+        '2' => '2x',
+      ],
+      '#default_value' => $config->get('default_speed') ?: '1',
     ];
 
     $form['caching'] = [
@@ -103,6 +107,42 @@ class AiTtsSettingsForm extends ConfigFormBase {
       ],
     ];
 
+    $form['cache_management'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Cache Management'),
+      '#description' => $this->t('Configure automatic cache cleanup to manage disk space and content freshness.'),
+    ];
+
+    $form['cache_management']['cache_size_limit_enabled'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Enable size-based cache cleanup'),
+      '#description' => $this->t('Automatically delete least recently used audio files when cache exceeds size limit.'),
+      '#default_value' => $config->get('cache_size_limit_enabled') ?? TRUE,
+    ];
+
+    $form['cache_management']['cache_max_size'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Maximum cache size (MB)'),
+      '#description' => $this->t('Maximum disk space for cached audio files. Default: 1024 MB (1 GB). Files will be deleted by least recently used when this limit is exceeded.'),
+      '#default_value' => round(($config->get('cache_max_size') ?? 1073741824) / 1048576),
+      '#min' => 10,
+      '#max' => 102400,
+      '#step' => 1,
+      '#field_suffix' => 'MB',
+      '#states' => [
+        'visible' => [
+          ':input[name="cache_size_limit_enabled"]' => ['checked' => TRUE],
+        ],
+      ],
+    ];
+
+    $form['cache_management']['cache_content_tracking_enabled'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Enable content-based cache invalidation'),
+      '#description' => $this->t('Automatically delete audio files when the source content is updated. Tracks entity changes (nodes, taxonomy terms, etc.) and removes associated audio.'),
+      '#default_value' => $config->get('cache_content_tracking_enabled') ?? TRUE,
+    ];
+
     return parent::buildForm($form, $form_state);
   }
 
@@ -126,12 +166,19 @@ class AiTtsSettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
+    // Convert MB to bytes for storage.
+    $max_size_mb = $form_state->getValue('cache_max_size');
+    $max_size_bytes = $max_size_mb * 1048576;
+
     $this->config('ai_tts.settings')
       ->set('koko_binary_path', $form_state->getValue('koko_binary_path'))
       ->set('default_voice', $form_state->getValue('default_voice'))
       ->set('default_speed', $form_state->getValue('default_speed'))
       ->set('cache_audio', $form_state->getValue('cache_audio'))
       ->set('audio_directory', $form_state->getValue('audio_directory'))
+      ->set('cache_size_limit_enabled', $form_state->getValue('cache_size_limit_enabled'))
+      ->set('cache_max_size', $max_size_bytes)
+      ->set('cache_content_tracking_enabled', $form_state->getValue('cache_content_tracking_enabled'))
       ->save();
 
     parent::submitForm($form, $form_state);
@@ -144,20 +191,8 @@ class AiTtsSettingsForm extends ConfigFormBase {
    *   Array of voice options.
    */
   protected function getAvailableVoices() {
-    // Common Kokoro voices based on the documentation.
-    return [
-      'af_sky' => 'af_sky (Female, Sky)',
-      'af_nicole' => 'af_nicole (Female, Nicole)',
-      'af_heart' => 'af_heart (Female, Heart)',
-      'af_bella' => 'af_bella (Female, Bella)',
-      'af_sarah' => 'af_sarah (Female, Sarah)',
-      'am_adam' => 'am_adam (Male, Adam)',
-      'am_michael' => 'am_michael (Male, Michael)',
-      'bf_emma' => 'bf_emma (British Female, Emma)',
-      'bf_isabella' => 'bf_isabella (British Female, Isabella)',
-      'bm_george' => 'bm_george (British Male, George)',
-      'bm_lewis' => 'bm_lewis (British Male, Lewis)',
-    ];
+    // Get voices from the TTS service.
+    return \Drupal::service('ai_tts.tts_service')->getAvailableVoices();
   }
 
 }

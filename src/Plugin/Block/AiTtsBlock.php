@@ -54,11 +54,11 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
   protected $entityTypeBundleInfo;
 
   /**
-   * The current node.
+   * The current entity.
    *
-   * @var \Drupal\node\NodeInterface|null
+   * @var \Drupal\Core\Entity\EntityInterface|null
    */
-  protected $node;
+  protected $entity;
 
   /**
    * The current user.
@@ -95,8 +95,16 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
     $this->ttsService = $tts_service;
     $this->entityFieldManager = $entity_field_manager;
     $this->entityTypeBundleInfo = $entity_type_bundle_info;
-    $this->node = $route_match->getParameter('node');
     $this->currentUser = $current_user;
+
+    // Try to get any fieldable entity from route parameters.
+    $this->entity = NULL;
+    foreach ($route_match->getParameters() as $parameter) {
+      if ($parameter instanceof \Drupal\Core\Entity\FieldableEntityInterface) {
+        $this->entity = $parameter;
+        break;
+      }
+    }
   }
 
   /**
@@ -206,17 +214,44 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
     $config = $this->getConfiguration();
     $global_config = $this->configFactory->get('ai_tts.settings');
 
+    // Get entity language for voice filtering.
+    $langcode = NULL;
+    if ($this->entity && method_exists($this->entity, 'language')) {
+      $langcode = $this->entity->language()->getId();
+    }
+
+    // Check if voices are available for this language.
+    $available_voices = $this->ttsService->getAvailableVoices($langcode);
+    if (empty($available_voices)) {
+      // No voices available for this language, hide the block.
+      return [];
+    }
+
     $content = '';
     $selected_fields = array_filter($config['fields'] ?? []);
 
-    if ($this->node) {
-      foreach ($this->node->getFieldDefinitions() as $field_name => $field_definition) {
+    // Base fields to exclude from TTS (administrative/metadata fields).
+    $excluded_base_fields = [
+      'nid', 'uuid', 'vid', 'langcode', 'type', 'revision_timestamp',
+      'revision_uid', 'revision_log', 'status', 'uid', 'created', 'changed',
+      'promote', 'sticky', 'default_langcode', 'revision_default',
+      'revision_translation_affected', 'metatag', 'path', 'menu_link',
+      'tid', 'weight', 'parent', 'description__format',
+    ];
+
+    if ($this->entity) {
+      foreach ($this->entity->getFieldDefinitions() as $field_name => $field_definition) {
+        // Skip explicitly excluded base fields.
+        if (in_array($field_name, $excluded_base_fields, TRUE)) {
+          continue;
+        }
+
         if (!empty($selected_fields) && !in_array($field_name, $selected_fields, TRUE)) {
           continue;
         }
 
-        if ($this->node->hasField($field_name)) {
-          $field = $this->node->get($field_name);
+        if ($this->entity->hasField($field_name)) {
+          $field = $this->entity->get($field_name);
 
           if (!$field->access('view', $this->currentUser)) {
             continue;
@@ -224,9 +259,21 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
 
           if (!$field->isEmpty() && in_array($field_definition->getType(), ['string', 'string_long', 'text', 'text_long', 'text_with_summary', 'text_plain', 'email', 'telephone'])) {
             foreach ($field as $item) {
-              $text = $item->value;
+              // Get the actual value - handle different item types.
+              if (isset($item->value)) {
+                $text = $item->value;
+              }
+              elseif (is_string($item)) {
+                $text = $item;
+              }
+              else {
+                continue;
+              }
+
               $text = html_entity_decode(strip_tags($text ?? ''), ENT_QUOTES | ENT_HTML5);
-              $content .= (strlen($content) > 0 ? ' ' : '') . $text;
+              if (!empty(trim($text))) {
+                $content .= (strlen($content) > 0 ? ' ' : '') . $text;
+              }
             }
           }
         }
@@ -242,7 +289,12 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
       '#attributes' => ['class' => ['ai-tts-container']],
     ];
 
-    $build['listen_button'] = [
+    $build['controls'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['ai-tts-controls']],
+    ];
+
+    $build['controls']['listen_button'] = [
       '#type' => 'button',
       '#value' => $config['button_text'],
       '#attributes' => [
@@ -250,10 +302,11 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
         'class' => ['ai-tts-button', 'ai-tts-play-button'],
         'aria-label' => $this->t('Listen to the content on this page'),
         'aria-pressed' => 'false',
+        'aria-controls' => 'ai-tts-audio',
       ],
     ];
 
-    $build['stop_button'] = [
+    $build['controls']['stop_button'] = [
       '#type' => 'button',
       '#value' => $config['stop_button_text'],
       '#attributes' => [
@@ -261,17 +314,28 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
         'class' => ['ai-tts-button', 'ai-tts-stop-button'],
         'disabled' => 'disabled',
         'aria-label' => $this->t('Stop reading'),
+        'aria-controls' => 'ai-tts-audio',
       ],
     ];
 
-    if ($config['show_voice_selector']) {
-      $voices = $this->ttsService->getAvailableVoices();
-      $voice_options = array_combine($voices, $voices);
+    $build['settings'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['ai-tts-settings']],
+    ];
 
-      $build['voice_select'] = [
+    if ($config['show_voice_selector']) {
+      // Ensure default voice is valid for this language.
+      $default_voice = $global_config->get('default_voice');
+      if (!isset($available_voices[$default_voice])) {
+        // Default voice not available, use first available voice.
+        $default_voice = array_key_first($available_voices);
+      }
+
+      $build['settings']['voice_select'] = [
         '#type' => 'select',
-        '#options' => $voice_options,
-        '#default_value' => $global_config->get('default_voice'),
+        '#title' => $this->t('Voice'),
+        '#options' => $available_voices,
+        '#default_value' => $default_voice,
         '#attributes' => [
           'id' => 'ai-tts-voice-select',
           'class' => ['ai-tts-voice-select'],
@@ -281,19 +345,22 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
     }
 
     if ($config['show_speed_control']) {
-      $default_speed = $global_config->get('default_speed') ?: 1.0;
-      $build['speed_control'] = [
-        '#type' => 'number',
+      $default_speed = $global_config->get('default_speed') ?: '1';
+      $build['settings']['speed_control'] = [
+        '#type' => 'select',
         '#title' => $this->t('Speed'),
+        '#options' => [
+          '0.8' => '0.8x',
+          '1' => '1x (Normal)',
+          '1.2' => '1.2x',
+          '1.5' => '1.5x',
+          '2' => '2x',
+        ],
         '#default_value' => $default_speed,
-        '#min' => 0.5,
-        '#max' => 2.0,
-        '#step' => 0.1,
         '#attributes' => [
           'id' => 'ai-tts-speed-input',
           'class' => ['ai-tts-speed-input'],
           'aria-label' => $this->t('Adjust speech speed'),
-          'value' => $default_speed,
         ],
       ];
     }
@@ -317,17 +384,36 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
       ],
     ];
 
+    // Use language-aware default voice for JavaScript.
+    $js_default_voice = $global_config->get('default_voice');
+    if (!isset($available_voices[$js_default_voice])) {
+      $js_default_voice = array_key_first($available_voices);
+    }
+
     $build['#attached'] = [
       'library' => ['ai_tts/player'],
       'drupalSettings' => [
         'aiTts' => [
-          'defaultVoice' => $global_config->get('default_voice'),
+          'defaultVoice' => $js_default_voice,
           'defaultSpeed' => $global_config->get('default_speed'),
           'generateUrl' => Url::fromRoute('ai_tts.generate')->toString(),
           'content' => $content,
+          'language' => $langcode,
         ],
       ],
     ];
+
+    // Add cache contexts and tags to ensure block content is unique per page.
+    $build['#cache']['contexts'][] = 'route';
+    $build['#cache']['contexts'][] = 'languages:language_content';
+
+    if ($this->entity) {
+      $entity_type = $this->entity->getEntityTypeId();
+      $entity_id = $this->entity->id();
+      $build['#cache']['tags'][] = "{$entity_type}:{$entity_id}";
+    }
+
+    $build['#cache']['tags'][] = 'config:ai_tts.settings';
 
     return $build;
   }

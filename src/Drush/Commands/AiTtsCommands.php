@@ -36,11 +36,14 @@ final class AiTtsCommands extends DrushCommands {
    * @aliases tts-test
    * @option voice The voice to use (e.g., af_sky, am_adam).
    * @option speed The speech speed (0.5 to 2.0).
+   * @option language The language code for proper pronunciation (e.g., en, es, ja).
    * @option no-play Skip automatic audio playback.
    * @usage ai-tts:test
    *   Generate and play "Hello World" using default settings.
    * @usage ai-tts:test "Welcome to Drupal" --voice=am_adam --speed=1.2
    *   Generate and play speech with custom text, voice, and speed.
+   * @usage ai-tts:test "Hola mundo" --voice=ef_dora --language=es
+   *   Generate Spanish speech with proper Spanish pronunciation.
    * @usage ai-tts:test "Hello World" --no-play
    *   Generate speech without automatic playback.
    */
@@ -48,11 +51,13 @@ final class AiTtsCommands extends DrushCommands {
   #[CLI\Argument(name: 'text', description: 'The text to speak')]
   #[CLI\Option(name: 'voice', description: 'The voice to use')]
   #[CLI\Option(name: 'speed', description: 'The speech speed (0.5 to 2.0)')]
+  #[CLI\Option(name: 'language', description: 'The language code for proper pronunciation (e.g., en, es, ja)')]
   #[CLI\Option(name: 'no-play', description: 'Skip automatic audio playback')]
   #[CLI\Usage(name: 'ai-tts:test', description: 'Generate and play "Hello World" using default settings')]
   #[CLI\Usage(name: 'ai-tts:test "Welcome to Drupal" --voice=am_adam --speed=1.2', description: 'Generate and play speech with custom text, voice, and speed')]
+  #[CLI\Usage(name: 'ai-tts:test "Hola mundo" --voice=ef_dora --language=es', description: 'Generate Spanish speech with proper Spanish pronunciation')]
   #[CLI\Usage(name: 'ai-tts:test "Hello World" --no-play', description: 'Generate speech without automatic playback')]
-  public function test(string $text = 'Hello World', array $options = ['voice' => NULL, 'speed' => NULL, 'no-play' => FALSE]): void {
+  public function test(string $text = 'Hello World', array $options = ['voice' => NULL, 'speed' => NULL, 'language' => NULL, 'no-play' => FALSE]): void {
     $this->output()->writeln('🔊 Testing AI TTS...');
 
     // Prepare options for TTS service.
@@ -63,6 +68,9 @@ final class AiTtsCommands extends DrushCommands {
     if ($options['speed']) {
       $tts_options['speed'] = (float) $options['speed'];
     }
+    if ($options['language']) {
+      $tts_options['language'] = $options['language'];
+    }
 
     // Generate speech.
     $this->output()->writeln("Text: $text");
@@ -71,6 +79,9 @@ final class AiTtsCommands extends DrushCommands {
     }
     if (!empty($tts_options['speed'])) {
       $this->output()->writeln("Speed: {$tts_options['speed']}");
+    }
+    if (!empty($tts_options['language'])) {
+      $this->output()->writeln("Language: {$tts_options['language']}");
     }
 
     $audio_uri = $this->ttsService->generateSpeech($text, $tts_options);
@@ -198,24 +209,52 @@ final class AiTtsCommands extends DrushCommands {
   /**
    * List available TTS voices.
    *
+   * @param array $options
+   *   The command options.
+   *
    * @command ai-tts:voices
    * @aliases tts-voices
+   * @option language Filter voices by language code (e.g., en, es, ja).
    * @usage ai-tts:voices
    *   Display all available voices.
+   * @usage ai-tts:voices --language=es
+   *   Display only Spanish voices.
+   * @usage ai-tts:voices --language=ja
+   *   Display only Japanese voices.
    */
   #[CLI\Command(name: 'ai-tts:voices', aliases: ['tts-voices'])]
+  #[CLI\Option(name: 'language', description: 'Filter voices by language code (e.g., en, es, ja)')]
   #[CLI\Usage(name: 'ai-tts:voices', description: 'Display all available voices')]
-  public function listVoices(): void {
-    $this->output()->writeln('Available TTS Voices:');
+  #[CLI\Usage(name: 'ai-tts:voices --language=es', description: 'Display only Spanish voices')]
+  #[CLI\Usage(name: 'ai-tts:voices --language=ja', description: 'Display only Japanese voices')]
+  public function listVoices(array $options = ['language' => NULL]): void {
+    $langcode = $options['language'] ?? NULL;
+
+    if ($langcode) {
+      $this->output()->writeln("Available TTS Voices for language '$langcode':");
+    }
+    else {
+      $this->output()->writeln('Available TTS Voices:');
+    }
     $this->output()->writeln('');
 
-    $voices = $this->ttsService->getAvailableVoices();
-    foreach ($voices as $voice) {
-      $this->output()->writeln("  • $voice");
+    $voices = $this->ttsService->getAvailableVoices($langcode);
+
+    if (empty($voices)) {
+      $this->output()->writeln("  No voices available for language '$langcode'.");
+      $this->output()->writeln('');
+      $supported_languages = $this->ttsService->getSupportedLanguages();
+      $this->output()->writeln('Supported languages: ' . implode(', ', $supported_languages));
+      return;
+    }
+
+    foreach ($voices as $voice_code => $voice_name) {
+      $this->output()->writeln("  • $voice_code - $voice_name");
     }
 
     $this->output()->writeln('');
-    $this->output()->writeln('Use these voices with: drush ai-tts:test "Your text" --voice=VOICE_NAME');
+    $this->output()->writeln(sprintf('Total: %d voices', count($voices)));
+    $this->output()->writeln('Use these voices with: drush ai-tts:test "Your text" --voice=VOICE_CODE');
   }
 
   /**

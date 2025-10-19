@@ -1,5 +1,8 @@
 player:
   version: 1.x
+  css:
+    theme:
+      css/ai-tts-player.css: {}
   js:
     js/ai-tts-player.js: {}
   dependencies:

@@ -1,5 +1,8 @@
 koko_binary_path: '/Users/jur/www/dxpr-marketing-cms-2024-12/koko'
 default_voice: 'af_sky'
-default_speed: 1.0
+default_speed: '1'
 cache_audio: true
 audio_directory: 'public://ai-tts'
+cache_size_limit_enabled: true
+cache_max_size: 1073741824
+cache_content_tracking_enabled: true

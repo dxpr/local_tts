@@ -1,0 +1,83 @@
+{
+  "name": "custom/ai_tts",
+  "description": "AI-powered text-to-speech using Kokoro TTS (Rust implementation)",
+  "type": "drupal-module",
+  "license": "GPL-2.0-or-later",
+  "keywords": ["drupal", "tts", "text-to-speech", "ai", "kokoro", "audio"],
+  "homepage": "https://github.com/lucasjinreal/Kokoros",
+  "require": {
+    "php": ">=7.4",
+    "drupal/core": "^9 || ^10 || ^11"
+  },
+  "require-dev": {
+    "drush/drush": "^11 || ^12"
+  },
+  "scripts": {
+    "post-install-cmd": [
+      "@setup-directories",
+      "@check-binary",
+      "@display-instructions"
+    ],
+    "post-update-cmd": [
+      "@setup-directories",
+      "@check-binary"
+    ],
+    "setup-directories": [
+      "echo 'Setting up AI TTS directories...'",
+      "mkdir -p bin",
+      "chmod 755 bin"
+    ],
+    "check-binary": [
+      "bash -c 'if [ -f bin/koko ]; then echo \"✓ Kokoro binary found at bin/koko\"; chmod +x bin/koko; else echo \"⚠ Kokoro binary not found. See installation instructions.\"; fi'"
+    ],
+    "display-instructions": [
+      "echo ''",
+      "echo '╔════════════════════════════════════════════════════════════╗'",
+      "echo '║         AI Text-to-Speech Module Installation             ║'",
+      "echo '╚════════════════════════════════════════════════════════════╝'",
+      "echo ''",
+      "echo 'Next steps:'",
+      "echo ''",
+      "echo '1. Install the Kokoro binary (choose one method):'",
+      "echo ''",
+      "echo '   Option A - Download pre-built binary (fastest):'",
+      "echo '   composer run download-binary'",
+      "echo ''",
+      "echo '   Option B - Build from source (requires Rust):'",
+      "echo '   composer run build-binary'",
+      "echo ''",
+      "echo '   Option C - Use system binary:'",
+      "echo '   ln -s /usr/local/bin/koko bin/koko'",
+      "echo ''",
+      "echo '2. Enable the module:'",
+      "echo '   drush en ai_tts -y'",
+      "echo ''",
+      "echo '3. Configure at: /admin/config/media/ai-tts'",
+      "echo ''",
+      "echo '4. Test the installation:'",
+      "echo '   drush ai-tts:test'",
+      "echo ''"
+    ],
+    "download-binary": [
+      "bash -c 'ARCH=$(uname -m); OS=$(uname -s | tr \"[:upper:]\" \"[:lower:]\"); echo \"Detecting platform: $OS-$ARCH\"; if [ \"$OS\" = \"darwin\" ]; then OS=\"macos\"; fi; echo \"Checking for Kokoro releases...\"; LATEST_URL=$(curl -s https://api.github.com/repos/lucasjinreal/Kokoros/releases/latest | grep \"browser_download_url.*koko.*$OS\" | cut -d : -f 2,3 | tr -d \\\"); if [ -z \"$LATEST_URL\" ]; then echo \"⚠ No pre-built binary found for $OS-$ARCH\"; echo \"Please build from source using: composer run build-binary\"; exit 1; else echo \"Downloading from: $LATEST_URL\"; curl -L \"$LATEST_URL\" -o bin/koko && chmod +x bin/koko && echo \"✓ Binary downloaded and installed to bin/koko\"; fi'"
+    ],
+    "build-binary": [
+      "bash -c 'if ! command -v cargo &> /dev/null; then echo \"Error: Rust/Cargo not found. Install from https://rustup.rs\"; exit 1; fi; echo \"Building Kokoro from source...\"; cd /tmp && rm -rf Kokoros && git clone https://github.com/lucasjinreal/Kokoros.git && cd Kokoros && bash download_all.sh && cargo build --release && cp target/release/koko \"$OLDPWD/bin/koko\" && chmod +x \"$OLDPWD/bin/koko\" && echo \"✓ Binary built and installed to bin/koko\"'"
+    ],
+    "test": [
+      "drush ai-tts:test 'Composer installation successful!'"
+    ]
+  },
+  "scripts-descriptions": {
+    "setup-directories": "Create necessary directories for the module",
+    "check-binary": "Check if Kokoro binary is installed",
+    "download-binary": "Download pre-built Kokoro binary for your platform",
+    "build-binary": "Build Kokoro binary from source (requires Rust)",
+    "test": "Test the TTS functionality"
+  },
+  "extra": {
+    "installer-paths": {
+      "modules/custom/{$name}": ["type:drupal-module"]
+    }
+  }
+}

@@ -65,6 +65,7 @@ class TtsController extends ControllerBase {
     $text = $request->request->get('text') ?: $request->query->get('text');
     $voice = $request->request->get('voice') ?: $request->query->get('voice');
     $speed = $request->request->get('speed') ?: $request->query->get('speed');
+    $language = $request->request->get('language') ?: $request->query->get('language');
 
     if (empty($text)) {
       return new JsonResponse(['error' => 'No text provided'], 400);
@@ -76,6 +77,9 @@ class TtsController extends ControllerBase {
     }
     if ($speed) {
       $options['speed'] = (float) $speed;
+    }
+    if ($language) {
+      $options['language'] = $language;
     }
 
     $audio_uri = $this->ttsService->generateSpeech($text, $options);

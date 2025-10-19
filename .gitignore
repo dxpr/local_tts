@@ -1,0 +1,8 @@
+# Kokoro binary (platform-specific, should be built/downloaded locally)
+bin/koko
+
+# Composer dependencies
+vendor/
+
+# Composer lock file (for modules, typically not committed)
+composer.lock

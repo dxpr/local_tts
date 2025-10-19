@@ -50,30 +50,29 @@
 
         function updateButtonStates() {
           if (isPlaying) {
-            playButton.value = Drupal.t('Pause');
             playButton.setAttribute('aria-pressed', 'true');
+            playButton.classList.add('playing');
             stopButton.disabled = false;
           } else {
-            if (currentAudioUrl && audioElement.currentTime > 0 && !audioElement.ended) {
-              playButton.value = Drupal.t('Resume');
-            } else {
-              playButton.value = playButton.getAttribute('data-original-text');
-            }
             playButton.setAttribute('aria-pressed', 'false');
+            playButton.classList.remove('playing');
           }
         }
 
         function generateSpeech(text) {
           const voice = voiceSelect ? voiceSelect.value : config.defaultVoice;
-          const speed = speedInput ? parseFloat(speedInput.value) : config.defaultSpeed;
+          const speed = speedInput ? parseFloat(speedInput.value) : (config.defaultSpeed || 1);
+          const language = config.language || 'en';
 
-          updateStatus(Drupal.t('Generating speech...'), 'status');
+          updateStatus('<span class="ai-tts-loading"></span> ' + Drupal.t('Generating speech...'), 'status');
           playButton.disabled = true;
+          playButton.classList.add('loading');
 
           const formData = new FormData();
           formData.append('text', text);
           formData.append('voice', voice);
           formData.append('speed', speed);
+          formData.append('language', language);
 
           fetch(config.generateUrl, {
             method: 'POST',
@@ -87,12 +86,14 @@
               } else {
                 updateStatus(Drupal.t('Failed to generate speech.'), 'error');
                 playButton.disabled = false;
+                playButton.classList.remove('loading');
                 updateButtonStates();
               }
             })
             .catch(error => {
               updateStatus(Drupal.t('Error generating speech: @error', {'@error': error.message}), 'error');
               playButton.disabled = false;
+              playButton.classList.remove('loading');
               updateButtonStates();
             });
         }
@@ -106,11 +107,13 @@
             audioElement.play().then(function() {
               isPlaying = true;
               playButton.disabled = false;
+              playButton.classList.remove('loading');
               updateButtonStates();
-              updateStatus(Drupal.t('Playing...'), 'status');
+              updateStatus('', 'status');
             }).catch(function(error) {
               updateStatus(Drupal.t('Error playing audio.'), 'error');
               playButton.disabled = false;
+              playButton.classList.remove('loading');
               isPlaying = false;
               updateButtonStates();
             });
@@ -137,14 +140,14 @@
               audioElement.play().then(function() {
                 isPlaying = true;
                 updateButtonStates();
-                updateStatus(Drupal.t('Playing...'), 'status');
+                updateStatus('', 'status');
               });
             }
           } else {
             audioElement.pause();
             isPlaying = false;
             updateButtonStates();
-            updateStatus(Drupal.t('Paused'), 'status');
+            updateStatus('', 'status');
           }
         }
 
@@ -176,11 +179,16 @@
           updateButtonStates();
         });
 
-        playButton.setAttribute('data-original-text', playButton.value);
-
         playButton.addEventListener('click', function(e) {
           e.preventDefault();
           togglePlay();
+        });
+
+        playButton.addEventListener('keydown', function(e) {
+          if (e.key === ' ' || e.key === 'Spacebar') {
+            e.preventDefault();
+            togglePlay();
+          }
         });
 
         stopButton.addEventListener('click', function(e) {

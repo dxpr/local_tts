@@ -101,10 +101,12 @@ function ai_tts_requirements($phase) {
       $requirements['ai_tts_cache_dir'] = [
         'title' => t('AI TTS: Cache Directory'),
         'value' => t('Writable'),
-        'description' => t('Directory: @path<br>Permissions: @perms', [
-          '@path' => $real_path,
-          '@perms' => $perms,
-        ]),
+        'description' => [
+          '#markup' => t('Directory: @path<br>Permissions: @perms', [
+            '@path' => $real_path,
+            '@perms' => $perms,
+          ]),
+        ],
         'severity' => REQUIREMENT_OK,
       ];
     }
@@ -127,22 +129,43 @@ function ai_tts_requirements($phase) {
 
         // Warning thresholds.
         $severity = REQUIREMENT_OK;
-        $warning_message = '';
+        $description_parts = [];
 
-        // Warn if cache is over 100MB.
-        if ($cache_size > 100 * 1024 * 1024) {
+        // Basic info.
+        $description_parts[] = t('@count cached audio files', ['@count' => $file_count]);
+        $description_parts[] = t('Total size: @size', ['@size' => $size_formatted]);
+
+        // Add cache limit info if size-based cleanup is enabled.
+        $max_size = $config->get('cache_max_size') ?: 1073741824;
+        $size_limit_enabled = $config->get('cache_size_limit_enabled') ?? TRUE;
+
+        if ($size_limit_enabled) {
+          $percent_used = ($cache_size / $max_size) * 100;
+          $description_parts[] = t('Size limit: @limit (@percent% used)', [
+            '@limit' => format_size($max_size),
+            '@percent' => round($percent_used),
+          ]);
+
+          // Warn if over 80% of limit.
+          if ($percent_used > 80) {
+            $severity = REQUIREMENT_WARNING;
+          }
+        }
+
+        // Warn if cache is over 100MB (when no size limit).
+        if (!$size_limit_enabled && $cache_size > 100 * 1024 * 1024) {
           $severity = REQUIREMENT_WARNING;
-          $warning_message = t('<br><strong>Warning:</strong> Cache is large. Consider running <code>drush ai-tts:cache-clear</code> to free up disk space.');
+          $description_parts[] = t('Warning: Cache is large. Consider running @command to free up disk space.', [
+            '@command' => 'drush ai-tts:cache-clear',
+          ]);
         }
 
         $requirements['ai_tts_cache_size'] = [
           'title' => t('AI TTS: Cache Size'),
           'value' => $size_formatted,
-          'description' => t('@count cached audio files<br>Total size: @size@warning', [
-            '@count' => $file_count,
-            '@size' => $size_formatted,
-            '@warning' => $warning_message,
-          ]),
+          'description' => [
+            '#markup' => implode('<br>', $description_parts),
+          ],
           'severity' => $severity,
         ];
       }
@@ -153,6 +176,40 @@ function ai_tts_requirements($phase) {
         'value' => t('Unknown'),
         'description' => t('Cache directory not accessible.'),
         'severity' => REQUIREMENT_WARNING,
+      ];
+    }
+
+    // Check 4: Cache Management Configuration.
+    $size_enabled = $config->get('cache_size_limit_enabled') ?? TRUE;
+    $content_enabled = $config->get('cache_content_tracking_enabled') ?? TRUE;
+
+    $management_features = [];
+    if ($size_enabled) {
+      $max_size = $config->get('cache_max_size') ?: 1073741824;
+      $management_features[] = t('Size-based cleanup (limit: @size)', ['@size' => format_size($max_size)]);
+    }
+    if ($content_enabled) {
+      $management_features[] = t('Content-based invalidation');
+    }
+
+    if (empty($management_features)) {
+      $requirements['ai_tts_cache_mgmt'] = [
+        'title' => t('AI TTS: Cache Management'),
+        'value' => t('Disabled'),
+        'description' => t('Automatic cache management is disabled. Cache will grow unbounded. Enable at least one cleanup strategy in the <a href="@settings">settings</a>.', [
+          '@settings' => \Drupal\Core\Url::fromRoute('ai_tts.settings')->toString(),
+        ]),
+        'severity' => REQUIREMENT_WARNING,
+      ];
+    }
+    else {
+      $requirements['ai_tts_cache_mgmt'] = [
+        'title' => t('AI TTS: Cache Management'),
+        'value' => t('Enabled'),
+        'description' => t('Active strategies: @strategies', [
+          '@strategies' => implode(', ', $management_features),
+        ]),
+        'severity' => REQUIREMENT_OK,
       ];
     }
   }
