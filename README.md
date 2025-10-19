@@ -1,12 +1,15 @@
 # AI Text-to-Speech Module
 
-A Drupal module that provides high-quality AI-powered text-to-speech using the Kokoro TTS engine (Rust implementation).
+A Drupal module that provides high-quality AI-powered text-to-speech
+using the Kokoro TTS engine (Rust implementation).
 
 ## Features
 
 - High-quality AI voices using Kokoro-82M model
-- **64 voices across 9 languages** (English, Japanese, Mandarin Chinese, French, Hindi, Spanish, Italian, Portuguese)
-- **Language-aware voice filtering** - automatically shows only voices matching the content language
+- **64 voices across 9 languages** (English, Japanese, Mandarin Chinese,
+  French, Hindi, Spanish, Italian, Portuguese)
+- **Language-aware voice filtering** - automatically shows only voices
+  matching the content language
 - Multiple voice options (male/female, accents)
 - Adjustable speech speed (0.5x to 2.0x)
 - Audio caching to reduce server load
@@ -27,7 +30,9 @@ A Drupal module that provides high-quality AI-powered text-to-speech using the K
 
 **Kokoro Binary (koko)**
 
-This module requires the Kokoro Rust binary to be installed. The installation process is automated via Composer scripts (see Installation section below).
+This module requires the Kokoro Rust binary to be installed. The
+installation process is automated via Composer scripts (see Installation
+section below).
 
 ## Installation
 
@@ -112,7 +117,8 @@ For quick testing with Docker:
 docker pull ghcr.io/lucasjinreal/kokoros:latest
 ```
 
-Note: Using Docker requires additional configuration to make the binary accessible to Drupal.
+Note: Using Docker requires additional configuration to make the binary
+accessible to Drupal.
 
 ## Usage
 
@@ -130,11 +136,14 @@ Note: Using Docker requires additional configuration to make the binary accessib
 
 ### Available Voices
 
-Kokoro-82M supports **64 voices across 9 languages**. The module includes all voices:
+Kokoro-82M supports **64 voices across 9 languages**. The module includes
+all voices:
 
 **American English (af_ / am_)** - 20 voices
-- Female: af_alloy, af_aoede, af_bella, af_heart, af_jessica, af_kore, af_nicole, af_nova, af_river, af_sarah, af_sky
-- Male: am_adam, am_echo, am_eric, am_fenrir, am_liam, am_michael, am_onyx, am_puck, am_santa
+- Female: af_alloy, af_aoede, af_bella, af_heart, af_jessica, af_kore,
+  af_nicole, af_nova, af_river, af_sarah, af_sky
+- Male: am_adam, am_echo, am_eric, am_fenrir, am_liam, am_michael,
+  am_onyx, am_puck, am_santa
 
 **British English (bf_ / bm_)** - 8 voices
 - Female: bf_alice, bf_emma, bf_isabella, bf_lily
@@ -167,23 +176,31 @@ Kokoro-82M supports **64 voices across 9 languages**. The module includes all vo
 - Female: pf_dora
 - Male: pm_alex, pm_santa
 
-**Note:** Non-English language support may vary in quality due to training data limitations. Some languages have limited voice options (e.g., French has only one voice).
+**Note:** Non-English language support may vary in quality due to training
+data limitations. Some languages have limited voice options (e.g., French
+has only one voice).
 
 ### Language-Aware Voice Filtering
 
-The module automatically filters available voices based on the language of the content being read:
+The module automatically filters available voices based on the language
+of the content being read:
 
 **How It Works:**
-1. The module detects the language of the node/content (e.g., English, Japanese, French)
+1. The module detects the language of the node/content (e.g., English,
+   Japanese, French)
 2. Only voices matching that language are shown in the voice selector
-3. If no voices are available for the content language, the entire TTS block is automatically hidden
-4. The default voice is automatically adjusted to the first available voice for the content language
+3. If no voices are available for the content language, the entire TTS
+   block is automatically hidden
+4. The default voice is automatically adjusted to the first available
+   voice for the content language
 
 **Examples:**
-- **English content** (en) → Shows all American and British English voices
+- **English content** (en) → Shows all American and British English
+  voices
 - **Japanese content** (ja) → Shows only Japanese voices (jf_*, jm_*)
 - **Spanish content** (es) → Shows only Spanish voices (ef_*, em_*)
-- **Content in unsupported language** → Block is hidden (no TTS available)
+- **Content in unsupported language** → Block is hidden (no TTS
+  available)
 
 **Supported Language Mappings:**
 - `en`, `en-us` → American English voices
@@ -196,10 +213,14 @@ The module automatically filters available voices based on the language of the c
 - `it` → Italian voices
 - `pt`, `pt-br`, `pt-pt` → Portuguese voices
 
-This ensures users only see relevant, natural-sounding voices for their content's language.
+This ensures users only see relevant, natural-sounding voices for their
+content's language.
 
 **Dynamic Language Support:**
-The list of supported languages is maintained automatically based on the available voices in the Kokoro binary. When voices are updated, the supported language list updates accordingly. You can see the current list by running:
+The list of supported languages is maintained automatically based on the
+available voices in the Kokoro binary. When voices are updated, the
+supported language list updates accordingly. You can see the current list
+by running:
 ```bash
 drush ai-tts:voices --language=invalid
 ```
@@ -224,11 +245,13 @@ composer run-script --list
 
 ### Drush Commands
 
-The module provides convenient Drush commands for testing and managing TTS functionality.
+The module provides convenient Drush commands for testing and managing
+TTS functionality.
 
 #### Test TTS Generation
 
-Generate speech and automatically play it back using **streaming mode** for instant playback:
+Generate speech and automatically play it back using **streaming mode**
+for instant playback:
 
 ```bash
 # Basic test with "Hello World" using default settings
@@ -253,7 +276,8 @@ drush ai-tts:test "こんにちは" --voice=jf_alpha --language=ja
 ```
 
 **Streaming Mode Benefits:**
-- ⚡ **1-2 second time-to-first-audio** instead of 5-10s for traditional generation
+- ⚡ **1-2 second time-to-first-audio** instead of 5-10s for
+  traditional generation
 - Audio starts playing almost immediately while still being generated
 - No file caching required - perfect for quick testing
 - Uses the `koko stream` command under the hood
@@ -261,10 +285,13 @@ drush ai-tts:test "こんにちは" --voice=jf_alpha --language=ja
 **Available Options:**
 - `--voice` - Voice to use (see available voices below)
 - `--speed` - Speech speed from 0.5 to 2.0 (default: 1.0)
-- `--language` - Language code for proper pronunciation (e.g., en, es, ja, fr, hi, it, pt, zh). If not specified, the language is auto-detected from the voice prefix.
+- `--language` - Language code for proper pronunciation (e.g., en, es,
+  ja, fr, hi, it, pt, zh). If not specified, the language is
+  auto-detected from the voice prefix.
 
 **Platform Support:**
-The command automatically detects your operating system and uses the appropriate audio player:
+The command automatically detects your operating system and uses the
+appropriate audio player:
 - **macOS**: `afplay`
 - **Linux**: `paplay` (PulseAudio), `aplay` (ALSA), or `ffplay` (FFmpeg)
 - **Windows**: PowerShell SoundPlayer
@@ -289,13 +316,17 @@ drush ai-tts:voices --language=en
 ```
 
 **Available Options:**
-- `--language` - Filter voices by language code (e.g., en, es, ja, fr, hi, it, pt, zh)
+- `--language` - Filter voices by language code (e.g., en, es, ja, fr,
+  hi, it, pt, zh)
 
-This shows all 64 voices with their identifiers, or filtered by language if specified.
+This shows all 64 voices with their identifiers, or filtered by language
+if specified.
 
 #### Read Entity Content
 
-Generate and play TTS audio for Drupal entities (nodes, taxonomy terms, etc.). This command generates **cached files** that are interoperable with frontend-generated audio:
+Generate and play TTS audio for Drupal entities (nodes, taxonomy terms,
+etc.). This command generates **cached files** that are interoperable with
+frontend-generated audio:
 
 ```bash
 # Read a node's content (auto-detects body field)
@@ -321,18 +352,26 @@ drush ai-tts:read node 456 --voice=ef_dora --language=es
 **Available Options:**
 - `--voice` - Voice to use (default: site configuration)
 - `--speed` - Speech speed from 0.5 to 2.0 (default: 1.0)
-- `--language` - Language code (default: auto-detected from entity or voice)
-- `--field` - Specific field to read (default: auto-detects body, field_description, etc.)
-- `--stream` - Use streaming mode for instant playback instead of caching
+- `--language` - Language code (default: auto-detected from entity or
+  voice)
+- `--field` - Specific field to read (default: auto-detects body,
+  field_description, etc.)
+- `--stream` - Use streaming mode for instant playback instead of
+  caching
 
 **How It Works:**
-1. **Default mode (cached)**: Generates audio file using `TtsService`, stores in cache, plays the cached file
-2. **Streaming mode (`--stream`)**: Pipes text directly to koko for instant playback (1-2s time-to-first-audio)
+1. **Default mode (cached)**: Generates audio file using `TtsService`,
+   stores in cache, plays the cached file
+2. **Streaming mode (`--stream`)**: Pipes text directly to koko for
+   instant playback (1-2s time-to-first-audio)
 
 **Cache Interoperability:**
-- Cached files are stored in the same location as frontend-generated audio (`public://ai-tts/`)
-- Uses the same cache key algorithm (MD5 hash of text + voice + speed + language)
-- If you generate audio for a node via Drush, the frontend will use that cached file
+- Cached files are stored in the same location as frontend-generated
+  audio (`public://ai-tts/`)
+- Uses the same cache key algorithm (MD5 hash of text + voice + speed +
+  language)
+- If you generate audio for a node via Drush, the frontend will use that
+  cached file
 - Perfect for pre-generating audio for frequently accessed content
 
 **Supported Entity Types:**
@@ -388,9 +427,12 @@ The test command outputs the full path when using `--no-play`.
 
 1. User clicks "Listen" button on a page
 2. JavaScript detects content language and available voices
-3. AJAX request sent to `/ai-tts/generate` with text, voice, speed, and language
-4. `TtsService` calls koko binary with proper language for G2P (grapheme-to-phoneme):
-   - Example: `koko --lan es --style ef_dora --speed 1.0 text "Hola" --output output.wav`
+3. AJAX request sent to `/ai-tts/generate` with text, voice, speed, and
+   language
+4. `TtsService` calls koko binary with proper language for G2P
+   (grapheme-to-phoneme):
+   - Example: `koko --lan es --style ef_dora --speed 1.0 text "Hola"
+     --output output.wav`
 5. Generated audio file is cached (if caching enabled)
 6. Audio URL returned to frontend
 7. HTML5 `<audio>` element plays the generated speech
@@ -403,13 +445,17 @@ The test command outputs the full path when using `--no-play`.
 
 ### Caching
 
-Audio files are cached by default in `public://ai-tts/` directory. Cache key is based on:
+Audio files are cached by default in `public://ai-tts/` directory. Cache
+key is based on:
 - Text content (MD5 hash)
 - Voice selection
 - Speed setting
 - **Language code** (ensures proper pronunciation per language)
 
-This prevents regenerating the same audio multiple times. **Importantly, the cache is language-aware**, so the same text in different languages will have separate cache files with correct pronunciation for each language.
+This prevents regenerating the same audio multiple times. **Importantly,
+the cache is language-aware**, so the same text in different languages
+will have separate cache files with correct pronunciation for each
+language.
 
 ## Configuration Options
 
@@ -436,17 +482,21 @@ This prevents regenerating the same audio multiple times. **Importantly, the cac
 
 **Solutions:**
 1. Check your internet connection for downloads
-2. For build errors, ensure Rust is installed: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-3. Check available releases: https://github.com/lucasjinreal/Kokoros/releases
+2. For build errors, ensure Rust is installed:
+   `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+3. Check available releases:
+   https://github.com/lucasjinreal/Kokoros/releases
 4. Try manual installation (see Manual Installation section)
 5. Check disk space and permissions in the module's `bin/` directory
 
 ### Binary not found or not executable
 
-**Error:** "Binary not found or not executable at: modules/custom/ai_tts/bin/koko"
+**Error:** "Binary not found or not executable at:
+modules/custom/ai_tts/bin/koko"
 
 **Solutions:**
-1. Run the Composer setup: `cd web/modules/custom/ai_tts && composer run download-binary`
+1. Run the Composer setup:
+   `cd web/modules/custom/ai_tts && composer run download-binary`
 2. Verify the binary exists: `ls -la web/modules/custom/ai_tts/bin/koko`
 3. Make it executable: `chmod +x web/modules/custom/ai_tts/bin/koko`
 4. Update the path in module configuration to match your installation

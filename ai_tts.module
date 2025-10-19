@@ -107,7 +107,8 @@ function _ai_tts_cleanup_stale_content() {
             ->getStorage($metadata['entity_type'])
             ->load($metadata['entity_id']);
 
-          // Delete if entity is missing or has been modified since audio was generated.
+          // Delete if entity is missing or has been modified since audio
+          // was generated.
           $should_delete = FALSE;
 
           if (!$entity) {

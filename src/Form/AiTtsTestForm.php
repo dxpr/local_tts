@@ -137,60 +137,7 @@ class AiTtsTestForm extends FormBase {
       ],
     ];
 
-    // Results section.
-    $storage = $form_state->getStorage();
-    if (!empty($storage['audio_url'])) {
-      $form['results'] = [
-        '#type' => 'details',
-        '#title' => $this->t('Results'),
-        '#open' => TRUE,
-      ];
-
-      $form['results']['status'] = [
-        '#markup' => '<div class="messages messages--status">' .
-        $this->t('✓ Audio generated successfully! File size: @size', [
-          '@size' => $storage['file_size'],
-        ]) . '</div>',
-      ];
-
-      $form['results']['player'] = [
-        '#type' => 'html_tag',
-        '#tag' => 'audio',
-        '#attributes' => [
-          'controls' => TRUE,
-          'autoplay' => TRUE,
-          'src' => $storage['audio_url'],
-          'style' => 'width: 100%; max-width: 600px;',
-        ],
-        '#value' => $this->t('Your browser does not support the audio element.'),
-      ];
-
-      $form['results']['timing'] = [
-        '#markup' => '<p><small>' .
-        $this->t('Generation time: @time seconds', [
-          '@time' => number_format($storage['generation_time'], 2),
-        ]) . '</small></p>',
-      ];
-
-      $form['results']['download'] = [
-        '#type' => 'link',
-        '#title' => $this->t('Download Audio File'),
-        '#url' => Url::fromUri($storage['audio_url']),
-        '#attributes' => [
-          'class' => ['button'],
-          'download' => TRUE,
-        ],
-      ];
-    }
-
-    // Show errors if any.
-    if (!empty($storage['error_message'])) {
-      $form['error'] = [
-        '#markup' => '<div class="messages messages--error">' .
-        $storage['error_message'] . '</div>',
-      ];
-    }
-
+    // Results section will be added by AJAX callback.
     return $form;
   }
 
@@ -219,51 +166,84 @@ class AiTtsTestForm extends FormBase {
 
         $audio_url = $this->fileUrlGenerator->generateAbsoluteString($audio_uri);
 
-        // Store in form storage to persist across AJAX rebuilds.
-        $storage = $form_state->getStorage();
-        $storage['audio_url'] = $audio_url;
-        $storage['file_size'] = $file_size;
-        $storage['generation_time'] = $generation_time;
-        $storage['error_message'] = NULL;
-        $form_state->setStorage($storage);
-
         $this->messenger()->addStatus($this->t('Audio generated successfully in @time seconds!', [
           '@time' => number_format($generation_time, 2),
         ]));
+
+        // Add results section directly to the returned form.
+        $form['results'] = [
+          '#type' => 'details',
+          '#title' => $this->t('Results'),
+          '#open' => TRUE,
+        ];
+
+        $form['results']['status'] = [
+          '#markup' => '<div class="messages messages--status">' .
+          $this->t('✓ Audio generated successfully! File size: @size', [
+            '@size' => $file_size,
+          ]) . '</div>',
+        ];
+
+        $form['results']['player'] = [
+          '#type' => 'html_tag',
+          '#tag' => 'audio',
+          '#attributes' => [
+            'controls' => TRUE,
+            'autoplay' => TRUE,
+            'src' => $audio_url,
+            'style' => 'width: 100%; max-width: 600px;',
+          ],
+          '#value' => $this->t('Your browser does not support the audio element.'),
+        ];
+
+        $form['results']['timing'] = [
+          '#markup' => '<p><small>' .
+          $this->t('Generation time: @time seconds', [
+            '@time' => number_format($generation_time, 2),
+          ]) . '</small></p>',
+        ];
+
+        $form['results']['download'] = [
+          '#type' => 'link',
+          '#title' => $this->t('Download Audio File'),
+          '#url' => Url::fromUri($audio_url),
+          '#attributes' => [
+            'class' => ['button'],
+            'download' => TRUE,
+          ],
+        ];
       }
       else {
-        $storage = $form_state->getStorage();
-        $storage['error_message'] = $this->t('Failed to generate audio. Check the error logs for details.');
-        $storage['audio_url'] = NULL;
-        $form_state->setStorage($storage);
+        $form['error'] = [
+          '#markup' => '<div class="messages messages--error">' .
+          $this->t('Failed to generate audio. Check the error logs for details.') . '</div>',
+        ];
       }
     }
     catch (\InvalidArgumentException $e) {
-      $storage = $form_state->getStorage();
-      $storage['error_message'] = $this->t('Validation error: @message', [
-        '@message' => $e->getMessage(),
-      ]);
-      $storage['audio_url'] = NULL;
-      $form_state->setStorage($storage);
+      $form['error'] = [
+        '#markup' => '<div class="messages messages--error">' .
+        $this->t('Validation error: @message', [
+          '@message' => $e->getMessage(),
+        ]) . '</div>',
+      ];
     }
     catch (\RuntimeException $e) {
-      $storage = $form_state->getStorage();
-      $storage['error_message'] = $this->t('Service error: @message', [
-        '@message' => $e->getMessage(),
-      ]);
-      $storage['audio_url'] = NULL;
-      $form_state->setStorage($storage);
+      $form['error'] = [
+        '#markup' => '<div class="messages messages--error">' .
+        $this->t('Service error: @message', [
+          '@message' => $e->getMessage(),
+        ]) . '</div>',
+      ];
     }
     catch (\Exception $e) {
-      $storage = $form_state->getStorage();
-      $storage['error_message'] = $this->t('Unexpected error: @message', [
-        '@message' => $e->getMessage(),
-      ]);
-      $storage['audio_url'] = NULL;
-      $form_state->setStorage($storage);
+      $form['error'] = [
+        '#markup' => '<div class="messages messages--error">' .
+        $this->t('Unexpected error: @message', [
+          '@message' => $e->getMessage(),
+        ]) . '</div>',
+      ];
     }
-
-    $form_state->setRebuild(TRUE);
 
     return $form;
   }

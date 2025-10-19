@@ -237,7 +237,8 @@ class TtsServiceTest extends UnitTestCase {
     // Should not throw exception for long text when max_text_length is 0.
     $long_text = str_repeat('a', 100000);
 
-    // We expect RuntimeException for missing binary, not InvalidArgumentException for length.
+    // We expect RuntimeException for missing binary, not
+    // InvalidArgumentException for length.
     $this->expectException(\RuntimeException::class);
     $this->expectExceptionMessage('binary');
 
