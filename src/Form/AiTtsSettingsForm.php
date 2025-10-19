@@ -98,6 +98,17 @@ class AiTtsSettingsForm extends ConfigFormBase {
       ],
     ];
 
+    $form['paths']['espeak_data_path'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('eSpeak NG data path'),
+      '#description' => $this->t('Path to espeak-ng-data directory (contains phoneme data for text processing). Must be readable (755 permissions).'),
+      '#default_value' => $config->get('espeak_data_path'),
+      '#required' => TRUE,
+      '#attributes' => [
+        'placeholder' => '/opt/homebrew/share/espeak-ng-data',
+      ],
+    ];
+
     // Status checks.
     $binary_path = $config->get('koko_binary_path');
     $model_path = $config->get('model_path');
@@ -256,7 +267,7 @@ class AiTtsSettingsForm extends ConfigFormBase {
       '#default_value' => $config->get('generation_timeout') ?? 900,
       '#min' => 10,
       '#max' => 3600,
-      '#step' => 30,
+      '#step' => 1,
       '#field_suffix' => $this->t('seconds'),
     ];
 
@@ -281,6 +292,17 @@ class AiTtsSettingsForm extends ConfigFormBase {
           ':input[name="rate_limit_enabled"]' => ['checked' => TRUE],
         ],
       ],
+    ];
+
+    $form['security']['max_server_load'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Maximum server load threshold'),
+      '#description' => $this->t('The TTS binary will NOT run if server load (1-minute average) exceeds this value. This prevents TTS generation from impacting server performance during high-load periods. Set to 0 to disable load checking. Default: 2.0'),
+      '#default_value' => $config->get('max_server_load') ?? 2,
+      '#min' => 0,
+      '#max' => 100,
+      '#step' => 0.1,
+      '#field_suffix' => $this->t('load average'),
     ];
 
     return parent::buildForm($form, $form_state);
@@ -332,6 +354,7 @@ class AiTtsSettingsForm extends ConfigFormBase {
       ->set('koko_binary_path', $form_state->getValue('koko_binary_path'))
       ->set('model_path', $form_state->getValue('model_path'))
       ->set('data_path', $form_state->getValue('data_path'))
+      ->set('espeak_data_path', $form_state->getValue('espeak_data_path'))
       ->set('default_voice', $form_state->getValue('default_voice'))
       ->set('default_speed', $form_state->getValue('default_speed'))
       ->set('cache_audio', $form_state->getValue('cache_audio'))
@@ -342,6 +365,7 @@ class AiTtsSettingsForm extends ConfigFormBase {
       ->set('generation_timeout', $form_state->getValue('generation_timeout'))
       ->set('rate_limit_enabled', $form_state->getValue('rate_limit_enabled'))
       ->set('rate_limit_threshold', $form_state->getValue('rate_limit_threshold'))
+      ->set('max_server_load', $form_state->getValue('max_server_load'))
       ->save();
 
     parent::submitForm($form, $form_state);
