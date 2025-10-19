@@ -60,7 +60,54 @@ function ai_tts_requirements($phase) {
       ];
     }
 
-    // Check 2: Audio Cache Directory Status.
+    // Check 2: Model Files Status.
+    $model_path = $config->get('model_path') ?: '~/.cache/kokoros/checkpoints/kokoro-v1.0.onnx';
+    $data_path = $config->get('data_path') ?: '~/.cache/kokoros/data/voices-v1.0.bin';
+
+    // Expand tilde in paths.
+    $model_real = _ai_tts_expand_path($model_path);
+    $data_real = _ai_tts_expand_path($data_path);
+
+    $model_exists = file_exists($model_real);
+    $data_exists = file_exists($data_real);
+
+    if (!$model_exists || !$data_exists) {
+      $messages = [];
+      if (!$model_exists) {
+        $messages[] = t('Model file not found: @path', ['@path' => $model_real]);
+      }
+      if (!$data_exists) {
+        $messages[] = t('Data file not found: @path', ['@path' => $data_real]);
+      }
+      $requirements['ai_tts_models'] = [
+        'title' => t('AI TTS: Model Files'),
+        'value' => t('Missing'),
+        'description' => [
+          '#markup' => implode('<br>', $messages) . '<br>' .
+            t('Download models: <code>cd modules/custom/ai_tts && composer run download-binary</code><br><a href="@settings">Configure paths</a>', [
+              '@settings' => \Drupal\Core\Url::fromRoute('ai_tts.settings')->toString(),
+            ]),
+        ],
+        'severity' => REQUIREMENT_ERROR,
+      ];
+    }
+    else {
+      $model_size = filesize($model_real);
+      $data_size = filesize($data_real);
+      $requirements['ai_tts_models'] = [
+        'title' => t('AI TTS: Model Files'),
+        'value' => t('Found'),
+        'description' => t('Model: @model (@size)<br>Data: @data (@data_size)', [
+          '@model' => $model_real,
+          '@size' => format_size($model_size),
+          '@data' => $data_real,
+          '@data_size' => format_size($data_size),
+        ]),
+        'severity' => REQUIREMENT_OK,
+      ];
+    }
+
+    // Check 3: Audio Cache Directory Status.
     $audio_directory = $config->get('audio_directory') ?: 'public://ai-tts';
     $real_path = $file_system->realpath($audio_directory);
 
@@ -276,63 +323,28 @@ function ai_tts_requirements($phase) {
       ];
     }
 
-    // Check 6: Permissions Configuration.
-    $role_permissions = \Drupal::service('user.permissions');
-    $anonymous_can_generate = FALSE;
-    $authenticated_can_generate = FALSE;
-
-    try {
-      // Check anonymous role.
-      $anonymous_role = \Drupal::entityTypeManager()->getStorage('user_role')->load('anonymous');
-      if ($anonymous_role && $anonymous_role->hasPermission('generate ai tts')) {
-        $anonymous_can_generate = TRUE;
-      }
-
-      // Check authenticated role.
-      $authenticated_role = \Drupal::entityTypeManager()->getStorage('user_role')->load('authenticated');
-      if ($authenticated_role && $authenticated_role->hasPermission('generate ai tts')) {
-        $authenticated_can_generate = TRUE;
-      }
-    }
-    catch (\Exception $e) {
-      // Roles not found, skip check.
-    }
-
-    if ($anonymous_can_generate) {
-      $requirements['ai_tts_permissions'] = [
-        'title' => t('AI TTS: Permissions'),
-        'value' => t('Anonymous access enabled'),
-        'description' => [
-          '#markup' => t('Anonymous users can generate TTS audio. This may lead to abuse. <a href="@permissions">Review permissions</a>.', [
-            '@permissions' => \Drupal\Core\Url::fromRoute('user.admin_permissions', [], ['fragment' => 'module-ai_tts'])->toString(),
-          ]),
-        ],
-        'severity' => REQUIREMENT_WARNING,
-      ];
-    }
-    elseif ($authenticated_can_generate) {
-      $requirements['ai_tts_permissions'] = [
-        'title' => t('AI TTS: Permissions'),
-        'value' => t('Authenticated users only'),
-        'description' => t('Only authenticated users can generate TTS audio.'),
-        'severity' => REQUIREMENT_OK,
-      ];
-    }
-    else {
-      $requirements['ai_tts_permissions'] = [
-        'title' => t('AI TTS: Permissions'),
-        'value' => t('Restricted access'),
-        'description' => [
-          '#markup' => t('TTS generation restricted to specific roles. <a href="@permissions">Review permissions</a>.', [
-            '@permissions' => \Drupal\Core\Url::fromRoute('user.admin_permissions', [], ['fragment' => 'module-ai_tts'])->toString(),
-          ]),
-        ],
-        'severity' => REQUIREMENT_INFO,
-      ];
-    }
   }
 
   return $requirements;
+}
+
+/**
+ * Expand path with tilde (~) to full path.
+ *
+ * @param string $path
+ *   Path potentially containing ~.
+ *
+ * @return string
+ *   Expanded path.
+ */
+function _ai_tts_expand_path($path) {
+  if (strpos($path, '~') === 0) {
+    $home = getenv('HOME');
+    if ($home) {
+      return str_replace('~', $home, $path);
+    }
+  }
+  return $path;
 }
 
 /**
