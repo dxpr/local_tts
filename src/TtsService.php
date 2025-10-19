@@ -140,9 +140,23 @@ class TtsService {
       throw new \RuntimeException(sprintf('TTS binary not executable at: %s', $binary_path));
     }
 
-    $home_dir = getenv('HOME');
-    $model_path = $home_dir . '/.cache/kokoros/checkpoints/kokoro-v1.0.onnx';
-    $data_path = $home_dir . '/.cache/kokoros/data/voices-v1.0.bin';
+    // Get model paths from configuration with fallback defaults.
+    $model_path = $config->get('model_path') ?: '~/.cache/kokoros/checkpoints/kokoro-v1.0.onnx';
+    $data_path = $config->get('data_path') ?: '~/.cache/kokoros/data/voices-v1.0.bin';
+
+    // Expand tilde in paths.
+    $model_path = $this->expandPath($model_path);
+    $data_path = $this->expandPath($data_path);
+
+    // Validate model files exist.
+    if (!file_exists($model_path)) {
+      $this->logger->error('Model file not found at: @path', ['@path' => $model_path]);
+      throw new \RuntimeException(sprintf('Model file not found at: %s', $model_path));
+    }
+    if (!file_exists($data_path)) {
+      $this->logger->error('Data file not found at: @path', ['@path' => $data_path]);
+      throw new \RuntimeException(sprintf('Data file not found at: %s', $data_path));
+    }
 
     $command = sprintf(
       '%s --lan %s --model %s --data %s --style %s --speed %s text %s --output %s 2>&1',
@@ -591,6 +605,25 @@ class TtsService {
     }
 
     return $deleted;
+  }
+
+  /**
+   * Expand path with tilde (~) to full path.
+   *
+   * @param string $path
+   *   Path potentially containing ~.
+   *
+   * @return string
+   *   Expanded path.
+   */
+  protected function expandPath($path) {
+    if (strpos($path, '~') === 0) {
+      $home = getenv('HOME');
+      if ($home) {
+        return str_replace('~', $home, $path);
+      }
+    }
+    return $path;
   }
 
   /**

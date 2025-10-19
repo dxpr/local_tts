@@ -228,11 +228,11 @@ The module provides convenient Drush commands for testing and managing TTS funct
 
 #### Test TTS Generation
 
-Generate speech and automatically play it back:
+Generate speech and automatically play it back using **streaming mode** for instant playback:
 
 ```bash
 # Basic test with "Hello World" using default settings
-# Audio will play automatically
+# Uses streaming mode - audio starts playing in ~1-2 seconds!
 drush ai-tts:test
 drush tts-test  # Short alias
 
@@ -250,16 +250,18 @@ drush ai-tts:test "Hola mundo" --voice=ef_dora --language=es
 
 # Japanese text with proper Japanese pronunciation
 drush ai-tts:test "こんにちは" --voice=jf_alpha --language=ja
-
-# Generate without automatic playback
-drush ai-tts:test "Hello World" --no-play
 ```
+
+**Streaming Mode Benefits:**
+- ⚡ **1-2 second time-to-first-audio** instead of 5-10s for traditional generation
+- Audio starts playing almost immediately while still being generated
+- No file caching required - perfect for quick testing
+- Uses the `koko stream` command under the hood
 
 **Available Options:**
 - `--voice` - Voice to use (see available voices below)
 - `--speed` - Speech speed from 0.5 to 2.0 (default: 1.0)
 - `--language` - Language code for proper pronunciation (e.g., en, es, ja, fr, hi, it, pt, zh). If not specified, the language is auto-detected from the voice prefix.
-- `--no-play` - Skip automatic playback (just generate the audio file)
 
 **Platform Support:**
 The command automatically detects your operating system and uses the appropriate audio player:
@@ -290,6 +292,54 @@ drush ai-tts:voices --language=en
 - `--language` - Filter voices by language code (e.g., en, es, ja, fr, hi, it, pt, zh)
 
 This shows all 64 voices with their identifiers, or filtered by language if specified.
+
+#### Read Entity Content
+
+Generate and play TTS audio for Drupal entities (nodes, taxonomy terms, etc.). This command generates **cached files** that are interoperable with frontend-generated audio:
+
+```bash
+# Read a node's content (auto-detects body field)
+drush ai-tts:read node 123
+drush tts-read node 123  # Short alias
+
+# Use with a specific voice
+drush ai-tts:read node 123 --voice=bf_emma
+
+# Read a taxonomy term
+drush ai-tts:read taxonomy_term 45
+
+# Read a specific field instead of body
+drush ai-tts:read node 123 --field=field_summary
+
+# Use streaming mode for instant playback (no caching)
+drush ai-tts:read node 123 --stream
+
+# Spanish content with proper voice
+drush ai-tts:read node 456 --voice=ef_dora --language=es
+```
+
+**Available Options:**
+- `--voice` - Voice to use (default: site configuration)
+- `--speed` - Speech speed from 0.5 to 2.0 (default: 1.0)
+- `--language` - Language code (default: auto-detected from entity or voice)
+- `--field` - Specific field to read (default: auto-detects body, field_description, etc.)
+- `--stream` - Use streaming mode for instant playback instead of caching
+
+**How It Works:**
+1. **Default mode (cached)**: Generates audio file using `TtsService`, stores in cache, plays the cached file
+2. **Streaming mode (`--stream`)**: Pipes text directly to koko for instant playback (1-2s time-to-first-audio)
+
+**Cache Interoperability:**
+- Cached files are stored in the same location as frontend-generated audio (`public://ai-tts/`)
+- Uses the same cache key algorithm (MD5 hash of text + voice + speed + language)
+- If you generate audio for a node via Drush, the frontend will use that cached file
+- Perfect for pre-generating audio for frequently accessed content
+
+**Supported Entity Types:**
+- `node` - Content nodes
+- `taxonomy_term` - Taxonomy terms
+- `media` - Media entities (if they have text fields)
+- Any entity with text fields
 
 #### Clear Audio Cache
 
