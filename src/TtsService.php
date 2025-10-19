@@ -65,14 +65,41 @@ class TtsService {
    *
    * @return string|null
    *   The file URI of the generated audio, or NULL on failure.
+   *
+   * @throws \InvalidArgumentException
+   *   When validation fails for text length, voice, or speed.
    */
   public function generateSpeech($text, array $options = []) {
     $config = $this->configFactory->get('ai_tts.settings');
+
+    // Security: Validate text length.
+    $max_length = $config->get('max_text_length') ?? 1000000;
+    if ($max_length > 0 && mb_strlen($text) > $max_length) {
+      $this->logger->warning('Text length (@length chars) exceeds maximum (@max chars)', [
+        '@length' => mb_strlen($text),
+        '@max' => $max_length,
+      ]);
+      throw new \InvalidArgumentException(sprintf('Text length (%d characters) exceeds maximum allowed (%d characters)', mb_strlen($text), $max_length));
+    }
 
     $voice = $options['voice'] ?? $config->get('default_voice');
     $speed = $options['speed'] ?? $config->get('default_speed');
     $language = $options['language'] ?? $this->detectLanguageFromVoice($voice);
     $use_cache = $options['use_cache'] ?? $config->get('cache_audio');
+
+    // Security: Validate voice against allowed list.
+    $available_voices = array_keys($this->getAvailableVoices());
+    if (!in_array($voice, $available_voices, TRUE)) {
+      $this->logger->error('Invalid voice: @voice', ['@voice' => $voice]);
+      throw new \InvalidArgumentException(sprintf('Invalid voice: %s', $voice));
+    }
+
+    // Security: Validate speed is within safe range.
+    $speed = (float) $speed;
+    if ($speed < 0.5 || $speed > 2.0) {
+      $this->logger->error('Invalid speed: @speed (must be between 0.5 and 2.0)', ['@speed' => $speed]);
+      throw new \InvalidArgumentException(sprintf('Invalid speed: %s (must be between 0.5 and 2.0)', $speed));
+    }
 
     // Convert to espeak-ng language identifier.
     $espeak_lang = $this->mapLanguageToEspeak($language);
@@ -90,16 +117,27 @@ class TtsService {
 
     $directory = $this->fileSystem->realpath($audio_dir);
     if (!$directory) {
-      $this->fileSystem->prepareDirectory($audio_dir, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
+      if (!$this->fileSystem->prepareDirectory($audio_dir, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS)) {
+        $this->logger->error('Failed to create audio directory: @dir', ['@dir' => $audio_dir]);
+        throw new \RuntimeException(sprintf('Failed to create audio directory: %s', $audio_dir));
+      }
       $directory = $this->fileSystem->realpath($audio_dir);
+      if (!$directory) {
+        throw new \RuntimeException(sprintf('Audio directory path could not be resolved: %s', $audio_dir));
+      }
     }
 
     $output_file = $directory . '/' . $cache_key . '.wav';
     $binary_path = $config->get('koko_binary_path');
 
-    if (!file_exists($binary_path) || !is_executable($binary_path)) {
-      $this->logger->error('Koko binary not found or not executable at: @path', ['@path' => $binary_path]);
-      return NULL;
+    if (!file_exists($binary_path)) {
+      $this->logger->error('Koko binary not found at: @path', ['@path' => $binary_path]);
+      throw new \RuntimeException(sprintf('TTS binary not found at: %s', $binary_path));
+    }
+
+    if (!is_executable($binary_path)) {
+      $this->logger->error('Koko binary not executable at: @path', ['@path' => $binary_path]);
+      throw new \RuntimeException(sprintf('TTS binary not executable at: %s', $binary_path));
     }
 
     $home_dir = getenv('HOME');
@@ -120,19 +158,25 @@ class TtsService {
 
     $this->logger->info('Executing command: @command', ['@command' => $command]);
 
-    exec($command, $output, $return_code);
+    // Security: Execute with timeout to prevent hanging.
+    $timeout = $config->get('generation_timeout') ?? 900;
+    $result = $this->execWithTimeout($command, $timeout);
 
-    if ($return_code !== 0) {
+    if ($result['return_code'] !== 0) {
+      if ($result['timeout']) {
+        $this->logger->error('Koko TTS timed out after @timeout seconds', ['@timeout' => $timeout]);
+        throw new \RuntimeException(sprintf('TTS generation timed out after %d seconds', $timeout));
+      }
       $this->logger->error('Koko TTS failed with return code @code. Output: @output', [
-        '@code' => $return_code,
-        '@output' => implode("\n", $output),
+        '@code' => $result['return_code'],
+        '@output' => implode("\n", $result['output']),
       ]);
-      return NULL;
+      throw new \RuntimeException(sprintf('TTS generation failed with exit code %d: %s', $result['return_code'], implode(' ', array_slice($result['output'], -3))));
     }
 
     if (!file_exists($output_file)) {
       $this->logger->error('Audio file was not created at: @path', ['@path' => $output_file]);
-      return NULL;
+      throw new \RuntimeException(sprintf('TTS audio file was not created at: %s', $output_file));
     }
 
     $uri = $audio_dir . '/' . $cache_key . '.wav';
@@ -154,7 +198,7 @@ class TtsService {
    * @return string
    *   The language code (e.g., 'en', 'es', 'ja').
    */
-  protected function detectLanguageFromVoice($voice) {
+  public function detectLanguageFromVoice($voice) {
     // Extract first letter from voice prefix.
     $prefix = substr($voice, 0, 1);
 
@@ -547,6 +591,90 @@ class TtsService {
     }
 
     return $deleted;
+  }
+
+  /**
+   * Execute a command with timeout support.
+   *
+   * @param string $command
+   *   The command to execute.
+   * @param int $timeout
+   *   Maximum execution time in seconds.
+   *
+   * @return array
+   *   Array containing:
+   *   - output: Command output lines
+   *   - return_code: Exit code
+   *   - timeout: Boolean indicating if command timed out
+   */
+  protected function execWithTimeout($command, $timeout = 60) {
+    $descriptors = [
+      0 => ['pipe', 'r'],
+      1 => ['pipe', 'w'],
+      2 => ['pipe', 'w'],
+    ];
+
+    $process = proc_open($command, $descriptors, $pipes);
+
+    if (!is_resource($process)) {
+      return [
+        'output' => ['Failed to start process'],
+        'return_code' => -1,
+        'timeout' => FALSE,
+      ];
+    }
+
+    // Close stdin.
+    fclose($pipes[0]);
+
+    // Set streams to non-blocking.
+    stream_set_blocking($pipes[1], FALSE);
+    stream_set_blocking($pipes[2], FALSE);
+
+    $start_time = time();
+    $output = '';
+    $error_output = '';
+
+    // Poll for output until timeout or process exits.
+    while (time() - $start_time < $timeout) {
+      $status = proc_get_status($process);
+
+      // Read any available output.
+      $output .= stream_get_contents($pipes[1]);
+      $error_output .= stream_get_contents($pipes[2]);
+
+      // Check if process has exited.
+      if (!$status['running']) {
+        // Read remaining output.
+        $output .= stream_get_contents($pipes[1]);
+        $error_output .= stream_get_contents($pipes[2]);
+
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($process);
+
+        return [
+          'output' => array_filter(explode("\n", $output . $error_output)),
+          'return_code' => $status['exitcode'],
+          'timeout' => FALSE,
+        ];
+      }
+
+      // Small sleep to avoid busy-waiting.
+      usleep(100000);
+    }
+
+    // Timeout occurred - terminate the process.
+    proc_terminate($process, 9);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    proc_close($process);
+
+    return [
+      'output' => array_filter(explode("\n", $output . $error_output)),
+      'return_code' => -1,
+      'timeout' => TRUE,
+    ];
   }
 
 }

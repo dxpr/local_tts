@@ -11,6 +11,6 @@ ai_tts.generate:
   defaults:
     _controller: '\Drupal\ai_tts\Controller\TtsController::generate'
   requirements:
-    _permission: 'access content'
+    _permission: 'generate ai tts'
   options:
     no_cache: TRUE

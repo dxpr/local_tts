@@ -78,20 +78,54 @@
             method: 'POST',
             body: formData
           })
-            .then(response => response.json())
-            .then(data => {
-              if (data.success && data.audio_url) {
-                currentAudioUrl = data.audio_url;
-                playSpeech(data.audio_url);
+            .then(response => {
+              // Parse JSON response regardless of status.
+              return response.json().then(data => ({
+                ok: response.ok,
+                status: response.status,
+                data: data
+              }));
+            })
+            .then(result => {
+              if (result.ok && result.data.success && result.data.audio_url) {
+                currentAudioUrl = result.data.audio_url;
+                playSpeech(result.data.audio_url);
               } else {
-                updateStatus(Drupal.t('Failed to generate speech.'), 'error');
+                // Handle error responses with proper messages.
+                let errorMessage = result.data.message || 'Failed to generate speech';
+
+                // Provide user-friendly messages based on HTTP status code.
+                if (result.status === 400) {
+                  // Bad Request - validation errors.
+                  errorMessage = result.data.message || Drupal.t('Invalid request parameters');
+                } else if (result.status === 408) {
+                  // Request Timeout.
+                  errorMessage = Drupal.t('Generation took too long. Try with shorter text.');
+                } else if (result.status === 429) {
+                  // Too Many Requests - rate limiting.
+                  let retryMsg = '';
+                  if (result.data.retry_after) {
+                    const minutes = Math.ceil(result.data.retry_after / 60);
+                    retryMsg = Drupal.t(' Try again in @minutes minutes.', {'@minutes': minutes});
+                  }
+                  errorMessage = Drupal.t('Rate limit exceeded.') + retryMsg;
+                } else if (result.status === 500) {
+                  // Internal Server Error.
+                  errorMessage = Drupal.t('Server error. Please try again later.');
+                } else if (result.status === 503) {
+                  // Service Unavailable.
+                  errorMessage = Drupal.t('Service temporarily unavailable. Please contact support.');
+                }
+
+                updateStatus(errorMessage, 'error');
                 playButton.disabled = false;
                 playButton.classList.remove('loading');
                 updateButtonStates();
               }
             })
             .catch(error => {
-              updateStatus(Drupal.t('Error generating speech: @error', {'@error': error.message}), 'error');
+              // Network errors or unexpected failures.
+              updateStatus(Drupal.t('Network error. Please check your connection.'), 'error');
               playButton.disabled = false;
               playButton.classList.remove('loading');
               updateButtonStates();

@@ -26,3 +26,15 @@ ai_tts.settings:
     cache_content_tracking_enabled:
       type: boolean
       label: 'Enable content-based cache invalidation'
+    max_text_length:
+      type: integer
+      label: 'Maximum text length in characters (0 for unlimited)'
+    generation_timeout:
+      type: integer
+      label: 'Maximum generation timeout in seconds'
+    rate_limit_enabled:
+      type: boolean
+      label: 'Enable rate limiting'
+    rate_limit_threshold:
+      type: integer
+      label: 'Maximum requests per hour per user'

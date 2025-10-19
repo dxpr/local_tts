@@ -143,6 +143,57 @@ class AiTtsSettingsForm extends ConfigFormBase {
       '#default_value' => $config->get('cache_content_tracking_enabled') ?? TRUE,
     ];
 
+    $form['security'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Security Settings'),
+      '#description' => $this->t('Configure security constraints to prevent abuse and protect server resources.'),
+    ];
+
+    $form['security']['max_text_length'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Maximum text length'),
+      '#description' => $this->t('Maximum number of characters allowed per request. Set to 0 for unlimited. Default: 1,000,000 characters (~200,000 words) - suitable for long-form content, books, and documentation.'),
+      '#default_value' => $config->get('max_text_length') ?? 1000000,
+      '#min' => 0,
+      '#max' => 10000000,
+      '#step' => 10000,
+      '#field_suffix' => $this->t('characters'),
+    ];
+
+    $form['security']['generation_timeout'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Generation timeout'),
+      '#description' => $this->t('Maximum time (in seconds) to wait for audio generation. Prevents hanging processes. Default: 900 seconds (15 minutes).'),
+      '#default_value' => $config->get('generation_timeout') ?? 900,
+      '#min' => 10,
+      '#max' => 3600,
+      '#step' => 30,
+      '#field_suffix' => $this->t('seconds'),
+    ];
+
+    $form['security']['rate_limit_enabled'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Enable rate limiting'),
+      '#description' => $this->t('Limit the number of TTS generation requests per user to prevent abuse. Recommended: enabled.'),
+      '#default_value' => $config->get('rate_limit_enabled') ?? TRUE,
+    ];
+
+    $form['security']['rate_limit_threshold'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Rate limit threshold'),
+      '#description' => $this->t('Maximum number of requests allowed per hour per user.'),
+      '#default_value' => $config->get('rate_limit_threshold') ?? 20,
+      '#min' => 1,
+      '#max' => 1000,
+      '#step' => 1,
+      '#field_suffix' => $this->t('requests/hour'),
+      '#states' => [
+        'visible' => [
+          ':input[name="rate_limit_enabled"]' => ['checked' => TRUE],
+        ],
+      ],
+    ];
+
     return parent::buildForm($form, $form_state);
   }
 
@@ -179,6 +230,10 @@ class AiTtsSettingsForm extends ConfigFormBase {
       ->set('cache_size_limit_enabled', $form_state->getValue('cache_size_limit_enabled'))
       ->set('cache_max_size', $max_size_bytes)
       ->set('cache_content_tracking_enabled', $form_state->getValue('cache_content_tracking_enabled'))
+      ->set('max_text_length', $form_state->getValue('max_text_length'))
+      ->set('generation_timeout', $form_state->getValue('generation_timeout'))
+      ->set('rate_limit_enabled', $form_state->getValue('rate_limit_enabled'))
+      ->set('rate_limit_threshold', $form_state->getValue('rate_limit_threshold'))
       ->save();
 
     parent::submitForm($form, $form_state);
