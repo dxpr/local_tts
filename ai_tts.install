@@ -5,7 +5,6 @@
  * Install, update and uninstall functions for the AI TTS module.
  */
 
-use Drupal\Core\Url;
 use Drupal\Core\File\FileSystemInterface;
 
 /**
@@ -72,25 +71,17 @@ function ai_tts_requirements($phase) {
     // Create single requirement entry.
     if (!empty($issues)) {
       $requirements['ai_tts_files'] = [
-        'title' => t('AI TTS: File Paths'),
-        'value' => t('Issues found'),
-        'description' => [
-          '#markup' => implode('<br>', $issues) . '<br><br>' .
-          t('Install using: <code>cd modules/custom/ai_tts && composer run download-binary</code><br><a href="@settings">Configure paths</a>', [
-            '@settings' => Url::fromRoute('ai_tts.settings')->toString(),
-          ]),
-        ],
+        'title' => t('AI TTS files'),
+        'value' => t('Not found'),
+        'description' => implode(' ', $issues) . ' ' .
+        t('Run: <code>composer run download-binary</code>'),
         'severity' => REQUIREMENT_ERROR,
       ];
     }
     else {
       $requirements['ai_tts_files'] = [
-        'title' => t('AI TTS: File Paths'),
-        'value' => t('All files found'),
-        'description' => [
-          '#markup' => implode('<br>', $details),
-        ],
-        'severity' => REQUIREMENT_OK,
+        'title' => t('AI TTS files'),
+        'value' => t('Installed'),
       ];
     }
 
@@ -101,47 +92,34 @@ function ai_tts_requirements($phase) {
     if (!$real_path) {
       // Directory doesn't exist - try to create it.
       if ($file_system->prepareDirectory($audio_directory, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS)) {
-        $real_path = $file_system->realpath($audio_directory);
         $requirements['ai_tts_cache_dir'] = [
-          'title' => t('AI TTS: Cache Directory'),
-          'value' => t('Created successfully'),
-          'description' => t('Directory: @path', ['@path' => $real_path]),
-          'severity' => REQUIREMENT_OK,
+          'title' => t('AI TTS cache directory'),
+          'value' => t('Writable'),
         ];
       }
       else {
         $requirements['ai_tts_cache_dir'] = [
-          'title' => t('AI TTS: Cache Directory'),
-          'value' => t('Cannot be created'),
-          'description' => t('Failed to create directory at: @uri. Check web server permissions.', [
-            '@uri' => $audio_directory,
-          ]),
+          'title' => t('AI TTS cache directory'),
+          'value' => t('Not writable'),
+          'description' => t('Failed to create directory. Check web server permissions.'),
           'severity' => REQUIREMENT_ERROR,
         ];
       }
     }
     elseif (!is_writable($real_path)) {
       $requirements['ai_tts_cache_dir'] = [
-        'title' => t('AI TTS: Cache Directory'),
+        'title' => t('AI TTS cache directory'),
         'value' => t('Not writable'),
-        'description' => t('Directory exists at @path but is not writable. Run: <code>chmod 755 @path</code>', [
+        'description' => t('Directory exists but is not writable. Run: <code>chmod 755 @path</code>', [
           '@path' => $real_path,
         ]),
         'severity' => REQUIREMENT_ERROR,
       ];
     }
     else {
-      $perms = substr(sprintf('%o', fileperms($real_path)), -4);
       $requirements['ai_tts_cache_dir'] = [
-        'title' => t('AI TTS: Cache Directory'),
+        'title' => t('AI TTS cache directory'),
         'value' => t('Writable'),
-        'description' => [
-          '#markup' => t('Directory: @path<br>Permissions: @perms', [
-            '@path' => $real_path,
-            '@perms' => $perms,
-          ]),
-        ],
-        'severity' => REQUIREMENT_OK,
       ];
     }
 
@@ -152,58 +130,34 @@ function ai_tts_requirements($phase) {
 
       if ($file_count === 0) {
         $requirements['ai_tts_cache_size'] = [
-          'title' => t('AI TTS: Cache Size'),
+          'title' => t('AI TTS cache size'),
           'value' => t('Empty'),
-          'description' => t('No cached audio files. Audio will be generated on first use.'),
-          'severity' => REQUIREMENT_INFO,
         ];
       }
       else {
         $size_formatted = format_size($cache_size);
-
-        // Warning thresholds.
-        $severity = REQUIREMENT_OK;
-        $value_display = $size_formatted;
-        $description = '';
-
-        // Add cache limit info if size-based cleanup is enabled.
         $max_size = $config->get('cache_max_size') ?: 1073741824;
-        $size_limit_enabled = $config->get('cache_size_limit_enabled') ?? TRUE;
+        $percent_used = ($cache_size / $max_size) * 100;
 
-        if ($size_limit_enabled) {
-          $percent_used = ($cache_size / $max_size) * 100;
-          $value_display = t('@size (@percent% of @limit)', [
+        $requirements['ai_tts_cache_size'] = [
+          'title' => t('AI TTS cache size'),
+          'value' => t('@size (@percent% of @limit)', [
             '@size' => $size_formatted,
             '@percent' => round($percent_used),
             '@limit' => format_size($max_size),
-          ]);
-
-          // Warn if over 80% of limit.
-          if ($percent_used > 80) {
-            $severity = REQUIREMENT_WARNING;
-          }
-        }
-
-        // Description: just show file count.
-        $description = t('@count files', ['@count' => $file_count]);
-
-        // Warn if cache is over 100MB (when no size limit).
-        if (!$size_limit_enabled && $cache_size > 100 * 1024 * 1024) {
-          $severity = REQUIREMENT_WARNING;
-          $description .= ' - ' . t('Consider running <code>drush ai-tts:cache-clear</code>');
-        }
-
-        $requirements['ai_tts_cache_size'] = [
-          'title' => t('AI TTS: Cache Size'),
-          'value' => $value_display,
-          'description' => $description,
-          'severity' => $severity,
+          ]),
         ];
+
+        // Warn if over 80% of limit.
+        if ($percent_used > 80) {
+          $requirements['ai_tts_cache_size']['severity'] = REQUIREMENT_WARNING;
+          $requirements['ai_tts_cache_size']['description'] = t('Cache is nearly full. Consider running <code>drush ai-tts:cache-clear</code>');
+        }
       }
     }
     else {
       $requirements['ai_tts_cache_size'] = [
-        'title' => t('AI TTS: Cache Size'),
+        'title' => t('AI TTS cache size'),
         'value' => t('Unknown'),
         'description' => t('Cache directory not accessible.'),
         'severity' => REQUIREMENT_WARNING,
@@ -249,26 +203,15 @@ function ai_tts_requirements($phase) {
 
     if (empty($security_warnings)) {
       $requirements['ai_tts_security'] = [
-        'title' => t('AI TTS: Security'),
-        'value' => t('Properly configured'),
-        'description' => t('Text limit: @limit | Timeout: @timeout sec | Rate limiting: @rate', [
-          '@limit' => $max_text_length > 0 ? number_format($max_text_length) . ' chars' : 'unlimited',
-          '@timeout' => $generation_timeout,
-          '@rate' => $rate_limit_enabled ? 'enabled' : 'disabled',
-        ]),
-        'severity' => REQUIREMENT_OK,
+        'title' => t('AI TTS security'),
+        'value' => t('Configured'),
       ];
     }
     else {
       $requirements['ai_tts_security'] = [
-        'title' => t('AI TTS: Security'),
-        'value' => t('Recommendations available'),
-        'description' => [
-          '#markup' => t('Consider these improvements:<ul><li>@warnings</li></ul><a href="@settings">Configure security settings</a>', [
-            '@warnings' => implode('</li><li>', $security_warnings),
-            '@settings' => Url::fromRoute('ai_tts.settings')->toString(),
-          ]),
-        ],
+        'title' => t('AI TTS security'),
+        'value' => t('Review recommended'),
+        'description' => implode(' ', $security_warnings),
         'severity' => REQUIREMENT_WARNING,
       ];
     }
