@@ -124,10 +124,9 @@ final class AiTtsCommands extends DrushCommands {
       return;
     }
 
-    // Get model paths.
-    $home_dir = getenv('HOME');
-    $model_path = $home_dir . '/.cache/kokoros/checkpoints/kokoro-v1.0.onnx';
-    $data_path = $home_dir . '/.cache/kokoros/data/voices-v1.0.bin';
+    // Get model paths from configuration.
+    $model_path = $config->get('model_path');
+    $data_path = $config->get('data_path');
 
     // Map language to espeak format.
     $espeak_lang = $this->mapLanguageToEspeak($language);
@@ -167,10 +166,19 @@ final class AiTtsCommands extends DrushCommands {
     $this->output()->writeln('⚡ Time-to-first-audio: ~1-2 seconds');
     $this->output()->writeln('');
 
+    // Set up environment variable for espeak-ng data.
+    $espeak_data_path = $config->get('espeak_data_path');
+    $env_prefix = '';
+    if ($espeak_data_path) {
+      $espeak_parent = dirname($espeak_data_path);
+      $env_prefix = 'PIPER_ESPEAKNG_DATA_DIRECTORY=' . escapeshellarg($espeak_parent) . ' ';
+    }
+
     // Build streaming command: echo "text" | koko ... stream | player.
     $command = sprintf(
-      'echo %s | %s --lan %s --model %s --data %s --style %s --speed %s stream 2>/dev/null | %s',
+      'echo %s | %s%s --lan %s --model %s --data %s --style %s --speed %s stream 2>/dev/null | %s',
       escapeshellarg($text),
+      $env_prefix,
       escapeshellarg($binary_path),
       escapeshellarg($espeak_lang),
       escapeshellarg($model_path),
