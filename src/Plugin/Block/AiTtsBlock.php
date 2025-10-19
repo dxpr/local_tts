@@ -2,15 +2,13 @@
 
 namespace Drupal\ai_tts\Plugin\Block;
 
-use Drupal\Core\Session\AnonymousUserSession;
+use Drupal\ai_tts\TtsPlayerBuilder;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Block\BlockBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
-use Drupal\Core\Url;
-use Drupal\ai_tts\TtsService;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
@@ -60,11 +58,11 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
   protected $configFactory;
 
   /**
-   * The TTS service.
+   * The TTS player builder service.
    *
-   * @var \Drupal\ai_tts\TtsService
+   * @var \Drupal\ai_tts\TtsPlayerBuilder
    */
-  protected $ttsService;
+  protected $playerBuilder;
 
   /**
    * The entity field manager.
@@ -105,8 +103,8 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
    *   The plugin implementation definition.
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The config factory.
-   * @param \Drupal\ai_tts\TtsService $tts_service
-   *   The TTS service.
+   * @param \Drupal\ai_tts\TtsPlayerBuilder $player_builder
+   *   The TTS player builder service.
    * @param \Drupal\Core\Entity\EntityFieldManagerInterface $entity_field_manager
    *   The entity field manager.
    * @param \Drupal\Core\Entity\EntityTypeBundleInfoInterface $entity_type_bundle_info
@@ -116,10 +114,10 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
    * @param \Drupal\Core\Session\AccountInterface $current_user
    *   The current user.
    */
-  public function __construct(array $configuration, $plugin_id, $plugin_definition, ConfigFactoryInterface $config_factory, TtsService $tts_service, EntityFieldManagerInterface $entity_field_manager, EntityTypeBundleInfoInterface $entity_type_bundle_info, RouteMatchInterface $route_match, AccountInterface $current_user) {
+  public function __construct(array $configuration, $plugin_id, $plugin_definition, ConfigFactoryInterface $config_factory, TtsPlayerBuilder $player_builder, EntityFieldManagerInterface $entity_field_manager, EntityTypeBundleInfoInterface $entity_type_bundle_info, RouteMatchInterface $route_match, AccountInterface $current_user) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->configFactory = $config_factory;
-    $this->ttsService = $tts_service;
+    $this->playerBuilder = $player_builder;
     $this->entityFieldManager = $entity_field_manager;
     $this->entityTypeBundleInfo = $entity_type_bundle_info;
     $this->currentUser = $current_user;
@@ -143,7 +141,7 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
       $plugin_id,
       $plugin_definition,
       $container->get('config.factory'),
-      $container->get('ai_tts.tts_service'),
+      $container->get('ai_tts.player_builder'),
       $container->get('entity_field.manager'),
       $container->get('entity_type.bundle.info'),
       $container->get('current_route_match'),
@@ -217,209 +215,11 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
   }
 
   /**
-   * Get a valid default voice for the given language.
-   *
-   * @param array $available_voices
-   *   Available voices for the language.
-   * @param string $langcode
-   *   The language code.
-   *
-   * @return string
-   *   A valid voice code.
-   */
-  protected function getValidDefaultVoice(array $available_voices, $langcode) {
-    $config = $this->configFactory->get('ai_tts.settings');
-    $default_voices = $config->get('default_voices') ?? [];
-
-    // Check language-specific default first.
-    if (isset($default_voices[$langcode]) && isset($available_voices[$default_voices[$langcode]])) {
-      return $default_voices[$langcode];
-    }
-
-    // Fall back to first available voice for this language.
-    return array_key_first($available_voices);
-  }
-
-  /**
    * {@inheritdoc}
    */
   public function build() {
-    $config = $this->getConfiguration();
-    $global_config = $this->configFactory->get('ai_tts.settings');
-
-    // Get entity language for voice filtering.
-    $langcode = NULL;
-    if ($this->entity && method_exists($this->entity, 'language')) {
-      $langcode = $this->entity->language()->getId();
-    }
-
-    // ARCHITECTURE: Fail hard, no defensive coding.
-    // If entity doesn't exist, Drupal routing wouldn't have loaded it.
-    // If no voices available, backend will return 500.
-    // If no text content, backend will return 400.
-    // Block only shows on entity pages, always has entity context.
-    if (!$this->entity) {
-      return [];
-    }
-
-    // Check access (valid check - prevents showing UI for private content).
-    $anonymous = new AnonymousUserSession();
-    if (!$this->entity->access('view', $anonymous)) {
-      return [];
-    }
-
-    // Voices check still valid (prevents UI for unsupported languages).
-    $available_voices = $this->ttsService->getAvailableVoices($langcode);
-    if (empty($available_voices)) {
-      return [];
-    }
-
-    $build = [
-      '#type' => 'container',
-      '#attributes' => ['class' => ['ai-tts-container', 'container-inline']],
-    ];
-
-    $build['controls'] = [
-      '#type' => 'container',
-      '#attributes' => ['class' => ['ai-tts-controls', 'container-inline']],
-    ];
-
-    $build['controls']['listen_button'] = [
-      '#type' => 'button',
-      '#value' => $this->t('Listen to this page'),
-      '#attributes' => [
-        'id' => 'ai-tts-play-button',
-        'class' => ['ai-tts-button', 'ai-tts-play-button'],
-        'aria-label' => $this->t('Listen to the content on this page'),
-        'aria-pressed' => 'false',
-        'aria-controls' => 'ai-tts-audio',
-      ],
-    ];
-
-    $build['controls']['stop_button'] = [
-      '#type' => 'button',
-      '#value' => $this->t('Stop'),
-      '#attributes' => [
-        'id' => 'ai-tts-stop-button',
-        'class' => ['ai-tts-button', 'ai-tts-stop-button'],
-        'disabled' => 'disabled',
-        'aria-label' => $this->t('Stop reading'),
-        'aria-controls' => 'ai-tts-audio',
-      ],
-    ];
-
-    $build['settings'] = [
-      '#type' => 'container',
-      '#attributes' => ['class' => ['ai-tts-settings', 'container-inline']],
-    ];
-
-    if ($config['show_voice_selector']) {
-      $default_voice = $this->getValidDefaultVoice(
-        $available_voices,
-        $langcode
-      );
-
-      $build['settings']['voice_select'] = [
-        '#type' => 'select',
-        '#title' => $this->t('Voice'),
-        '#options' => $available_voices,
-        '#value' => $default_voice,
-        '#attributes' => [
-          'id' => 'ai-tts-voice-select',
-          'class' => ['ai-tts-voice-select'],
-          'aria-label' => $this->t('Select voice'),
-        ],
-      ];
-    }
-
-    if ($config['show_speed_control']) {
-      $default_speed = $this->ttsService->normalizeSpeed(
-        $global_config->get('default_speed') ?: '1'
-      );
-
-      $build['settings']['speed_control'] = [
-        '#type' => 'select',
-        '#title' => $this->t('Speed'),
-        '#options' => [
-          '0.8' => $this->t('0.8x'),
-          '1' => $this->t('1x (Normal)'),
-          '1.2' => $this->t('1.2x'),
-          '1.5' => $this->t('1.5x'),
-          '2' => $this->t('2x'),
-        ],
-        '#value' => $default_speed,
-        '#attributes' => [
-          'id' => 'ai-tts-speed-input',
-          'class' => ['ai-tts-speed-input'],
-          'aria-label' => $this->t('Adjust speech speed'),
-        ],
-      ];
-    }
-
-    $build['status'] = [
-      '#type' => 'container',
-      '#attributes' => [
-        'id' => 'ai-tts-status',
-        'class' => ['ai-tts-status'],
-        'role' => 'status',
-        'aria-live' => 'polite',
-      ],
-    ];
-
-    $build['duration'] = [
-      '#type' => 'container',
-      '#attributes' => [
-        'id' => 'ai-tts-duration',
-        'class' => ['ai-tts-duration'],
-        'style' => 'display: none;',
-      ],
-    ];
-
-    $build['audio'] = [
-      '#type' => 'html_tag',
-      '#tag' => 'audio',
-      '#attributes' => [
-        'id' => 'ai-tts-audio',
-        'preload' => 'none',
-      ],
-    ];
-
-    // Use language-aware default voice for JavaScript.
-    $js_default_voice = $this->getValidDefaultVoice(
-      $available_voices,
-      $langcode
-    );
-
-    // SECURITY: Pass only entity reference to JavaScript, NOT the content.
-    // Server loads entity, validates access, extracts text.
-    $build['#attached'] = [
-      'library' => ['ai_tts/player'],
-      'drupalSettings' => [
-        'aiTts' => [
-          'defaultVoice' => $js_default_voice,
-          'defaultSpeed' => $global_config->get('default_speed'),
-          'generateUrl' => Url::fromRoute('ai_tts.generate')->toString(),
-          'language' => $langcode,
-          'entityType' => $this->entity->getEntityTypeId(),
-          'entityId' => $this->entity->id(),
-          'fields' => array_values(array_filter($config['fields'] ?? [])),
-        ],
-      ],
-    ];
-
-    // Add cache contexts and tags to ensure block content is unique per page.
-    $build['#cache']['contexts'][] = 'route';
-    $build['#cache']['contexts'][] = 'languages:language_content';
-
-    if ($this->entity) {
-      $entity_type = $this->entity->getEntityTypeId();
-      $entity_id = $this->entity->id();
-      $build['#cache']['tags'][] = "{$entity_type}:{$entity_id}";
-    }
-
-    $build['#cache']['tags'][] = 'config:ai_tts.settings';
-
-    return $build;
+    // Delegate to the player builder service.
+    return $this->playerBuilder->buildPlayer($this->entity, $this->getConfiguration());
   }
 
 }

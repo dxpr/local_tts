@@ -2,3 +2,6 @@ services:
   ai_tts.tts_service:
     class: Drupal\ai_tts\TtsService
     arguments: ['@config.factory', '@file_system', '@logger.factory']
+  ai_tts.player_builder:
+    class: Drupal\ai_tts\TtsPlayerBuilder
+    arguments: ['@config.factory', '@ai_tts.tts_service']
