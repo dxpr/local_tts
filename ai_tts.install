@@ -18,50 +18,8 @@ function ai_tts_requirements($phase) {
     $config = \Drupal::config('ai_tts.settings');
     $file_system = \Drupal::service('file_system');
 
-    // Check 1: Kokoro Binary Status.
+    // Check 1: File Paths (Binary + Model Files).
     $binary_path = $config->get('koko_binary_path');
-
-    if (empty($binary_path)) {
-      $requirements['ai_tts_binary'] = [
-        'title' => t('AI TTS: Kokoro Binary'),
-        'value' => t('Not configured'),
-        'description' => t('The Kokoro binary path has not been configured. Visit the <a href="@settings">AI TTS settings page</a> to configure it.', [
-          '@settings' => Url::fromRoute('ai_tts.settings')->toString(),
-        ]),
-        'severity' => REQUIREMENT_ERROR,
-      ];
-    }
-    elseif (!file_exists($binary_path)) {
-      $requirements['ai_tts_binary'] = [
-        'title' => t('AI TTS: Kokoro Binary'),
-        'value' => t('Not found'),
-        'description' => t('The Kokoro binary was not found at: @path. Please install the binary or update the path in the <a href="@settings">AI TTS settings</a>.', [
-          '@path' => $binary_path,
-          '@settings' => Url::fromRoute('ai_tts.settings')->toString(),
-        ]),
-        'severity' => REQUIREMENT_ERROR,
-      ];
-    }
-    elseif (!is_executable($binary_path)) {
-      $requirements['ai_tts_binary'] = [
-        'title' => t('AI TTS: Kokoro Binary'),
-        'value' => t('Not executable'),
-        'description' => t('The Kokoro binary at @path is not executable. Run: <code>chmod +x @path</code>', [
-          '@path' => $binary_path,
-        ]),
-        'severity' => REQUIREMENT_ERROR,
-      ];
-    }
-    else {
-      $requirements['ai_tts_binary'] = [
-        'title' => t('AI TTS: Kokoro Binary'),
-        'value' => t('Installed and executable'),
-        'description' => t('Binary location: @path', ['@path' => $binary_path]),
-        'severity' => REQUIREMENT_OK,
-      ];
-    }
-
-    // Check 2: Model Files Status.
     $model_path = $config->get('model_path') ?: '~/.cache/kokoros/checkpoints/kokoro-v1.0.onnx';
     $data_path = $config->get('data_path') ?: '~/.cache/kokoros/data/voices-v1.0.bin';
 
@@ -69,23 +27,56 @@ function ai_tts_requirements($phase) {
     $model_real = _ai_tts_expand_path($model_path);
     $data_real = _ai_tts_expand_path($data_path);
 
-    $model_exists = file_exists($model_real);
-    $data_exists = file_exists($data_real);
+    // Check all files.
+    $issues = [];
+    $details = [];
 
-    if (!$model_exists || !$data_exists) {
-      $messages = [];
-      if (!$model_exists) {
-        $messages[] = t('Model file not found: @path', ['@path' => $model_real]);
-      }
-      if (!$data_exists) {
-        $messages[] = t('Data file not found: @path', ['@path' => $data_real]);
-      }
-      $requirements['ai_tts_models'] = [
-        'title' => t('AI TTS: Model Files'),
-        'value' => t('Missing'),
+    // Binary checks.
+    if (empty($binary_path)) {
+      $issues[] = t('Binary path not configured');
+    }
+    elseif (!file_exists($binary_path)) {
+      $issues[] = t('Binary not found at: @path', ['@path' => $binary_path]);
+    }
+    elseif (!is_executable($binary_path)) {
+      $issues[] = t('Binary not executable. Run: <code>chmod +x @path</code>', ['@path' => $binary_path]);
+    }
+    else {
+      $details[] = t('Binary: @path', ['@path' => $binary_path]);
+    }
+
+    // Model file checks.
+    if (!file_exists($model_real)) {
+      $issues[] = t('Model not found: @path', ['@path' => $model_real]);
+    }
+    else {
+      $model_size = filesize($model_real);
+      $details[] = t('Model: @path (@size)', [
+        '@path' => $model_real,
+        '@size' => format_size($model_size),
+      ]);
+    }
+
+    // Data file checks.
+    if (!file_exists($data_real)) {
+      $issues[] = t('Data not found: @path', ['@path' => $data_real]);
+    }
+    else {
+      $data_size = filesize($data_real);
+      $details[] = t('Data: @path (@size)', [
+        '@path' => $data_real,
+        '@size' => format_size($data_size),
+      ]);
+    }
+
+    // Create single requirement entry.
+    if (!empty($issues)) {
+      $requirements['ai_tts_files'] = [
+        'title' => t('AI TTS: File Paths'),
+        'value' => t('Issues found'),
         'description' => [
-          '#markup' => implode('<br>', $messages) . '<br>' .
-          t('Download models: <code>cd modules/custom/ai_tts && composer run download-binary</code><br><a href="@settings">Configure paths</a>', [
+          '#markup' => implode('<br>', $issues) . '<br><br>' .
+          t('Install using: <code>cd modules/custom/ai_tts && composer run download-binary</code><br><a href="@settings">Configure paths</a>', [
             '@settings' => Url::fromRoute('ai_tts.settings')->toString(),
           ]),
         ],
@@ -93,17 +84,12 @@ function ai_tts_requirements($phase) {
       ];
     }
     else {
-      $model_size = filesize($model_real);
-      $data_size = filesize($data_real);
-      $requirements['ai_tts_models'] = [
-        'title' => t('AI TTS: Model Files'),
-        'value' => t('Found'),
-        'description' => t('Model: @model (@size)<br>Data: @data (@data_size)', [
-          '@model' => $model_real,
-          '@size' => format_size($model_size),
-          '@data' => $data_real,
-          '@data_size' => format_size($data_size),
-        ]),
+      $requirements['ai_tts_files'] = [
+        'title' => t('AI TTS: File Paths'),
+        'value' => t('All files found'),
+        'description' => [
+          '#markup' => implode('<br>', $details),
+        ],
         'severity' => REQUIREMENT_OK,
       ];
     }
@@ -177,11 +163,8 @@ function ai_tts_requirements($phase) {
 
         // Warning thresholds.
         $severity = REQUIREMENT_OK;
-        $description_parts = [];
-
-        // Basic info.
-        $description_parts[] = t('@count cached audio files', ['@count' => $file_count]);
-        $description_parts[] = t('Total size: @size', ['@size' => $size_formatted]);
+        $value_display = $size_formatted;
+        $description = '';
 
         // Add cache limit info if size-based cleanup is enabled.
         $max_size = $config->get('cache_max_size') ?: 1073741824;
@@ -189,9 +172,10 @@ function ai_tts_requirements($phase) {
 
         if ($size_limit_enabled) {
           $percent_used = ($cache_size / $max_size) * 100;
-          $description_parts[] = t('Size limit: @limit (@percent% used)', [
-            '@limit' => format_size($max_size),
+          $value_display = t('@size (@percent% of @limit)', [
+            '@size' => $size_formatted,
             '@percent' => round($percent_used),
+            '@limit' => format_size($max_size),
           ]);
 
           // Warn if over 80% of limit.
@@ -200,20 +184,19 @@ function ai_tts_requirements($phase) {
           }
         }
 
+        // Description: just show file count.
+        $description = t('@count files', ['@count' => $file_count]);
+
         // Warn if cache is over 100MB (when no size limit).
         if (!$size_limit_enabled && $cache_size > 100 * 1024 * 1024) {
           $severity = REQUIREMENT_WARNING;
-          $description_parts[] = t('Warning: Cache is large. Consider running @command to free up disk space.', [
-            '@command' => 'drush ai-tts:cache-clear',
-          ]);
+          $description .= ' - ' . t('Consider running <code>drush ai-tts:cache-clear</code>');
         }
 
         $requirements['ai_tts_cache_size'] = [
           'title' => t('AI TTS: Cache Size'),
-          'value' => $size_formatted,
-          'description' => [
-            '#markup' => implode('<br>', $description_parts),
-          ],
+          'value' => $value_display,
+          'description' => $description,
           'severity' => $severity,
         ];
       }
