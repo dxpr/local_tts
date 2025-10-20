@@ -452,6 +452,11 @@ class TtsService {
     // Normalize language code to lowercase.
     $langcode = strtolower($langcode);
 
+    // Treat "und" (undefined) as English (most common case).
+    if ($langcode === 'und' || $langcode === 'zxx') {
+      $langcode = 'en';
+    }
+
     // Get prefixes for this language.
     $prefixes = self::LANGUAGE_MAP[$langcode] ?? [];
 
