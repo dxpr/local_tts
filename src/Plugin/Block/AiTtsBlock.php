@@ -79,11 +79,11 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
   protected $entityTypeBundleInfo;
 
   /**
-   * The current entity.
+   * The route match service.
    *
-   * @var \Drupal\Core\Entity\EntityInterface|null
+   * @var \Drupal\Core\Routing\RouteMatchInterface
    */
-  protected $entity;
+  protected $routeMatch;
 
   /**
    * The current user.
@@ -120,16 +120,8 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
     $this->playerBuilder = $player_builder;
     $this->entityFieldManager = $entity_field_manager;
     $this->entityTypeBundleInfo = $entity_type_bundle_info;
+    $this->routeMatch = $route_match;
     $this->currentUser = $current_user;
-
-    // Try to get any fieldable entity from route parameters.
-    $this->entity = NULL;
-    foreach ($route_match->getParameters() as $parameter) {
-      if ($parameter instanceof FieldableEntityInterface) {
-        $this->entity = $parameter;
-        break;
-      }
-    }
   }
 
   /**
@@ -218,8 +210,18 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
    * {@inheritdoc}
    */
   public function build() {
+    // Get entity from route parameters (must be in build(), not constructor,
+    // because blocks are cached and constructor doesn't run on every request).
+    $entity = NULL;
+    foreach ($this->routeMatch->getParameters() as $parameter) {
+      if ($parameter instanceof FieldableEntityInterface) {
+        $entity = $parameter;
+        break;
+      }
+    }
+
     // Delegate to the player builder service.
-    return $this->playerBuilder->buildPlayer($this->entity, $this->getConfiguration());
+    return $this->playerBuilder->buildPlayer($entity, $this->getConfiguration());
   }
 
 }
