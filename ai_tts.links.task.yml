@@ -11,3 +11,9 @@ ai_tts.test:
   title: 'Test'
   base_route: ai_tts.settings
   weight: 10
+
+ai_tts.batch:
+  route_name: ai_tts.batch
+  title: 'Batch'
+  base_route: ai_tts.settings
+  weight: 20

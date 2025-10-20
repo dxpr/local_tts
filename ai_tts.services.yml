@@ -5,3 +5,6 @@ services:
   ai_tts.player_builder:
     class: Drupal\ai_tts\TtsPlayerBuilder
     arguments: ['@config.factory', '@ai_tts.tts_service']
+  ai_tts.batch_service:
+    class: Drupal\ai_tts\Service\TtsBatchService
+    arguments: ['@entity_type.manager', '@ai_tts.tts_service', '@config.factory', '@entity_type.bundle.info', '@logger.factory']

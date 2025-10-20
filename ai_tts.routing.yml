@@ -14,6 +14,14 @@ ai_tts.test:
   requirements:
     _permission: 'administer ai tts settings'
 
+ai_tts.batch:
+  path: '/admin/config/media/ai-tts/batch'
+  defaults:
+    _form: '\Drupal\ai_tts\Form\AiTtsBatchForm'
+    _title: 'Batch TTS Generation'
+  requirements:
+    _permission: 'administer ai tts settings'
+
 ai_tts.generate:
   path: '/ai-tts/generate'
   defaults:
