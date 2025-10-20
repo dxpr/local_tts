@@ -1,5 +1,5 @@
 player:
-  version: 1.x
+  version: 2.0
   css:
     theme:
       css/ai-tts-player.css: {}
@@ -8,4 +8,14 @@ player:
   dependencies:
     - core/drupal
     - core/drupalSettings
+    - core/once
+
+batch_form:
+  version: 1.x
+  js:
+    js/batch-form.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
+    - core/drupal.form
     - core/once
