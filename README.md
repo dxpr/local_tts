@@ -20,45 +20,33 @@ using the Kokoro TTS engine (Rust implementation).
 
 ## Security & Privacy
 
-**Public Content Only**
+**Rule:** Only publicly viewable content can be converted to audio.
 
-Audio files are cached to the public file system for performance. To prevent
-private content from being exposed, the module enforces this security policy:
+**Why:** Audio files cache to `public://` filesystem. Private content must not be exposed.
 
-**The Rule:**
-- Audio generation only works for content that anonymous users can view
-- This means content must be:
-  - Published (status = 1)
-  - Have appropriate view permissions for anonymous role
+**Requirements for TTS:**
+- Content published (status = 1)
+- Anonymous users can view content
+- "Generate AI text-to-speech audio" permission granted
 
-**What Happens:**
-- **UI**: TTS player does not display on private/unpublished content
-- **API**: Audio generation returns HTTP 403 error
-- **Drush**: Shows error message with solution
+**Enforcement:**
+- **UI** - Player hidden on private content
+- **API** - Returns HTTP 403 for private content
+- **Drush** - Shows error with solution
 
-**Example Error Message:**
-```
-Cannot generate audio for private content. Only content viewable by
-anonymous users can be cached.
-Solution: Use --stream flag to play without caching, or publish the content.
-```
+**Automatic cache cleanup:**
+- Audio deleted when source content updated
+- Audio deleted when source content deleted
+- Keeps cache synchronized with content
 
-**Automatic Cache Cleanup:**
-When you update or delete content, associated audio files are automatically
-removed from the cache. This ensures the cache stays synchronized with your
-content.
+**Development workaround:**
 
-**Development Workaround:**
-
-For testing TTS on private content during development, use streaming mode:
+Test TTS on private content without caching:
 
 ```bash
-# Streaming: no files cached, immediate playback
+# Streaming mode: no cache, bypasses access check
 drush ai-tts:read node 123 --stream
 ```
-
-Streaming mode bypasses the public access check and does not create cached
-files.
 
 ## Requirements
 
@@ -167,7 +155,7 @@ drush en ai_tts -y
 
 **Step 4: Configure the module**
 
-Go to: Administration > Configuration > Media > AI TTS
+Go to: Configuration > Media > AI TTS Settings (`/admin/config/media/ai-tts`)
 
 Set the file paths from the installation above.
 
@@ -197,7 +185,7 @@ If you prefer manual installation or need a system-wide binary:
    ```
 
 3. **Configure with system binary path:**
-   - Go to: Administration > Configuration > Media > AI TTS
+   - Go to: Configuration > Media > AI TTS Settings
    - Set the path to: `/usr/local/bin/koko`
    - Configure other settings as needed
 
@@ -213,17 +201,59 @@ accessible to Drupal.
 
 ## Usage
 
-### Add TTS to Your Pages
+### Option 1: Block (Simple)
+
+**When to use:** Quick setup, testing, or site-wide TTS on all pages.
+
+**Steps:**
 
 1. Go to: Structure > Block layout
 2. Click "Place block" in your desired region
-3. Search for "AI Text-to-Speech"
-4. Configure the block:
-   - Set button text
-   - Choose whether to show voice selector
-   - Choose whether to show speed control
-   - Set CSS selector for content (default: `article .field--name-body`)
-5. Save the block configuration
+3. Find "AI Text-to-Speech" and click "Place block"
+4. Configure:
+   - **Show Voice Selection Dropdown** - Let users choose voices
+   - **Show Speed Control** - Let users adjust playback speed
+   - **Fields to include** - Select which fields to read
+5. Save
+
+The block appears on all pages in that region and reads content from the selected fields.
+
+### Option 2: Field (Advanced)
+
+**When to use:** Per-content-type control, Layout Builder, or custom field selection.
+
+**Benefits:**
+- Position player anywhere in entity display
+- Different settings per content type
+- Works with Layout Builder
+- Granular field selection
+
+**Add the field:**
+
+1. Go to: Structure > Content types > [Your type] > Manage fields
+2. Click "Add field"
+3. Select "AI TTS Player"
+4. Label: "Text-to-Speech Player" (or your preference)
+5. Save field settings
+
+**Configure display:**
+
+1. Go to: Structure > Content types > [Your type] > Manage display
+2. Drag the field to your desired position
+3. Click the gear icon:
+   - **Show Voice Selection Dropdown** - Let users choose voices
+   - **Show Speed Control** - Let users adjust playback speed
+   - **Fields to include** - Select fields to read (empty = all)
+4. Save
+
+**Layout Builder:**
+
+1. Edit your layout
+2. Add block > select your TTS field
+3. Position in layout
+4. Configure settings
+
+**Permissions:** Users need "Generate AI text-to-speech audio" permission to use the player.
 
 ### Available Voices
 
@@ -273,45 +303,32 @@ has only one voice).
 
 ### Language-Aware Voice Filtering
 
-The module automatically filters available voices based on the language
-of the content being read:
+**Automatic filtering:** The player shows only voices matching your content's language.
 
-**How It Works:**
-1. The module detects the language of the node/content (e.g., English,
-   Japanese, French)
-2. Only voices matching that language are shown in the voice selector
-3. If no voices are available for the content language, the entire TTS
-   block is automatically hidden
-4. The default voice is automatically adjusted to the first available
-   voice for the content language
+**Behavior:**
+- Content language detected automatically
+- Voice selector shows only matching voices
+- Player hidden if no voices available for language
+- Default voice auto-adjusted to first available
 
 **Examples:**
-- **English content** (en) → Shows all American and British English
-  voices
-- **Japanese content** (ja) → Shows only Japanese voices (jf_*, jm_*)
-- **Spanish content** (es) → Shows only Spanish voices (ef_*, em_*)
-- **Content in unsupported language** → Block is hidden (no TTS
-  available)
+- English (en) → American + British voices
+- Japanese (ja) → Japanese voices only
+- Spanish (es) → Spanish voices only
+- Unsupported language → Player hidden
 
-**Supported Language Mappings:**
-- `en`, `en-us` → American English voices
-- `en-gb` → British English voices
-- `ja` → Japanese voices
-- `zh`, `zh-hans`, `zh-hant` → Mandarin Chinese voices
-- `fr` → French voices
-- `hi` → Hindi voices
-- `es` → Spanish voices
-- `it` → Italian voices
-- `pt`, `pt-br`, `pt-pt` → Portuguese voices
+**Supported languages:**
+- `en`, `en-us` → American English
+- `en-gb` → British English
+- `ja` → Japanese
+- `zh`, `zh-hans`, `zh-hant` → Mandarin Chinese
+- `fr` → French
+- `hi` → Hindi
+- `es` → Spanish
+- `it` → Italian
+- `pt`, `pt-br`, `pt-pt` → Portuguese
 
-This ensures users only see relevant, natural-sounding voices for their
-content's language.
-
-**Dynamic Language Support:**
-The list of supported languages is maintained automatically based on the
-available voices in the Kokoro binary. When voices are updated, the
-supported language list updates accordingly. You can see the current list
-by running:
+**Check supported languages:**
 ```bash
 drush ai-tts:voices --language=invalid
 ```
@@ -503,36 +520,57 @@ The test command outputs the full path when using `--no-play`.
 
 ### Components
 
-**PHP Components:**
+**Services:**
 - `TtsService` - Core service for interfacing with koko binary
-- `TtsController` - AJAX endpoint for generating audio
-- `AiTtsSettingsForm` - Admin configuration form
-- `AiTtsBlock` - Block plugin for rendering the player
-- `AiTtsCommands` - Drush commands for testing and cache management
+- `TtsPlayerBuilder` - Shared service for building player UI
+
+**Controllers:**
+- `TtsController` - AJAX endpoint for audio generation
+
+**Forms:**
+- `AiTtsSettingsForm` - Configuration form at `/admin/config/media/ai-tts`
+
+**Plugins:**
+- `AiTtsBlock` - Block plugin for site-wide TTS
+- `AiTtsPlayerItem` - Field type for per-content TTS
+- `AiTtsPlayerWidget` - Hidden widget (always enabled)
+- `AiTtsPlayerFormatter` - Field formatter with settings
+
+**Commands:**
+- `AiTtsCommands` - Drush commands (test, voices, read, cache-clear)
 
 **Frontend:**
-- `ai-tts-player.js` - JavaScript for audio playback control
-- `ai-tts-player.html.twig` - Template for player interface
+- `ai-tts-player.js` - Audio playback controls
+- `ai-tts.libraries.yml` - Library definition
 
 ### How It Works
 
-1. User clicks "Listen" button on a page
-2. JavaScript detects content language and available voices
-3. AJAX request sent to `/ai-tts/generate` with text, voice, speed, and
-   language
-4. `TtsService` calls koko binary with proper language for G2P
-   (grapheme-to-phoneme):
-   - Example: `koko --lan es --style ef_dora --speed 1.0 text "Hola"
-     --output output.wav`
-5. Generated audio file is cached (if caching enabled)
-6. Audio URL returned to frontend
-7. HTML5 `<audio>` element plays the generated speech
+**Player rendering:**
+1. `TtsPlayerBuilder` service builds player UI
+2. Player shown only if content viewable by anonymous users
+3. Voice selector filtered by content language
+4. JavaScript attached with entity reference (not content)
 
-**Language-Aware Processing:**
-- The language code is passed to espeak-ng for proper pronunciation
-- Spanish text uses Spanish phonemes (not English with Spanish accent)
-- Japanese text uses Japanese phonemes
-- Each language gets native pronunciation rules
+**Audio generation:**
+1. User clicks "Listen to this page"
+2. JavaScript sends AJAX to `/ai-tts/generate` with entity reference
+3. `TtsController` validates access and extracts text from entity
+4. `TtsService` calls koko with language-specific phoneme processing
+5. Audio cached in `public://ai-tts/` (if enabled)
+6. Audio URL returned to browser
+7. HTML5 `<audio>` element plays speech
+
+**Security model:**
+- Only entity reference passed to JavaScript (not content)
+- Server validates anonymous access before generation
+- Rate limiting prevents abuse
+- Cache invalidated on entity updates
+
+**Language processing:**
+- Language code passed to eSpeak NG for phoneme conversion
+- Spanish text → Spanish phonemes (native pronunciation)
+- Japanese text → Japanese phonemes (native pronunciation)
+- Each language uses native pronunciation rules
 
 ### Caching
 
@@ -550,24 +588,39 @@ language.
 
 ## Configuration Options
 
-### Global Settings (Admin Form)
+### Global Settings
 
-- **Koko Binary Path** - Absolute path to koko executable
-- **Model Path** - Absolute path to kokoro-v1.0.onnx file
-- **Data Path** - Absolute path to voices-v1.0.bin file
-- **eSpeak NG Data Path** - Absolute path to espeak-ng-data directory
-  (required for phoneme processing)
-- **Default Voice** - Voice to use when none specified
-- **Default Speed** - Speech speed (0.5 - 2.0)
-- **Cache Audio** - Enable/disable audio file caching
-- **Audio Directory** - Where to store cached audio files
+Go to: Configuration > Media > AI TTS Settings
+
+**File Paths**
+- **Koko executable path** - Path to koko binary
+- **Model file path** - Path to kokoro-v1.0.onnx
+- **Voices data path** - Path to voices-v1.0.bin
+- **eSpeak NG data path** - Path to espeak-ng-data directory
+
+**Voice Settings**
+- **Default voice for [language]** - Default voice per enabled language
+- **Default speech speed** - Speed multiplier (0.8x to 2x)
+
+**Caching Settings**
+- **Cache generated audio files** - Enable/disable caching
+- **Audio cache directory** - Storage location (default: public://ai-tts)
+
+**Cache Management**
+- **Maximum cache size (MB)** - Size limit with automatic cleanup
+
+**Security Settings**
+- **Maximum text length** - Character limit per request
+- **Generation timeout** - Maximum processing time (seconds)
+- **Enable rate limiting** - Prevent abuse
+- **Rate limit threshold** - Requests per hour per user
+- **Maximum server load threshold** - Skip generation during high load
 
 ### Block Settings
 
-- **Button Text** - Text for the play button
-- **Show Voice Selector** - Allow users to choose voice
-- **Show Speed Control** - Allow users to adjust speed
-- **Content Selector** - CSS selector for content to read
+- **Show Voice Selection Dropdown** - Let users choose voices
+- **Show Speed Control** - Let users adjust playback speed
+- **Fields to include** - Select fields to read
 
 ## Development
 
@@ -672,79 +725,109 @@ When contributing to this module:
 
 ## Troubleshooting
 
-### Binary installation fails
-
-**Error:** Composer scripts fail to download or build the binary
-
-**Solutions:**
-1. Check your internet connection for downloads
-2. For build errors, ensure Rust is installed:
-   `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-3. Check available releases:
-   https://github.com/lucasjinreal/Kokoros/releases
-4. Try manual installation (see Manual Installation section)
-5. Check disk space and permissions in the module's `bin/` directory
-
 ### Binary not found or not executable
 
-**Error:** "Binary not found or not executable at:
-modules/custom/ai_tts/bin/koko"
+**Symptom:** Error message about binary not found or not executable.
 
-**Solutions:**
-1. Run the Composer setup:
-   `cd web/modules/custom/ai_tts && composer run download-binary`
-2. Verify the binary exists: `ls -la web/modules/custom/ai_tts/bin/koko`
-3. Make it executable: `chmod +x web/modules/custom/ai_tts/bin/koko`
-4. Update the path in module configuration to match your installation
-5. Check the status report: Administration > Reports > Status report
+**Fix:**
+```bash
+# Download binary
+cd web/modules/custom/ai_tts
+composer run download-binary
 
-### Permission denied when generating audio
+# Make executable
+chmod +x bin/koko
 
-**Error:** Audio files cannot be created
+# Verify
+ls -la bin/koko
+```
 
-**Solutions:**
-1. Ensure the web server has write permissions to the audio directory
-2. Check: `ls -la sites/default/files/ai-tts/`
-3. Fix permissions: `chmod 755 sites/default/files/ai-tts/`
-
-### Audio generation is slow
-
-**Solutions:**
-1. Enable caching in module settings
-2. Consider using a faster server/CPU
-3. Limit text length in block configuration
-4. Pre-generate common audio files
-
-### Drush commands not found
-
-**Error:** "Command ai-tts:test was not found"
-
-**Solutions:**
-1. Clear Drupal cache: `drush cr`
-2. Verify the module is enabled: `drush pm:list | grep ai_tts`
-3. Check that Drush can find the commands:
-   `drush list | grep tts`
-4. Ensure `drush.services.yml` exists in the module directory
+Update path in Configuration > Media > AI TTS Settings if needed.
 
 ### eSpeak NG errors
 
-**Error:** "Failed to initialize eSpeak-ng" or
-"Error processing file 'espeak-ng-data/phontab'"
+**Symptom:** "Failed to initialize eSpeak-ng" or "Error processing file 'espeak-ng-data/phontab'"
+
+**Fix:**
+```bash
+# Install eSpeak NG
+# macOS:
+brew install espeak-ng
+
+# Ubuntu/Debian:
+sudo apt-get install espeak-ng
+
+# Find data directory
+# macOS:
+find /opt/homebrew -name "espeak-ng-data" -type d
+
+# Linux:
+find /usr -name "espeak-ng-data" -type d 2>/dev/null
+```
+
+Configure path in Configuration > Media > AI TTS Settings.
+
+**Common paths:**
+- macOS: `/opt/homebrew/Cellar/espeak-ng/[version]/share/espeak-ng-data`
+- Ubuntu/Debian: `/usr/share/espeak-ng-data`
+- Fedora/RHEL: `/usr/share/espeak-ng-data`
+
+### Permission denied
+
+**Symptom:** Cannot create audio files.
+
+**Fix:**
+```bash
+# Check permissions
+ls -la sites/default/files/ai-tts/
+
+# Fix if needed
+chmod 755 sites/default/files/ai-tts/
+```
+
+### Slow audio generation
+
+**Symptoms:** Long wait times for audio.
 
 **Solutions:**
-1. Install eSpeak NG:
-   - macOS: `brew install espeak-ng`
-   - Ubuntu/Debian: `sudo apt-get install espeak-ng`
-   - Fedora/RHEL: `sudo dnf install espeak-ng`
-2. Find the espeak-ng-data directory:
-   - macOS: `find /opt/homebrew -name "espeak-ng-data" -type d`
-   - Linux: `find /usr -name "espeak-ng-data" -type d 2>/dev/null`
-3. Configure the path in module settings at `/admin/config/media/ai-tts`
-4. Common paths:
-   - macOS (Homebrew): `/opt/homebrew/Cellar/espeak-ng/[version]/share/espeak-ng-data`
-   - Ubuntu/Debian: `/usr/share/espeak-ng-data`
-   - Fedora/RHEL: `/usr/share/espeak-ng-data`
-5. Verify the path contains files like `phontab`, `phonindex`, etc.
+1. Enable caching: Configuration > Media > AI TTS Settings
+2. Reduce text length in block/field settings
+3. Use faster CPU/server
+4. Pre-generate audio with Drush: `drush ai-tts:read node 123`
+
+### Drush commands not found
+
+**Symptom:** "Command ai-tts:test was not found"
+
+**Fix:**
+```bash
+# Clear cache
+drush cr
+
+# Verify module enabled
+drush pm:list | grep ai_tts
+
+# List available commands
+drush list | grep tts
+```
+
+### Player not showing
+
+**Possible causes:**
+
+1. **Private content** - Player hidden for content anonymous users can't view
+2. **No voices for language** - Player hidden if no voices available for content language
+3. **Missing permission** - Grant "Generate AI text-to-speech audio" permission
+4. **Field disabled** - Check field display settings (Manage display)
+
+**Debug:**
+```bash
+# Check voices available for language
+drush ai-tts:voices --language=en
+
+# Test with simple text
+drush ai-tts:test "Hello World"
+```
 
 ## Known Limitations
 
