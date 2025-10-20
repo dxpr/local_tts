@@ -94,6 +94,9 @@ class TtsPlayerBuilder {
       'fields' => [],
     ];
 
+    // Generate unique ID suffix to allow multiple players on same page.
+    $id_suffix = substr(md5(microtime() . random_bytes(8)), 0, 8);
+
     $global_config = $this->configFactory->get('ai_tts.settings');
 
     // Get entity language for voice filtering.
@@ -134,11 +137,11 @@ class TtsPlayerBuilder {
       '#type' => 'button',
       '#value' => $this->t('Listen to this page'),
       '#attributes' => [
-        'id' => 'ai-tts-play-button',
+        'id' => 'ai-tts-play-button-' . $id_suffix,
         'class' => ['ai-tts-button', 'ai-tts-play-button'],
         'aria-label' => $this->t('Listen to the content on this page'),
         'aria-pressed' => 'false',
-        'aria-controls' => 'ai-tts-audio',
+        'aria-controls' => 'ai-tts-audio-' . $id_suffix,
       ],
     ];
 
@@ -146,11 +149,11 @@ class TtsPlayerBuilder {
       '#type' => 'button',
       '#value' => $this->t('Stop'),
       '#attributes' => [
-        'id' => 'ai-tts-stop-button',
+        'id' => 'ai-tts-stop-button-' . $id_suffix,
         'class' => ['ai-tts-button', 'ai-tts-stop-button'],
         'disabled' => 'disabled',
         'aria-label' => $this->t('Stop reading'),
-        'aria-controls' => 'ai-tts-audio',
+        'aria-controls' => 'ai-tts-audio-' . $id_suffix,
       ],
     ];
 
@@ -171,7 +174,7 @@ class TtsPlayerBuilder {
         '#options' => $available_voices,
         '#value' => $default_voice,
         '#attributes' => [
-          'id' => 'ai-tts-voice-select',
+          'id' => 'ai-tts-voice-select-' . $id_suffix,
           'class' => ['ai-tts-voice-select'],
           'aria-label' => $this->t('Select voice'),
         ],
@@ -195,7 +198,7 @@ class TtsPlayerBuilder {
         ],
         '#value' => $default_speed,
         '#attributes' => [
-          'id' => 'ai-tts-speed-input',
+          'id' => 'ai-tts-speed-input-' . $id_suffix,
           'class' => ['ai-tts-speed-input'],
           'aria-label' => $this->t('Adjust speech speed'),
         ],
@@ -205,7 +208,7 @@ class TtsPlayerBuilder {
     $build['status'] = [
       '#type' => 'container',
       '#attributes' => [
-        'id' => 'ai-tts-status',
+        'id' => 'ai-tts-status-' . $id_suffix,
         'class' => ['ai-tts-status'],
         'role' => 'status',
         'aria-live' => 'polite',
@@ -215,7 +218,7 @@ class TtsPlayerBuilder {
     $build['duration'] = [
       '#type' => 'container',
       '#attributes' => [
-        'id' => 'ai-tts-duration',
+        'id' => 'ai-tts-duration-' . $id_suffix,
         'class' => ['ai-tts-duration'],
         'style' => 'display: none;',
       ],
@@ -225,7 +228,7 @@ class TtsPlayerBuilder {
       '#type' => 'html_tag',
       '#tag' => 'audio',
       '#attributes' => [
-        'id' => 'ai-tts-audio',
+        'id' => 'ai-tts-audio-' . $id_suffix,
         'preload' => 'none',
       ],
     ];

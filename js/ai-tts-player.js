@@ -15,13 +15,13 @@
       }
 
       players.forEach(function (player) {
-        const playButton = player.querySelector('#ai-tts-play-button');
-        const stopButton = player.querySelector('#ai-tts-stop-button');
-        const voiceSelect = player.querySelector('#ai-tts-voice-select');
-        const speedInput = player.querySelector('#ai-tts-speed-input');
-        const statusDiv = player.querySelector('#ai-tts-status');
-        const durationDiv = player.querySelector('#ai-tts-duration');
-        const audioElement = player.querySelector('#ai-tts-audio');
+        const playButton = player.querySelector('.ai-tts-play-button');
+        const stopButton = player.querySelector('.ai-tts-stop-button');
+        const voiceSelect = player.querySelector('.ai-tts-voice-select');
+        const speedInput = player.querySelector('.ai-tts-speed-input');
+        const statusDiv = player.querySelector('.ai-tts-status');
+        const durationDiv = player.querySelector('.ai-tts-duration');
+        const audioElement = player.querySelector('audio');
 
         if (!playButton || !stopButton || !audioElement) {
           return;
