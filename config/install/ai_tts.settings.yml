@@ -1,6 +1,3 @@
-koko_binary_path: '/usr/local/bin/koko'
-model_path: '/usr/local/share/kokoro/checkpoints/kokoro-v1.0.onnx'
-data_path: '/usr/local/share/kokoro/data/voices-v1.0.bin'
 espeak_data_path: '/usr/share/espeak-ng-data'
 default_voice: 'af_sky'
 default_speed: '1'
