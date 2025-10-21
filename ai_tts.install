@@ -95,77 +95,114 @@ function ai_tts_requirements($phase) {
     $config = \Drupal::config('ai_tts.settings');
     $file_system = \Drupal::service('file_system');
 
-    // Check 1: File Paths (Binary + Model Files).
-    $binary_path = $config->get('koko_binary_path');
-    $model_path = $config->get('model_path');
-    $data_path = $config->get('data_path');
+    // Check 1: Bundled Files (Binary + Model Files).
+    $module_path = \Drupal::service('extension.list.module')->getPath('ai_tts');
+    $binary_path = DRUPAL_ROOT . '/' . $module_path . '/bin/koko';
+    $model_path = DRUPAL_ROOT . '/' . $module_path . '/data/kokoro-v1.0.onnx';
+    $data_path = DRUPAL_ROOT . '/' . $module_path . '/data/voices-v1.0.bin';
 
-    // Expand tilde in paths.
-    $model_real = $model_path ? _ai_tts_expand_path($model_path) : NULL;
-    $data_real = $data_path ? _ai_tts_expand_path($data_path) : NULL;
-
-    // Check all files.
     $issues = [];
     $details = [];
 
     // Binary checks.
-    if (empty($binary_path)) {
-      $issues[] = t('Binary path not configured');
-    }
-    elseif (!file_exists($binary_path)) {
-      $issues[] = t('Binary not found at: @path', ['@path' => $binary_path]);
+    if (!file_exists($binary_path)) {
+      $issues[] = t('Binary not found');
     }
     elseif (!is_executable($binary_path)) {
       $issues[] = t('Binary not executable. Run: <code>chmod +x @path</code>', ['@path' => $binary_path]);
     }
     else {
-      $details[] = t('Binary: @path', ['@path' => $binary_path]);
+      $binary_size = filesize($binary_path);
+      $details[] = t('Binary: @size', ['@size' => format_size($binary_size)]);
     }
 
     // Model file checks.
-    if (!$model_path) {
-      $issues[] = t('Model path not configured');
-    }
-    elseif (!file_exists($model_real)) {
-      $issues[] = t('Model not found: @path', ['@path' => $model_real]);
+    if (!file_exists($model_path)) {
+      $issues[] = t('Model file not found');
     }
     else {
-      $model_size = filesize($model_real);
-      $details[] = t('Model: @path (@size)', [
-        '@path' => $model_real,
-        '@size' => format_size($model_size),
-      ]);
+      $model_size = filesize($model_path);
+      $details[] = t('Model: @size', ['@size' => format_size($model_size)]);
     }
 
     // Data file checks.
-    if (!$data_path) {
-      $issues[] = t('Data path not configured');
-    }
-    elseif (!file_exists($data_real)) {
-      $issues[] = t('Data not found: @path', ['@path' => $data_real]);
+    if (!file_exists($data_path)) {
+      $issues[] = t('Voice data not found');
     }
     else {
-      $data_size = filesize($data_real);
-      $details[] = t('Data: @path (@size)', [
-        '@path' => $data_real,
-        '@size' => format_size($data_size),
-      ]);
+      $data_size = filesize($data_path);
+      $details[] = t('Voice data: @size', ['@size' => format_size($data_size)]);
     }
 
     // Create single requirement entry.
     if (!empty($issues)) {
       $requirements['ai_tts_files'] = [
-        'title' => t('AI TTS files'),
-        'value' => t('Not found'),
-        'description' => implode(' ', $issues) . ' ' .
-        t('Run: <code>composer run download-binary</code>'),
+        'title' => t('AI TTS bundled files'),
+        'value' => t('Missing'),
+        'description' => implode(', ', $issues) . '. ' .
+        t('Run: <code>cd @module && composer run download-files</code>', [
+          '@module' => $module_path,
+        ]),
         'severity' => REQUIREMENT_ERROR,
       ];
     }
     else {
       $requirements['ai_tts_files'] = [
-        'title' => t('AI TTS files'),
-        'value' => t('Installed'),
+        'title' => t('AI TTS bundled files'),
+        'value' => t('Installed (@details)', [
+          '@details' => implode(', ', $details),
+        ]),
+        'severity' => REQUIREMENT_OK,
+      ];
+    }
+
+    // Check 2: .htaccess Protection (E2E Security Test).
+    // This performs actual HTTP HEAD requests to verify files are not
+    // accessible.
+    $security_issues = [];
+
+    // Test if files are accessible via HTTP (they shouldn't be).
+    $base_url = $GLOBALS['base_url'];
+    $test_paths = [
+      'bin/koko' => 'Binary file',
+      'data/kokoro-v1.0.onnx' => 'Model file',
+      'data/voices-v1.0.bin' => 'Voice data file',
+    ];
+
+    foreach ($test_paths as $path => $label) {
+      $url = $base_url . '/' . $module_path . '/' . $path;
+      $status_code = _ai_tts_check_url_access($url);
+
+      // Only flag if file is accessible (HTTP 200).
+      // NULL (403, 404, connection refused, etc.) is expected and safe.
+      if ($status_code === 200) {
+        $security_issues[] = t('@label is accessible via HTTP at @url', [
+          '@label' => $label,
+          '@url' => $url,
+        ]);
+      }
+    }
+
+    if (!empty($security_issues)) {
+      $htaccess_desc = t('Security issue:') . ' ' .
+        implode(' ', $security_issues) . ' ' .
+        t('The .htaccess files in bin/ and data/ directories should prevent web access. Check your Apache configuration and ensure mod_rewrite is enabled.');
+
+      $requirements['ai_tts_security_htaccess'] = [
+        'title' => t('AI TTS file protection'),
+        'value' => t('Files exposed'),
+        'description' => $htaccess_desc,
+        'severity' => REQUIREMENT_ERROR,
+      ];
+    }
+    else {
+      $htaccess_ok = t('Binary and data files are properly protected by .htaccess (not accessible via HTTP).');
+
+      $requirements['ai_tts_security_htaccess'] = [
+        'title' => t('AI TTS file protection'),
+        'value' => t('Protected'),
+        'description' => $htaccess_ok,
+        'severity' => REQUIREMENT_OK,
       ];
     }
 
@@ -320,22 +357,32 @@ function ai_tts_requirements($phase) {
 }
 
 /**
- * Expand path with tilde (~) to full path.
+ * Check URL accessibility via HTTP HEAD request.
  *
- * @param string $path
- *   Path potentially containing ~.
+ * @param string $url
+ *   The URL to check.
  *
- * @return string
- *   Expanded path.
+ * @return int|null
+ *   The HTTP status code, or NULL if request failed.
  */
-function _ai_tts_expand_path($path) {
-  if (strpos($path, '~') === 0) {
-    $home = getenv('HOME');
-    if ($home) {
-      return str_replace('~', $home, $path);
-    }
+function _ai_tts_check_url_access($url) {
+  try {
+    $client = \Drupal::httpClient();
+
+    // Use HEAD request to check without downloading the file.
+    $response = $client->request('HEAD', $url, [
+      'http_errors' => FALSE,
+      'timeout' => 5,
+      'allow_redirects' => FALSE,
+    ]);
+
+    return $response->getStatusCode();
   }
-  return $path;
+  catch (\Exception $e) {
+    // If request fails (e.g., 403, 404), return NULL.
+    // We only care if it returns 200 (file accessible).
+    return NULL;
+  }
 }
 
 /**
