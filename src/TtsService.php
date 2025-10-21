@@ -105,29 +105,34 @@ class TtsService {
 
     $entity_type = $options['entity_type'] ?? NULL;
     $entity_id = $options['entity_id'] ?? NULL;
+    $skip_access_check = $options['skip_access_check'] ?? FALSE;
 
     // Security: Only generate audio for publicly accessible content.
-    try {
-      $entity = \Drupal::entityTypeManager()
-        ->getStorage($entity_type)
-        ->load($entity_id);
+    // Skip access check only when explicitly requested (e.g., batch operations
+    // where access was already verified).
+    if (!$skip_access_check) {
+      try {
+        $entity = \Drupal::entityTypeManager()
+          ->getStorage($entity_type)
+          ->load($entity_id);
 
-      if ($entity) {
-        $anonymous = new AnonymousUserSession();
-        if (!$entity->access('view', $anonymous)) {
-          $this->logger->warning('Refusing to cache audio for non-public content: @type:@id', [
-            '@type' => $entity_type,
-            '@id' => $entity_id,
-          ]);
-          throw new \RuntimeException('Cannot generate audio for private content. Only content viewable by anonymous users can be cached.');
+        if ($entity) {
+          $anonymous = new AnonymousUserSession();
+          if (!$entity->access('view', $anonymous)) {
+            $this->logger->warning('Refusing to cache audio for non-public content: @type:@id', [
+              '@type' => $entity_type,
+              '@id' => $entity_id,
+            ]);
+            throw new \RuntimeException('Cannot generate audio for private content. Only content viewable by anonymous users can be cached.');
+          }
         }
       }
-    }
-    catch (\RuntimeException $e) {
-      throw $e;
-    }
-    catch (\Exception $e) {
-      $this->logger->error('Error checking entity access: @message', ['@message' => $e->getMessage()]);
+      catch (\RuntimeException $e) {
+        throw $e;
+      }
+      catch (\Exception $e) {
+        $this->logger->error('Error checking entity access: @message', ['@message' => $e->getMessage()]);
+      }
     }
 
     // Security: Validate text length.
@@ -576,10 +581,33 @@ class TtsService {
       $record['entity_id'] = $options['entity_id'];
     }
 
-    \Drupal::database()->merge('ai_tts_cache')
-      ->key(['cache_key' => $cache_key])
-      ->fields($record)
-      ->execute();
+    // Database connection may have timed out during long TTS generation.
+    // Close and reconnect the database connection.
+    try {
+      $database = \Drupal::database();
+
+      // Check if connection is still alive.
+      try {
+        $database->query('SELECT 1')->fetchField();
+      }
+      catch (\Exception $e) {
+        // Connection is gone. Destroy it to force reconnection.
+        $database->destroy();
+        // Get fresh connection.
+        $database = \Drupal::database();
+        $this->logger->info('Database connection refreshed before saving metadata.');
+      }
+
+      $database->merge('ai_tts_cache')
+        ->key(['cache_key' => $cache_key])
+        ->fields($record)
+        ->execute();
+    }
+    catch (\Exception $e) {
+      $this->logger->error('Failed to save TTS cache metadata: @message', [
+        '@message' => $e->getMessage(),
+      ]);
+    }
   }
 
   /**
