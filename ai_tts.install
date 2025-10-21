@@ -184,9 +184,9 @@ function ai_tts_requirements($phase) {
     }
 
     if (!empty($security_issues)) {
-      $htaccess_desc = t('Security issue:') . ' ' .
+      $htaccess_desc = t('CRITICAL SECURITY ISSUE:') . ' ' .
         implode(' ', $security_issues) . ' ' .
-        t('The .htaccess files in bin/ and data/ directories should prevent web access. Check your Apache configuration and ensure mod_rewrite is enabled.');
+        t('Apache users: Ensure AllowOverride is set and mod_rewrite is enabled. Nginx users: .htaccess files are not supported - add location blocks to deny access to modules/custom/ai_tts/bin/ and modules/custom/ai_tts/data/ directories. See README.md for detailed instructions.');
 
       $requirements['ai_tts_security_htaccess'] = [
         'title' => t('AI TTS file protection'),
