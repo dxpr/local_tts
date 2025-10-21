@@ -384,9 +384,11 @@ drush ai-tts:test "こんにちは" --voice=jf_alpha --language=ja
 **Platform Support:**
 The command automatically detects your operating system and uses the
 appropriate audio player:
-- **macOS**: `afplay`
-- **Linux**: `paplay` (PulseAudio), `aplay` (ALSA), or `ffplay` (FFmpeg)
-- **Windows**: PowerShell SoundPlayer
+- **macOS**: `afplay` (generates to temp file first, then plays)
+- **Linux**: `paplay` (PulseAudio), `aplay` (ALSA), or `ffplay` (FFmpeg) - true streaming
+- **Windows**: Not currently supported for streaming mode
+
+**Note on macOS:** Due to `afplay` limitations, streaming mode generates a temporary file before playback. This is still faster than full caching but not true streaming like on Linux.
 
 #### List Available Voices
 
@@ -801,6 +803,89 @@ ls -la bin/koko data/
 
 No configuration needed - module auto-detects bundled files.
 
+### Files exposed via HTTP (Security Warning)
+
+**Symptom:** Status report shows "Files exposed" with message about binary/model files being accessible via HTTP.
+
+This is a **critical security issue** - bundled files should never be served via web server.
+
+**Root Cause:** The `.htaccess` files in `bin/` and `data/` directories are not being respected by your web server.
+
+**Fix for Apache:**
+
+1. **Ensure mod_rewrite is enabled:**
+   ```bash
+   # Ubuntu/Debian
+   sudo a2enmod rewrite
+   sudo systemctl restart apache2
+
+   # RHEL/CentOS
+   # (Usually enabled by default)
+   sudo systemctl restart httpd
+   ```
+
+2. **Ensure AllowOverride is set:**
+
+   Edit your Apache virtual host configuration:
+   ```apache
+   <Directory /path/to/drupal>
+       AllowOverride All
+   </Directory>
+   ```
+
+3. **Verify .htaccess files exist:**
+   ```bash
+   ls -la web/modules/custom/ai_tts/bin/.htaccess
+   ls -la web/modules/custom/ai_tts/data/.htaccess
+   ```
+
+4. **Test protection:**
+   ```bash
+   # Should return 403 Forbidden (not 200)
+   curl -I https://your-site.com/modules/custom/ai_tts/bin/koko
+   ```
+
+**Fix for Nginx:**
+
+Nginx doesn't support `.htaccess` files. You must add location blocks to your Nginx configuration:
+
+```nginx
+server {
+    # Your existing configuration...
+
+    # Block access to ai_tts bundled files
+    location ~ ^/modules/custom/ai_tts/(bin|data)/ {
+        deny all;
+        return 403;
+    }
+
+    # Or more specific:
+    location ~ ^/modules/custom/ai_tts/bin/koko$ {
+        deny all;
+    }
+
+    location ~ ^/modules/custom/ai_tts/data/.*\.(onnx|bin)$ {
+        deny all;
+    }
+}
+```
+
+Then reload Nginx:
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+**Verification:**
+
+After fixing, clear Drupal cache and check status report:
+```bash
+drush cr
+drush status-report | grep "AI TTS"
+```
+
+You should see: "AI TTS file protection: Protected"
+
 ### eSpeak NG errors
 
 **Symptom:** "Failed to initialize eSpeak-ng" or "Error processing file 'espeak-ng-data/phontab'"
@@ -866,6 +951,36 @@ drush pm:list | grep ai_tts
 
 # List available commands
 drush list | grep tts
+```
+
+### Drush streaming mode issues
+
+**Symptom:** `drush ai-tts:test` fails or produces errors on macOS.
+
+**Possible causes:**
+1. **eSpeak NG not configured** - Check the espeak_data_path in settings
+2. **Audio player not found** - Ensure `afplay` is available (built into macOS)
+3. **Temp file issues** - macOS uses a temp file for streaming
+
+**Fix:**
+```bash
+# Check if afplay works
+echo "test" | afplay -
+
+# Verify eSpeak NG path is correct
+drush config:get ai_tts.settings espeak_data_path
+
+# Try with explicit voice and speed
+drush ai-tts:test "Testing" --voice=af_sky --speed=1.0
+
+# Check for detailed error output
+drush ai-tts:test "Testing" --verbose
+```
+
+**Workaround:** If streaming continues to fail, you can still generate and play cached audio:
+```bash
+# Generate to cache and play
+drush php:eval "echo \Drupal::service('ai_tts.tts_service')->generateSpeech('Test audio', ['voice' => 'af_sky', 'speed' => 1, 'language' => 'en', 'use_cache' => FALSE]);"
 ```
 
 ### Player not showing
