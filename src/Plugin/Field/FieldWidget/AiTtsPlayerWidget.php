@@ -11,12 +11,11 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
 /**
  * Plugin implementation of the 'ai_tts_player_widget' widget.
  *
- * This is a hidden widget that always enables the TTS player.
- * The field value is always 1 (enabled) and cannot be changed by editors.
+ * Provides a checkbox to enable/disable the TTS player per entity.
  */
 #[FieldWidget(
   id: 'ai_tts_player_widget',
-  label: new TranslatableMarkup('TTS Player (Hidden)'),
+  label: new TranslatableMarkup('AI TTS Player Toggle'),
   field_types: ['ai_tts_player'],
   multiple_values: TRUE,
 )]
@@ -25,13 +24,56 @@ class AiTtsPlayerWidget extends WidgetBase {
   /**
    * {@inheritdoc}
    */
-  public function formElement(FieldItemListInterface $items, $delta, array $element, array &$form, FormStateInterface $form_state) {
-    // Hidden widget - always returns value of 1 (enabled).
-    // The field is always active, no UI needed.
-    $element['value'] = [
-      '#type' => 'value',
-      '#value' => 1,
+  public static function defaultSettings() {
+    return [
+      'display_label' => FALSE,
+    ] + parent::defaultSettings();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function settingsForm(array $form, FormStateInterface $form_state) {
+    $element['display_label'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Use field label instead of default label'),
+      '#description' => $this->t('By default, shows "Show AI text-to-speech player". Check this to use the field label instead.'),
+      '#default_value' => $this->getSetting('display_label'),
+      '#weight' => -1,
     ];
+    return $element;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function settingsSummary() {
+    $summary = [];
+
+    $display_label = $this->getSetting('display_label');
+    $summary[] = $this->t('Use field label: @display_label', [
+      '@display_label' => ($display_label ? $this->t('Yes') : $this->t('No')),
+    ]);
+
+    return $summary;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function formElement(FieldItemListInterface $items, $delta, array $element, array &$form, FormStateInterface $form_state) {
+    $element['value'] = $element + [
+      '#type' => 'checkbox',
+      '#default_value' => !empty($items[0]->value),
+    ];
+
+    // Override the title from the incoming $element.
+    if ($this->getSetting('display_label')) {
+      $element['value']['#title'] = $this->fieldDefinition->getLabel();
+    }
+    else {
+      $element['value']['#title'] = $this->t('Show AI text-to-speech player');
+    }
 
     return $element;
   }

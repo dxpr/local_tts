@@ -185,6 +185,8 @@ class TtsService {
     if ($use_cache) {
       $cached_file = $audio_dir . '/' . $cache_key . '.wav';
       if (file_exists($cached_file)) {
+        // File exists, but we still need to save metadata for this entity.
+        $this->saveMetadata($cache_key, $text, $voice, $speed, $options);
         return $cached_file;
       }
     }
@@ -562,7 +564,7 @@ class TtsService {
     $directory = $this->fileSystem->realpath($audio_dir);
 
     if (!$directory) {
-      return;
+      throw new \RuntimeException(sprintf('Audio directory could not be resolved: %s', $audio_dir));
     }
 
     $file_path = $directory . '/' . $cache_key . '.wav';
@@ -587,31 +589,40 @@ class TtsService {
 
     // Database connection may have timed out during long TTS generation.
     // Close and reconnect the database connection.
+    $database = \Drupal::database();
+
+    // Check if connection is still alive.
     try {
-      $database = \Drupal::database();
-
-      // Check if connection is still alive.
-      try {
-        $database->query('SELECT 1')->fetchField();
-      }
-      catch (\Exception $e) {
-        // Connection is gone. Destroy it to force reconnection.
-        $database->destroy();
-        // Get fresh connection.
-        $database = \Drupal::database();
-        $this->logger->info('Database connection refreshed before saving metadata.');
-      }
-
-      $database->merge('ai_tts_cache')
-        ->key(['cache_key' => $cache_key])
-        ->fields($record)
-        ->execute();
+      $database->query('SELECT 1')->fetchField();
     }
     catch (\Exception $e) {
-      $this->logger->error('Failed to save TTS cache metadata: @message', [
-        '@message' => $e->getMessage(),
-      ]);
+      // Connection is gone. Destroy it to force reconnection.
+      $database->destroy();
+      // Get fresh connection.
+      $database = \Drupal::database();
+      $this->logger->info('Database connection refreshed before saving metadata.');
     }
+
+    // Use entity_type + entity_id + language as the merge key to allow multiple
+    // entities to share the same audio file (same cache_key) when they have
+    // identical content.
+    $merge_keys = [];
+    if (!empty($record['entity_type']) && !empty($record['entity_id'])) {
+      $merge_keys = [
+        'entity_type' => $record['entity_type'],
+        'entity_id' => $record['entity_id'],
+        'language' => $record['language'],
+      ];
+    }
+    else {
+      // Fallback to cache_key for non-entity cached files.
+      $merge_keys = ['cache_key' => $cache_key];
+    }
+
+    $database->merge('ai_tts_cache')
+      ->key($merge_keys)
+      ->fields($record)
+      ->execute();
   }
 
   /**
@@ -748,7 +759,9 @@ class TtsService {
     if ($espeak_data_path) {
       // Get parent directory that contains espeak-ng-data.
       $espeak_parent = dirname($espeak_data_path);
-      $env = array_merge($_SERVER, ['PIPER_ESPEAKNG_DATA_DIRECTORY' => $espeak_parent]);
+      // Filter $_SERVER to only include string values (proc_open requires string env vars).
+      $server_env = array_filter($_SERVER, 'is_string');
+      $env = array_merge($server_env, ['PIPER_ESPEAKNG_DATA_DIRECTORY' => $espeak_parent]);
     }
 
     $process = proc_open($command, $descriptors, $pipes, NULL, $env);

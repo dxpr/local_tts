@@ -7,6 +7,7 @@
 
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
 
 /**
@@ -242,4 +243,55 @@ function _ai_tts_get_audio_directory() {
   }
 
   return $directory;
+}
+
+/**
+ * Implements hook_form_BASE_FORM_ID_alter() for node_form.
+ */
+function ai_tts_form_node_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  // Find AI TTS fields on this form.
+  $has_tts_field = FALSE;
+  $tts_field_key = NULL;
+
+  foreach ($form as $key => $element) {
+    // Skip non-array elements.
+    if (!is_array($element)) {
+      continue;
+    }
+
+    if (isset($element['#type']) && $element['#type'] === 'container') {
+      if (isset($element['widget']['#field_name'])) {
+        $field_name = $element['widget']['#field_name'];
+        $field_definitions = \Drupal::service('entity_field.manager')
+          ->getFieldDefinitions('node', $form_state->getFormObject()->getEntity()->bundle());
+
+        if (isset($field_definitions[$field_name]) && $field_definitions[$field_name]->getType() === 'ai_tts_player') {
+          $has_tts_field = TRUE;
+          $tts_field_key = $key;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!$has_tts_field) {
+    return;
+  }
+
+  // Create AI TTS options group in sidebar.
+  $form['ai_tts_options'] = [
+    '#type' => 'details',
+    '#title' => t('AI Text-to-Speech'),
+    '#group' => 'advanced',
+    '#attributes' => [
+      'class' => ['ai-tts-form-options'],
+    ],
+    '#weight' => 96,
+    '#optional' => TRUE,
+  ];
+
+  // Move the TTS field into the sidebar group.
+  if (isset($tts_field_key)) {
+    $form[$tts_field_key]['#group'] = 'ai_tts_options';
+  }
 }

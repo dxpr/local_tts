@@ -711,7 +711,8 @@ final class AiTtsCommands extends DrushCommands {
   #[CLI\Option(name: 'language', description: 'Language code(s), comma-separated')]
   #[CLI\Option(name: 'limit', description: 'Maximum number of entities (0 for no limit)')]
   #[CLI\Option(name: 'force', description: 'Force regeneration even if cached')]
-  #[CLI\Option(name: 'updated-after', description: 'Only process entities updated after this date')]
+  #[CLI\Option(name: 'updated-after', description: 'Only process entities updated after this date (format: 2025-01-01)')]
+  #[CLI\Option(name: 'dry-run', description: 'Show count of entities to process without generating audio')]
   #[CLI\Usage(name: 'ai-tts:batch --entity-type=node --bundle=article --language=en --limit=10', description: 'Generate TTS for 10 English articles')]
   #[CLI\Usage(name: 'ai-tts:batch --entity-type=node --bundle=page --language=en,es --force', description: 'Regenerate TTS for all pages in English and Spanish')]
   public function batchGenerate(
@@ -722,6 +723,7 @@ final class AiTtsCommands extends DrushCommands {
       'limit' => 0,
       'force' => FALSE,
       'updated-after' => NULL,
+      'dry-run' => FALSE,
     ],
   ): void {
     // Validate required options.
@@ -736,6 +738,22 @@ final class AiTtsCommands extends DrushCommands {
     // Build entity bundle string.
     $entity_bundle = $options['entity-type'] . ':' . $options['bundle'];
 
+    // Get entities to process.
+    $entities = $this->batchService->getEntitiesForGeneration(
+      [$entity_bundle],
+      $languages,
+      (bool) $options['force'],
+      (int) $options['limit'],
+      $options['updated-after']
+    );
+
+    // If dry-run, just show count and exit.
+    if ($options['dry-run']) {
+      $count = count($entities);
+      $this->output()->writeln("Entities to process: $count");
+      return;
+    }
+
     $this->output()->writeln('');
     $this->output()->writeln('=== TTS Batch Generation ===');
     $this->output()->writeln("Entity type: {$options['entity-type']}");
@@ -747,15 +765,6 @@ final class AiTtsCommands extends DrushCommands {
       $this->output()->writeln("Updated after: {$options['updated-after']}");
     }
     $this->output()->writeln('');
-
-    // Get entities to process.
-    $entities = $this->batchService->getEntitiesForGeneration(
-      [$entity_bundle],
-      $languages,
-      (bool) $options['force'],
-      (int) $options['limit'],
-      $options['updated-after']
-    );
 
     if (empty($entities)) {
       $this->output()->writeln('No entities found to process.');
