@@ -6,6 +6,7 @@ use Drupal\ai_tts\Service\TtsBatchService;
 use Drupal\ai_tts\TtsService;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Extension\ModuleExtensionList;
 use Drupal\Core\File\FileSystemInterface;
 use Drush\Attributes as CLI;
 use Drush\Commands\DrushCommands;
@@ -28,6 +29,8 @@ final class AiTtsCommands extends DrushCommands {
    *   The file system service.
    * @param \Drupal\ai_tts\Service\TtsBatchService $batchService
    *   The TTS batch service.
+   * @param \Drupal\Core\Extension\ModuleExtensionList $moduleExtensionList
+   *   The module extension list service.
    */
   public function __construct(
     private readonly TtsService $ttsService,
@@ -35,6 +38,7 @@ final class AiTtsCommands extends DrushCommands {
     private readonly EntityTypeManagerInterface $entityTypeManager,
     private readonly FileSystemInterface $fileSystem,
     private readonly TtsBatchService $batchService,
+    private readonly ModuleExtensionList $moduleExtensionList,
   ) {
     parent::__construct();
   }
@@ -121,16 +125,17 @@ final class AiTtsCommands extends DrushCommands {
    */
   protected function playStreamingAudio(string $text, string $voice, float $speed, string $language): void {
     $config = $this->configFactory->get('ai_tts.settings');
-    $binary_path = $config->get('koko_binary_path');
+
+    // Use bundled files from module directory.
+    $module_path = $this->moduleExtensionList->getPath('ai_tts');
+    $binary_path = DRUPAL_ROOT . '/' . $module_path . '/bin/koko';
+    $model_path = DRUPAL_ROOT . '/' . $module_path . '/data/kokoro-v1.0.onnx';
+    $data_path = DRUPAL_ROOT . '/' . $module_path . '/data/voices-v1.0.bin';
 
     if (!file_exists($binary_path) || !is_executable($binary_path)) {
       $this->logger()->error('Koko binary not found or not executable at: @path', ['@path' => $binary_path]);
       return;
     }
-
-    // Get model paths from configuration.
-    $model_path = $config->get('model_path');
-    $data_path = $config->get('data_path');
 
     // Map language to espeak format.
     $espeak_lang = $this->mapLanguageToEspeak($language);
@@ -140,8 +145,12 @@ final class AiTtsCommands extends DrushCommands {
     $player_command = NULL;
     $player_name = NULL;
 
+    $use_temp_file = FALSE;
+
     if ($os === 'Darwin') {
-      $player_command = 'afplay -';
+      // Afplay doesn't support stdin - need temp file.
+      $use_temp_file = TRUE;
+      $player_command = 'afplay';
       $player_name = 'afplay (macOS)';
     }
     elseif ($os === 'Linux') {
@@ -178,24 +187,54 @@ final class AiTtsCommands extends DrushCommands {
       $env_prefix = 'PIPER_ESPEAKNG_DATA_DIRECTORY=' . escapeshellarg($espeak_parent) . ' ';
     }
 
-    // Build streaming command: echo "text" | koko ... stream | player.
-    $command = sprintf(
-      'echo %s | %s%s --lan %s --model %s --data %s --style %s --speed %s stream 2>/dev/null | %s',
-      escapeshellarg($text),
-      $env_prefix,
-      escapeshellarg($binary_path),
-      escapeshellarg($espeak_lang),
-      escapeshellarg($model_path),
-      escapeshellarg($data_path),
-      escapeshellarg($voice),
-      escapeshellarg((string) $speed),
-      $player_command
-    );
+    if ($use_temp_file) {
+      // macOS: Generate to temp file then play.
+      $temp_file = tempnam(sys_get_temp_dir(), 'tts_') . '.wav';
 
-    // Execute streaming playback.
-    $output = [];
-    $return_code = 0;
-    exec($command, $output, $return_code);
+      $command = sprintf(
+        'echo %s | %s%s --lan %s --model %s --data %s --style %s --speed %s stream > %s 2>&1',
+        escapeshellarg($text),
+        $env_prefix,
+        escapeshellarg($binary_path),
+        escapeshellarg($espeak_lang),
+        escapeshellarg($model_path),
+        escapeshellarg($data_path),
+        escapeshellarg($voice),
+        escapeshellarg((string) $speed),
+        escapeshellarg($temp_file)
+      );
+
+      exec($command, $output, $return_code);
+
+      if ($return_code === 0 && file_exists($temp_file) && filesize($temp_file) > 0) {
+        exec(escapeshellarg($player_command) . ' ' . escapeshellarg($temp_file), $play_output, $play_return);
+        @unlink($temp_file);
+        $return_code = $play_return;
+      }
+      elseif ($return_code !== 0) {
+        $this->logger()->error('TTS generation failed: ' . implode("\n", $output));
+      }
+      elseif (!file_exists($temp_file) || filesize($temp_file) === 0) {
+        $this->logger()->error('TTS temp file not created or empty at: ' . $temp_file);
+      }
+    }
+    else {
+      // Linux: Stream to player.
+      $command = sprintf(
+        'echo %s | %s%s --lan %s --model %s --data %s --style %s --speed %s stream 2>/dev/null | %s',
+        escapeshellarg($text),
+        $env_prefix,
+        escapeshellarg($binary_path),
+        escapeshellarg($espeak_lang),
+        escapeshellarg($model_path),
+        escapeshellarg($data_path),
+        escapeshellarg($voice),
+        escapeshellarg((string) $speed),
+        $player_command
+      );
+
+      exec($command, $output, $return_code);
+    }
 
     if ($return_code !== 0) {
       $this->logger()->warning("Streaming playback failed with code $return_code");
