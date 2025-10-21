@@ -208,7 +208,7 @@ function ai_tts_requirements($phase) {
             '#markup' => '<p>' . t('See README.md for detailed step-by-step instructions.') . '</p>',
           ],
         ],
-        'severity' => REQUIREMENT_ERROR,
+        'severity' => REQUIREMENT_WARNING,
       ];
     }
     else {
