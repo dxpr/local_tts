@@ -2,6 +2,7 @@
 
 namespace Drupal\ai_tts\Drush\Commands;
 
+use Drupal\ai_tts\Service\TtsBatchService;
 use Drupal\ai_tts\TtsService;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -25,12 +26,15 @@ final class AiTtsCommands extends DrushCommands {
    *   The entity type manager.
    * @param \Drupal\Core\File\FileSystemInterface $fileSystem
    *   The file system service.
+   * @param \Drupal\ai_tts\Service\TtsBatchService $batchService
+   *   The TTS batch service.
    */
   public function __construct(
     private readonly TtsService $ttsService,
     private readonly ConfigFactoryInterface $configFactory,
     private readonly EntityTypeManagerInterface $entityTypeManager,
     private readonly FileSystemInterface $fileSystem,
+    private readonly TtsBatchService $batchService,
   ) {
     parent::__construct();
   }
@@ -639,6 +643,170 @@ final class AiTtsCommands extends DrushCommands {
     }
     else {
       $this->logger()->error('Failed to clear cache.');
+    }
+  }
+
+  /**
+   * Batch generate TTS audio for multiple entities.
+   *
+   * @param array $options
+   *   The command options.
+   *
+   * @command ai-tts:batch
+   * @aliases tts-batch
+   * @option entity-type Entity type to process (e.g., node, taxonomy_term).
+   * @option bundle Bundle to process (e.g., article, page).
+   * @option language Language code(s), comma-separated (e.g., en,es).
+   * @option limit Maximum number of entities to process (0 for no limit).
+   * @option force Force regeneration even if cached.
+   * @option updated-after Only process entities updated after this date (Y-m-d format).
+   * @usage ai-tts:batch --entity-type=node --bundle=article --language=en --limit=10
+   *   Generate TTS for 10 English articles.
+   * @usage ai-tts:batch --entity-type=node --bundle=page --language=en,es --force
+   *   Regenerate TTS for all pages in English and Spanish.
+   */
+  #[CLI\Command(name: 'ai-tts:batch', aliases: ['tts-batch'])]
+  #[CLI\Option(name: 'entity-type', description: 'Entity type to process')]
+  #[CLI\Option(name: 'bundle', description: 'Bundle to process')]
+  #[CLI\Option(name: 'language', description: 'Language code(s), comma-separated')]
+  #[CLI\Option(name: 'limit', description: 'Maximum number of entities (0 for no limit)')]
+  #[CLI\Option(name: 'force', description: 'Force regeneration even if cached')]
+  #[CLI\Option(name: 'updated-after', description: 'Only process entities updated after this date')]
+  #[CLI\Usage(name: 'ai-tts:batch --entity-type=node --bundle=article --language=en --limit=10', description: 'Generate TTS for 10 English articles')]
+  #[CLI\Usage(name: 'ai-tts:batch --entity-type=node --bundle=page --language=en,es --force', description: 'Regenerate TTS for all pages in English and Spanish')]
+  public function batchGenerate(
+    array $options = [
+      'entity-type' => NULL,
+      'bundle' => NULL,
+      'language' => 'en',
+      'limit' => 0,
+      'force' => FALSE,
+      'updated-after' => NULL,
+    ],
+  ): void {
+    // Validate required options.
+    if (empty($options['entity-type']) || empty($options['bundle'])) {
+      $this->logger()->error('Both --entity-type and --bundle are required.');
+      return;
+    }
+
+    // Parse languages.
+    $languages = array_map('trim', explode(',', $options['language']));
+
+    // Build entity bundle string.
+    $entity_bundle = $options['entity-type'] . ':' . $options['bundle'];
+
+    $this->output()->writeln('');
+    $this->output()->writeln('=== TTS Batch Generation ===');
+    $this->output()->writeln("Entity type: {$options['entity-type']}");
+    $this->output()->writeln("Bundle: {$options['bundle']}");
+    $this->output()->writeln('Languages: ' . implode(', ', $languages));
+    $this->output()->writeln('Limit: ' . ($options['limit'] ? $options['limit'] : 'No limit'));
+    $this->output()->writeln('Force refresh: ' . ($options['force'] ? 'Yes' : 'No'));
+    if ($options['updated-after']) {
+      $this->output()->writeln("Updated after: {$options['updated-after']}");
+    }
+    $this->output()->writeln('');
+
+    // Get entities to process.
+    $entities = $this->batchService->getEntitiesForGeneration(
+      [$entity_bundle],
+      $languages,
+      (bool) $options['force'],
+      (int) $options['limit'],
+      $options['updated-after']
+    );
+
+    if (empty($entities)) {
+      $this->output()->writeln('No entities found to process.');
+      return;
+    }
+
+    $total = count($entities);
+    $this->output()->writeln("Found $total entities to process.");
+    $this->output()->writeln('');
+
+    // Process each entity.
+    $processed = 0;
+    $generated = 0;
+    $cached = 0;
+    $errors = [];
+
+    foreach ($entities as $entity_data) {
+      $processed++;
+
+      try {
+        // Load entity.
+        $entity = $this->entityTypeManager
+          ->getStorage($entity_data['entity_type'])
+          ->load($entity_data['entity_id']);
+
+        if (!$entity) {
+          $errors[] = "Entity {$entity_data['entity_type']}:{$entity_data['entity_id']} not found.";
+          continue;
+        }
+
+        // Get translation.
+        $langcode = $entity_data['langcode'] ?? $entity->language()->getId();
+        if ($entity->hasTranslation($langcode)) {
+          $entity = $entity->getTranslation($langcode);
+        }
+
+        // Extract text.
+        $text = $this->extractTextFromEntity($entity, NULL);
+
+        if (empty($text)) {
+          $errors[] = "No text content for {$entity_data['entity_type']}:{$entity_data['entity_id']}.";
+          continue;
+        }
+
+        // Generate TTS.
+        $this->output()->write("[$processed/$total] Processing {$entity_data['entity_type']}:{$entity_data['entity_id']} ($langcode)... ");
+
+        $config = $this->configFactory->get('ai_tts.settings');
+        $default_voice = $this->getDefaultVoiceForLanguage($langcode);
+
+        $tts_options = [
+          'language' => $langcode,
+          'voice' => $default_voice,
+          'speed' => $config->get('default_speed') ?? 1.0,
+          'entity_type' => $entity_data['entity_type'],
+          'entity_id' => $entity_data['entity_id'],
+          'use_cache' => !$options['force'],
+          'skip_access_check' => FALSE,
+        ];
+
+        $audio_uri = $this->ttsService->generateSpeech($text, $tts_options);
+
+        if ($audio_uri) {
+          $generated++;
+          $this->output()->writeln('Generated');
+        }
+        else {
+          $cached++;
+          $this->output()->writeln('Cached');
+        }
+      }
+      catch (\Exception $e) {
+        $this->output()->writeln('ERROR');
+        $errors[] = "{$entity_data['entity_type']}:{$entity_data['entity_id']} - " . $e->getMessage();
+      }
+    }
+
+    // Summary.
+    $this->output()->writeln('');
+    $this->output()->writeln('=== Summary ===');
+    $this->output()->writeln("Processed: $processed");
+    $this->output()->writeln("Generated: $generated");
+    $this->output()->writeln("Cached: $cached");
+    $this->output()->writeln('Errors: ' . count($errors));
+
+    if (!empty($errors)) {
+      $this->output()->writeln('');
+      $this->output()->writeln('Errors:');
+      foreach ($errors as $error) {
+        $this->output()->writeln("  - $error");
+      }
     }
   }
 
