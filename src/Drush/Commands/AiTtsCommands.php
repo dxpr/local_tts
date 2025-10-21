@@ -188,12 +188,12 @@ final class AiTtsCommands extends DrushCommands {
     }
 
     if ($use_temp_file) {
-      // macOS: Generate to temp file then play.
+      // macOS: Use text command instead of stream to avoid log
+      // pollution in audio output.
       $temp_file = tempnam(sys_get_temp_dir(), 'tts_') . '.wav';
 
       $command = sprintf(
-        'echo %s | %s%s --lan %s --model %s --data %s --style %s --speed %s stream > %s 2>&1',
-        escapeshellarg($text),
+        '%s%s --lan %s --model %s --data %s --style %s --speed %s text %s --output %s 2>/dev/null',
         $env_prefix,
         escapeshellarg($binary_path),
         escapeshellarg($espeak_lang),
@@ -201,6 +201,7 @@ final class AiTtsCommands extends DrushCommands {
         escapeshellarg($data_path),
         escapeshellarg($voice),
         escapeshellarg((string) $speed),
+        escapeshellarg($text),
         escapeshellarg($temp_file)
       );
 
