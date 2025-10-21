@@ -5,6 +5,7 @@
  * Install, update and uninstall functions for the AI TTS module.
  */
 
+use Drupal\Core\Url;
 use Drupal\Core\File\FileSystemInterface;
 
 /**
@@ -184,28 +185,35 @@ function ai_tts_requirements($phase) {
     }
 
     if (!empty($security_issues)) {
+      // Convert security issues to links with just filenames.
+      $file_links = [];
+      foreach ($security_issues as $issue) {
+        // Extract URL and filename from the message.
+        // Format: "Label is accessible via HTTP at URL".
+        if (preg_match('/at (https?:\/\/.+)$/', $issue, $matches)) {
+          $url = $matches[1];
+          $filename = basename($url);
+          $file_links[] = [
+            '#type' => 'link',
+            '#title' => $filename,
+            '#url' => Url::fromUri($url),
+          ];
+        }
+      }
+
       $requirements['ai_tts_security_htaccess'] = [
         'title' => t('AI TTS file protection'),
         'value' => t('Files exposed'),
         'description' => [
-          'critical' => [
-            '#markup' => '<strong>' . t('Resource Protection Issue') . '</strong><p>' .
-            t('Large binary and model files (337MB total) are publicly accessible via HTTP. This can result in bandwidth theft, hosting cost overruns, and server resource abuse. While these files are open source and publicly available on GitHub, they should not be served directly from your website.') . '</p>',
+          'warning' => [
+            '#markup' => '<p>' . t('Binary and model files (337MB) are web-accessible and may cause bandwidth abuse.') . '</p>',
           ],
           'files' => [
             '#theme' => 'item_list',
-            '#items' => $security_issues,
+            '#items' => $file_links,
           ],
-          'apache' => [
-            '#markup' => '<p><strong>' . t('Fix for Apache:') . '</strong> ' .
-            t('Ensure AllowOverride is set and mod_rewrite is enabled.') . '</p>',
-          ],
-          'nginx' => [
-            '#markup' => '<p><strong>' . t('Fix for Nginx:') . '</strong> ' .
-            t('.htaccess files are not supported - add location blocks to deny access to bin/ and data/ directories.') . '</p>',
-          ],
-          'docs' => [
-            '#markup' => '<p>' . t('See README.md for detailed step-by-step instructions.') . '</p>',
+          'fix' => [
+            '#markup' => '<p>' . t('<strong>Apache:</strong> Enable AllowOverride and mod_rewrite. <strong>Nginx:</strong> Add location blocks. See README for details.') . '</p>',
           ],
         ],
         'severity' => REQUIREMENT_WARNING,
