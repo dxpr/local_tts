@@ -73,122 +73,27 @@ class AiTtsSettingsForm extends ConfigFormBase {
   public function buildForm(array $form, FormStateInterface $form_state) {
     $config = $this->config('ai_tts.settings');
 
-    // File Paths Configuration.
-    $form['paths'] = [
+    // eSpeak NG Configuration.
+    $form['espeak'] = [
       '#type' => 'details',
-      '#title' => $this->t('File Paths'),
+      '#title' => $this->t('eSpeak NG Configuration'),
       '#open' => TRUE,
     ];
 
-    $form['paths']['koko_binary_path'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Koko executable path'),
-      '#description' => $this->t('Absolute path to koko binary. Must be executable (755 permissions), owned by root or deployment user.'),
-      '#default_value' => $config->get('koko_binary_path'),
-      '#required' => TRUE,
-      '#attributes' => [
-        'placeholder' => '/usr/local/bin/koko',
-      ],
+    $form['espeak']['description'] = [
+      '#markup' => '<p>' . $this->t('eSpeak NG is required for phoneme processing and must be installed system-wide.') . '</p>',
     ];
 
-    $form['paths']['model_path'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Model file path'),
-      '#description' => $this->t('Path to kokoro-v1.0.onnx file (~100-200MB). Must be readable (644 permissions), owned by root or deployment user.'),
-      '#default_value' => $config->get('model_path'),
-      '#required' => TRUE,
-      '#attributes' => [
-        'placeholder' => '/usr/local/share/kokoro/checkpoints/kokoro-v1.0.onnx',
-      ],
-    ];
-
-    $form['paths']['data_path'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Voices data path'),
-      '#description' => $this->t('Path to voices-v1.0.bin file (~10-50MB). Must be readable (644 permissions), owned by root or deployment user.'),
-      '#default_value' => $config->get('data_path'),
-      '#required' => TRUE,
-      '#attributes' => [
-        'placeholder' => '/usr/local/share/kokoro/data/voices-v1.0.bin',
-      ],
-    ];
-
-    $form['paths']['espeak_data_path'] = [
+    $form['espeak']['espeak_data_path'] = [
       '#type' => 'textfield',
       '#title' => $this->t('eSpeak NG data path'),
-      '#description' => $this->t('Path to espeak-ng-data directory (contains phoneme data for text processing). Must be readable (755 permissions).'),
+      '#description' => $this->t('Path to espeak-ng-data directory (contains phoneme data for text processing).'),
       '#default_value' => $config->get('espeak_data_path'),
       '#required' => TRUE,
       '#attributes' => [
-        'placeholder' => '/opt/homebrew/share/espeak-ng-data',
+        'placeholder' => '/usr/share/espeak-ng-data',
       ],
     ];
-
-    // Status checks.
-    $binary_path = $config->get('koko_binary_path');
-    $model_path = $config->get('model_path');
-    $data_path = $config->get('data_path');
-
-    $status_messages = [];
-
-    // Binary status.
-    if ($binary_path) {
-      $binary_exists = file_exists($binary_path);
-      $binary_executable = $binary_exists && is_executable($binary_path);
-
-      if ($binary_executable) {
-        $status_messages[] = '✓ ' . $this->t('Binary found and executable at: <code>@path</code>', ['@path' => $binary_path]);
-      }
-      elseif ($binary_exists) {
-        $status_messages[] = '✗ ' . $this->t('Binary found but not executable. Run: <code>chmod +x @path</code>', ['@path' => $binary_path]);
-      }
-      else {
-        $status_messages[] = '✗ ' . $this->t('Binary not found at: <code>@path</code>', ['@path' => $binary_path]);
-      }
-    }
-
-    // Model files status.
-    if ($model_path && $data_path) {
-      $model_real = $this->expandPath($model_path);
-      $data_real = $this->expandPath($data_path);
-
-      $model_exists = file_exists($model_real);
-      $data_exists = file_exists($data_real);
-
-      if ($model_exists && $data_exists) {
-        $model_size = filesize($model_real);
-        $data_size = filesize($data_real);
-        $status_messages[] = '✓ ' . $this->t('Model files found (@model_size, @data_size)', [
-          '@model_size' => format_size($model_size),
-          '@data_size' => format_size($data_size),
-        ]);
-      }
-      else {
-        if (!$model_exists) {
-          $status_messages[] = '✗ ' . $this->t('Model not found: <code>@path</code>', ['@path' => $model_real]);
-        }
-        if (!$data_exists) {
-          $status_messages[] = '✗ ' . $this->t('Data not found: <code>@path</code>', ['@path' => $data_real]);
-        }
-      }
-    }
-
-    // Display status if any messages.
-    if (!empty($status_messages)) {
-      $has_errors = strpos(implode(' ', $status_messages), '✗') !== FALSE;
-      $message_class = $has_errors ? 'messages--error' : 'messages--status';
-
-      if ($has_errors) {
-        $status_messages[] = $this->t('Install using: <code>cd @module && composer run download-binary</code>', [
-          '@module' => 'modules/custom/ai_tts',
-        ]);
-      }
-
-      $form['paths']['status'] = [
-        '#markup' => '<div class="messages ' . $message_class . '">' .
-        implode('<br>', $status_messages) . '</div>',
-      ];
-    }
 
     $form['voice_settings'] = [
       '#type' => 'details',
@@ -395,9 +300,6 @@ class AiTtsSettingsForm extends ConfigFormBase {
     unset($voice_settings['description']);
 
     $this->config('ai_tts.settings')
-      ->set('koko_binary_path', $form_state->getValue('koko_binary_path'))
-      ->set('model_path', $form_state->getValue('model_path'))
-      ->set('data_path', $form_state->getValue('data_path'))
       ->set('espeak_data_path', $form_state->getValue('espeak_data_path'))
       ->set('default_voices', $voice_settings)
       ->set('default_speed', $default_speed)
@@ -411,6 +313,9 @@ class AiTtsSettingsForm extends ConfigFormBase {
       ->set('rate_limit_threshold', $form_state->getValue('rate_limit_threshold'))
       ->set('max_server_load', $form_state->getValue('max_server_load'))
       ->clear('default_voice')
+      ->clear('koko_binary_path')
+      ->clear('model_path')
+      ->clear('data_path')
       ->save();
 
     parent::submitForm($form, $form_state);
