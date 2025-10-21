@@ -111,8 +111,8 @@ class TtsBatchService {
    *
    * @param array $entity_bundles
    *   Array of entity type:bundle strings.
-   * @param string $langcode
-   *   Language code to filter by.
+   * @param array $langcodes
+   *   Array of language codes to filter by.
    * @param bool $force_refresh
    *   Whether to regenerate even if cached.
    * @param int $limit
@@ -122,11 +122,12 @@ class TtsBatchService {
    *   after this date.
    *
    * @return array
-   *   Array of entity data arrays with keys: entity_type, entity_id, bundle.
+   *   Array of entity data arrays with keys:
+   *   entity_type, entity_id, bundle, langcode.
    */
   public function getEntitiesForGeneration(
     array $entity_bundles,
-    string $langcode,
+    array $langcodes,
     bool $force_refresh = FALSE,
     int $limit = 0,
     ?string $updated_after = NULL,
@@ -136,64 +137,67 @@ class TtsBatchService {
     foreach ($entity_bundles as $entity_bundle) {
       [$entity_type_id, $bundle] = explode(':', $entity_bundle);
 
-      $storage = $this->entityTypeManager->getStorage($entity_type_id);
-      $query = $storage->getQuery();
-      $query->accessCheck(FALSE);
+      foreach ($langcodes as $langcode) {
+        $storage = $this->entityTypeManager->getStorage($entity_type_id);
+        $query = $storage->getQuery();
+        $query->accessCheck(FALSE);
 
-      // Filter by bundle.
-      $bundle_key = $storage->getEntityType()->getKey('bundle');
-      if ($bundle_key) {
-        $query->condition($bundle_key, $bundle);
-      }
+        // Filter by bundle.
+        $bundle_key = $storage->getEntityType()->getKey('bundle');
+        if ($bundle_key) {
+          $query->condition($bundle_key, $bundle);
+        }
 
-      // Filter by language.
-      if ($storage->getEntityType()->isTranslatable()) {
-        $query->condition('langcode', $langcode);
-      }
+        // Filter by language.
+        if ($storage->getEntityType()->isTranslatable()) {
+          $query->condition('langcode', $langcode);
+        }
 
-      // Only published content (for nodes).
-      if ($entity_type_id === 'node') {
-        $query->condition('status', 1);
-      }
+        // Only published content (for nodes).
+        if ($entity_type_id === 'node') {
+          $query->condition('status', 1);
+        }
 
-      // Filter by updated date if specified.
-      if ($updated_after !== NULL) {
-        $changed_key = $storage->getEntityType()->getKey('changed');
-        if ($changed_key) {
-          // Convert date string to timestamp.
-          $timestamp = strtotime($updated_after . ' 00:00:00');
-          if ($timestamp !== FALSE) {
-            $query->condition($changed_key, $timestamp, '>=');
+        // Filter by updated date if specified.
+        if ($updated_after !== NULL) {
+          $changed_key = $storage->getEntityType()->getKey('changed');
+          if ($changed_key) {
+            // Convert date string to timestamp.
+            $timestamp = strtotime($updated_after . ' 00:00:00');
+            if ($timestamp !== FALSE) {
+              $query->condition($changed_key, $timestamp, '>=');
+            }
           }
         }
-      }
 
-      // Skip entities with cached audio (unless force refresh).
-      if (!$force_refresh) {
-        $cached_ids = $this->getCachedEntityIds($entity_type_id, $bundle, $langcode);
-        if (!empty($cached_ids)) {
-          $id_key = $storage->getEntityType()->getKey('id');
-          $query->condition($id_key, $cached_ids, 'NOT IN');
+        // Skip entities with cached audio (unless force refresh).
+        if (!$force_refresh) {
+          $cached_ids = $this->getCachedEntityIds($entity_type_id, $bundle, $langcode);
+          if (!empty($cached_ids)) {
+            $id_key = $storage->getEntityType()->getKey('id');
+            $query->condition($id_key, $cached_ids, 'NOT IN');
+          }
         }
-      }
 
-      // Apply limit.
-      if ($limit > 0) {
-        $remaining = $limit - count($entities);
-        if ($remaining <= 0) {
-          break;
+        // Apply limit.
+        if ($limit > 0) {
+          $remaining = $limit - count($entities);
+          if ($remaining <= 0) {
+            break 2;
+          }
+          $query->range(0, $remaining);
         }
-        $query->range(0, $remaining);
-      }
 
-      $ids = $query->execute();
+        $ids = $query->execute();
 
-      foreach ($ids as $id) {
-        $entities[] = [
-          'entity_type' => $entity_type_id,
-          'entity_id' => $id,
-          'bundle' => $bundle,
-        ];
+        foreach ($ids as $id) {
+          $entities[] = [
+            'entity_type' => $entity_type_id,
+            'entity_id' => $id,
+            'bundle' => $bundle,
+            'langcode' => $langcode,
+          ];
+        }
       }
     }
 
@@ -253,6 +257,17 @@ class TtsBatchService {
   ): void {
     // Initialize context.
     if (!isset($context['sandbox']['progress'])) {
+      // CRITICAL FIX: Set MySQL wait_timeout for long-running AI
+      // operations. This prevents "MySQL server has gone away" during
+      // 30+ second TTS generation.
+      try {
+        \Drupal::database()->query('SET SESSION wait_timeout = 600')->execute();
+        \Drupal::database()->query('SET SESSION interactive_timeout = 600')->execute();
+      }
+      catch (\Exception $e) {
+        // Silently continue if SET fails (e.g., insufficient privileges)
+      }
+
       $context['sandbox']['progress'] = 0;
       $context['sandbox']['total'] = $total_entities;
       $context['sandbox']['current_batch_start'] = time();
@@ -308,6 +323,22 @@ class TtsBatchService {
 
       while ($retry_count <= $max_retries && !$generated) {
         try {
+          // Ensure database connection is alive before loading entity.
+          // TTS generation can take 30+ seconds, causing MySQL timeout.
+          // Use mysql_ping() approach: test connection and reconnect if needed.
+          $database = \Drupal::database();
+          try {
+            // Simple ping query to keep connection alive.
+            $database->query('SELECT 1')->fetchField();
+          }
+          catch (\Exception $e) {
+            // Connection lost. Force reconnection by destroying old connection.
+            $database->destroy();
+            // Get fresh database connection.
+            $database = \Drupal::database();
+            $logger->info('Database connection refreshed during batch processing.');
+          }
+
           // Load entity.
           $entity = $this->entityTypeManager
             ->getStorage($entity_data['entity_type'])
@@ -322,30 +353,45 @@ class TtsBatchService {
           }
 
           // Get translation if needed.
-          if ($entity->hasTranslation($options['language'])) {
-            $entity = $entity->getTranslation($options['language']);
+          $langcode = $entity_data['langcode'] ?? $entity->language()->getId();
+          if ($entity->hasTranslation($langcode)) {
+            $entity = $entity->getTranslation($langcode);
+          }
+
+          // Extract text from entity.
+          $text = $this->extractTextFromEntity($entity);
+
+          if (empty($text)) {
+            $context['results']['errors'][] = $this->t('No text content found for @type:@id.', [
+              '@type' => $entity_data['entity_type'],
+              '@id' => $entity_data['entity_id'],
+            ]);
+            break;
           }
 
           // Build generation options.
+          // Note: We skip access check since we're in a batch operation and
+          // already verified the entity exists. This avoids database timeout
+          // issues during long TTS generation.
+          // Get default voice for this language (or use override from form).
+          $voice = $options['voice'] ?? $this->getDefaultVoiceForLanguage($langcode);
+
           $generation_options = [
-            'language' => $options['language'],
+            'language' => $langcode,
+            'voice' => $voice,
             'speed' => $options['speed'],
             'entity_type' => $entity_data['entity_type'],
             'entity_id' => $entity_data['entity_id'],
             'use_cache' => !$options['force_refresh'],
+            'skip_access_check' => TRUE,
           ];
-
-          // Use specific voice or default.
-          if ($options['voice']) {
-            $generation_options['voice'] = $options['voice'];
-          }
 
           // Generate TTS (CPU-intensive operation).
           // Suppress output to prevent batch corruption.
           ob_start();
 
-          $file_uri = $this->ttsService->generateSpeechForEntity(
-            $entity,
+          $file_uri = $this->ttsService->generateSpeech(
+            $text,
             $generation_options
           );
 
@@ -358,7 +404,7 @@ class TtsBatchService {
             $logger->info('Generated TTS for @type:@id (@lang)', [
               '@type' => $entity_data['entity_type'],
               '@id' => $entity_data['entity_id'],
-              '@lang' => $options['language'],
+              '@lang' => $langcode,
             ]);
           }
           else {
@@ -487,6 +533,114 @@ class TtsBatchService {
     $current_load = $load[0];
 
     return $current_load <= $max_load;
+  }
+
+  /**
+   * Extract text content from an entity.
+   *
+   * @param \Drupal\Core\Entity\EntityInterface $entity
+   *   The entity to extract text from.
+   *
+   * @return string
+   *   The extracted text content.
+   */
+  protected function extractTextFromEntity($entity): string {
+    // Auto-detect common text fields.
+    $common_fields = [
+      'body',
+      'field_body',
+      'field_description',
+      'field_text',
+      'field_content',
+      'description',
+    ];
+
+    foreach ($common_fields as $field) {
+      if ($entity->hasField($field) && !$entity->get($field)->isEmpty()) {
+        return $this->extractFieldText($entity, $field);
+      }
+    }
+
+    // Fallback to entity label.
+    return $entity->label() ?? '';
+  }
+
+  /**
+   * Extract text from a specific field.
+   *
+   * @param \Drupal\Core\Entity\EntityInterface $entity
+   *   The entity.
+   * @param string $field_name
+   *   The field name.
+   *
+   * @return string
+   *   The extracted text.
+   */
+  protected function extractFieldText($entity, $field_name): string {
+    if (!$entity->hasField($field_name)) {
+      return '';
+    }
+
+    $field = $entity->get($field_name);
+
+    if ($field->isEmpty()) {
+      return '';
+    }
+
+    $text_parts = [];
+
+    // Handle different field types.
+    foreach ($field as $item) {
+      // Text fields with format (like body).
+      if (isset($item->value)) {
+        $text = $item->value;
+
+        // Strip HTML tags for formatted text.
+        if (isset($item->format)) {
+          $text = strip_tags($text);
+        }
+
+        $text_parts[] = $text;
+      }
+      // Plain string fields.
+      elseif (is_string($item->value)) {
+        $text_parts[] = $item->value;
+      }
+      // Entity reference fields - get labels.
+      elseif (method_exists($item, 'entity') && $item->entity) {
+        $text_parts[] = $item->entity->label();
+      }
+    }
+
+    return implode(' ', $text_parts);
+  }
+
+  /**
+   * Get the default voice for a given language.
+   *
+   * @param string $langcode
+   *   The language code.
+   *
+   * @return string
+   *   The default voice ID.
+   */
+  protected function getDefaultVoiceForLanguage(string $langcode): string {
+    $config = $this->configFactory->get('ai_tts.settings');
+    $default_voices = $config->get('default_voices') ?? [];
+
+    // Check language-specific default first.
+    if (isset($default_voices[$langcode])) {
+      return $default_voices[$langcode];
+    }
+
+    // Fall back to first available voice for this language.
+    $available_voices = $this->ttsService->getAvailableVoices($langcode);
+    if (!empty($available_voices)) {
+      return array_key_first($available_voices);
+    }
+
+    // Final fallback to af_sky.
+    return 'af_sky';
   }
 
 }
