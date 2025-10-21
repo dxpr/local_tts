@@ -125,41 +125,124 @@ class TtsPlayerBuilder {
 
     $build = [
       '#type' => 'container',
-      '#attributes' => ['class' => ['ai-tts-container', 'container-inline']],
+      '#attributes' => ['class' => ['ai-tts-container']],
     ];
 
-    $build['controls'] = [
+    // Main player wrapper - contains button, content area, and settings.
+    $build['play_wrapper'] = [
       '#type' => 'container',
-      '#attributes' => ['class' => ['ai-tts-controls', 'container-inline']],
+      '#attributes' => ['class' => ['ai-tts-play-wrapper']],
     ];
 
-    $build['controls']['listen_button'] = [
+    $build['play_wrapper']['play_button'] = [
       '#type' => 'button',
-      '#value' => $this->t('Listen to this page'),
+      '#value' => '',
       '#attributes' => [
         'id' => 'ai-tts-play-button-' . $id_suffix,
         'class' => ['ai-tts-button', 'ai-tts-play-button'],
-        'aria-label' => $this->t('Listen to the content on this page'),
+        'aria-label' => $this->t('Listen to this article'),
         'aria-pressed' => 'false',
         'aria-controls' => 'ai-tts-audio-' . $id_suffix,
       ],
     ];
 
-    $build['controls']['stop_button'] = [
-      '#type' => 'button',
-      '#value' => $this->t('Stop'),
+    // Content area - label and playback controls toggle.
+    $build['play_wrapper']['content'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['ai-tts-content']],
+    ];
+
+    // Label (shown when not playing).
+    $build['play_wrapper']['content']['label'] = [
+      '#type' => 'container',
       '#attributes' => [
-        'id' => 'ai-tts-stop-button-' . $id_suffix,
-        'class' => ['ai-tts-button', 'ai-tts-stop-button'],
-        'disabled' => 'disabled',
-        'aria-label' => $this->t('Stop reading'),
-        'aria-controls' => 'ai-tts-audio-' . $id_suffix,
+        'id' => 'ai-tts-label-' . $id_suffix,
+        'class' => ['ai-tts-label'],
       ],
     ];
 
-    $build['settings'] = [
+    $build['play_wrapper']['content']['label']['text'] = [
+      '#type' => 'html_tag',
+      '#tag' => 'span',
+      '#attributes' => [
+        'id' => 'ai-tts-label-text-' . $id_suffix,
+        'class' => ['ai-tts-label-text'],
+      ],
+      '#value' => $this->t('Listen to this article'),
+    ];
+
+    $build['play_wrapper']['content']['label']['duration_text'] = [
+      '#type' => 'html_tag',
+      '#tag' => 'span',
+      '#attributes' => [
+        'id' => 'ai-tts-label-duration-' . $id_suffix,
+        'class' => ['ai-tts-label-duration'],
+      ],
+      '#value' => '',
+    ];
+
+    // Playback controls (hidden initially, replaces label during playback).
+    $build['play_wrapper']['content']['playback_controls'] = [
       '#type' => 'container',
-      '#attributes' => ['class' => ['ai-tts-settings', 'container-inline']],
+      '#attributes' => [
+        'id' => 'ai-tts-playback-controls-' . $id_suffix,
+        'class' => ['ai-tts-playback-controls'],
+        'style' => 'display: none;',
+      ],
+    ];
+
+    // Current time display.
+    $build['play_wrapper']['content']['playback_controls']['current_time'] = [
+      '#type' => 'html_tag',
+      '#tag' => 'span',
+      '#attributes' => [
+        'id' => 'ai-tts-current-time-' . $id_suffix,
+        'class' => ['ai-tts-current-time'],
+        'aria-live' => 'off',
+      ],
+      '#value' => '0:00',
+    ];
+
+    // Scrubber/seek bar.
+    $build['play_wrapper']['content']['playback_controls']['scrubber'] = [
+      '#type' => 'html_tag',
+      '#tag' => 'input',
+      '#attributes' => [
+        'type' => 'range',
+        'id' => 'ai-tts-scrubber-' . $id_suffix,
+        'class' => ['ai-tts-scrubber'],
+        'min' => '0',
+        'max' => '100',
+        'value' => '0',
+        'step' => '0.1',
+        'role' => 'slider',
+        'aria-label' => $this->t('Audio timeline'),
+        'aria-valuemin' => '0',
+        'aria-valuemax' => '100',
+        'aria-valuenow' => '0',
+        'aria-valuetext' => $this->t('0 seconds elapsed, duration unknown'),
+        'disabled' => 'disabled',
+      ],
+    ];
+
+    // Remaining time display.
+    $build['play_wrapper']['content']['playback_controls']['remaining_time'] = [
+      '#type' => 'html_tag',
+      '#tag' => 'span',
+      '#attributes' => [
+        'id' => 'ai-tts-remaining-time-' . $id_suffix,
+        'class' => ['ai-tts-remaining-time'],
+      ],
+      '#value' => '',
+    ];
+
+    // Voice and speed controls (inline with player, always visible).
+    $build['play_wrapper']['settings'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'ai-tts-settings-' . $id_suffix,
+        'class' => ['ai-tts-settings'],
+      ],
     ];
 
     if ($settings['show_voice_selector']) {
@@ -168,7 +251,7 @@ class TtsPlayerBuilder {
         $langcode
       );
 
-      $build['settings']['voice_select'] = [
+      $build['play_wrapper']['settings']['voice_select'] = [
         '#type' => 'select',
         '#title' => $this->t('Voice'),
         '#options' => $available_voices,
@@ -186,7 +269,7 @@ class TtsPlayerBuilder {
         $global_config->get('default_speed') ?: '1'
       );
 
-      $build['settings']['speed_control'] = [
+      $build['play_wrapper']['settings']['speed_control'] = [
         '#type' => 'select',
         '#title' => $this->t('Speed'),
         '#options' => [
@@ -205,6 +288,7 @@ class TtsPlayerBuilder {
       ];
     }
 
+    // Status messages.
     $build['status'] = [
       '#type' => 'container',
       '#attributes' => [
@@ -212,15 +296,7 @@ class TtsPlayerBuilder {
         'class' => ['ai-tts-status'],
         'role' => 'status',
         'aria-live' => 'polite',
-      ],
-    ];
-
-    $build['duration'] = [
-      '#type' => 'container',
-      '#attributes' => [
-        'id' => 'ai-tts-duration-' . $id_suffix,
-        'class' => ['ai-tts-duration'],
-        'style' => 'display: none;',
+        'aria-atomic' => 'true',
       ],
     ];
 

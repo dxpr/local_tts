@@ -1,144 +1,489 @@
 /**
  * @file
- * AI TTS player styling.
+ * AI TTS player styling - NYTimes-style interface.
+ *
+ * WCAG 2.2 Level AA Compliance:
+ * - Focus Visible (2.4.7): All interactive elements have visible focus indicators
+ * - Focus Appearance (2.4.11): Focus indicators meet minimum size (2px) and contrast (3:1) requirements
+ * - Uses box-shadow for focus rings to ensure visibility across all browsers
+ * - All styles use !important to override theme styles and maintain accessibility
+ *
+ * Focus Indicators:
+ * - Play/pause button: 3px white inner ring + 2px blue outer ring (circular)
+ * - Scrubber: 2px white inner ring + 2px blue outer ring
+ * - Select dropdowns: Blue border + 2px white inner ring + 2px blue outer ring
+ * - All focus colors: #0078d4 (blue) with sufficient contrast
  */
 
+/* Container */
 .ai-tts-container {
-  margin: 1rem 0;
-  padding: 1rem;
-  background: var(--color-bg-neutral, #f5f5f5);
-  border-radius: 0.5rem;
+  margin: 1.5rem 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
 }
 
-.ai-tts-container > div {
-  margin-right: 1rem;
+/* Play wrapper - button and content area on same line */
+.ai-tts-play-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
-.ai-tts-controls > * {
-  margin-right: 0.5rem;
+/* Play button - circular with play/pause icon */
+.ai-tts-play-button {
+  /* Layout */
+  flex-shrink: 0 !important;
+  width: 55px !important;
+  height: 55px !important;
+  min-width: 55px !important;
+  min-height: 55px !important;
+  max-width: 55px !important;
+  max-height: 55px !important;
+
+  /* Spacing */
+  padding: 0 !important;
+  margin: 0 !important;
+
+  /* Border - remove all theme borders */
+  border: none !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+
+  /* Outline - remove default, use custom focus */
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-style: none !important;
+  outline-color: transparent !important;
+  outline-offset: 0 !important;
+
+  /* Background - SVG icon */
+  background: transparent url('../images/play-icon.svg') center center no-repeat !important;
+  background-size: contain !important;
+  background-color: transparent !important;
+
+  /* Text/Content */
+  color: transparent !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  text-indent: -9999px !important;
+  overflow: hidden !important;
+
+  /* Interaction */
+  cursor: pointer !important;
+  position: relative !important;
+  display: block !important;
+
+  /* Animation */
+  transition: background-image 0.2s ease !important;
+  transform: none !important;
 }
 
-.ai-tts-button-wrapper {
-  position: relative;
+/* Hover state - swap to inverted icon */
+.ai-tts-play-button:hover:not(:disabled) {
+  opacity: 1 !important;
+  background-image: url('../images/play-icon-hover.svg') !important;
+  border: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.ai-tts-play-button:disabled {
+  opacity: 0.4 !important;
+  cursor: not-allowed !important;
+  background-color: transparent !important;
+  border: none !important;
+  outline: none !important;
+}
+
+/* WCAG 2.2 AA Focus Indicator (2.4.11, 2.4.7)
+ * - Minimum 2px outline thickness
+ * - 3:1 contrast ratio against background
+ * - Circular to match button shape
+ */
+.ai-tts-play-button:focus,
+.ai-tts-play-button:focus-visible {
+  /* Reset any theme outlines */
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-style: none !important;
+  outline-color: transparent !important;
+
+  /* WCAG compliant focus ring */
+  box-shadow: 0 0 0 3px #fff, 0 0 0 5px #0078d4 !important;
+  border-radius: 50% !important;
+  background-color: transparent !important;
+  border: none !important;
+}
+
+.ai-tts-play-button:active {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  transform: none !important;
+}
+
+/* Pause icon when playing */
+.ai-tts-play-button.playing {
+  background-image: url('../images/pause-icon.svg') !important;
+}
+
+/* Pause icon hover state */
+.ai-tts-play-button.playing:hover:not(:disabled) {
+  background-image: url('../images/pause-icon-hover.svg') !important;
+}
+
+/* Remove any pseudo-elements added by themes */
+.ai-tts-play-button::before,
+.ai-tts-play-button::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* Content area - contains label and playback controls (same space) */
+.ai-tts-content {
+  flex: 1;
+  min-height: 55px; /* Match button height */
+  display: flex;
+  align-items: center;
+}
+
+/* Label text (shown when not playing) */
+.ai-tts-label {
+  font-size: 15px;
+  line-height: 1.4;
+  color: #121212;
+  display: flex;
+  align-items: center;
+  min-height: 55px;
+}
+
+.ai-tts-label-text {
+  font-weight: 400;
+}
+
+.ai-tts-label-duration {
+  font-weight: 400;
+  color: #363636;
+}
+
+/* Playback controls - scrubber and time displays (shown during playback) */
+.ai-tts-playback-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 55px; /* Match button height */
+}
+
+/* Time displays */
+.ai-tts-current-time,
+.ai-tts-remaining-time {
+  font-size: 13px;
+  color: #121212;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  min-width: 40px;
+}
+
+.ai-tts-current-time {
+  text-align: right;
+}
+
+.ai-tts-remaining-time {
+  text-align: left;
+}
+
+/* Scrubber/seek bar */
+.ai-tts-scrubber {
+  /* Layout */
+  flex: 1 !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  height: 4px !important;
+  position: relative !important;
+
+  /* Background */
+  background: #dfdfdf !important;
+  border-radius: 2px !important;
+
+  /* Border & Outline - reset */
+  border: none !important;
+  border-width: 0 !important;
+  outline: none !important;
+  outline-width: 0 !important;
+  box-shadow: none !important;
+
+  /* Interaction */
+  cursor: pointer !important;
+
+  /* Transition */
+  transition: opacity 0.2s ease !important;
+}
+
+.ai-tts-scrubber:disabled {
+  opacity: 0.4 !important;
+  cursor: not-allowed !important;
+  border: none !important;
+  outline: none !important;
+}
+
+/* Scrubber track (Chrome/Safari) */
+.ai-tts-scrubber::-webkit-slider-runnable-track {
+  height: 4px !important;
+  background: #dfdfdf !important;
+  border-radius: 2px !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.ai-tts-scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 14px !important;
+  height: 14px !important;
+  background: #121212 !important;
+  border-radius: 50% !important;
+  cursor: pointer !important;
+  margin-top: -5px !important;
+  transition: transform 0.1s !important;
+
+  /* Border & Outline - reset */
+  border: none !important;
+  border-width: 0 !important;
+  outline: none !important;
+  outline-width: 0 !important;
+  box-shadow: none !important;
+}
+
+.ai-tts-scrubber::-webkit-slider-thumb:hover {
+  transform: scale(1.2) !important;
+}
+
+/* Scrubber track (Firefox) */
+.ai-tts-scrubber::-moz-range-track {
+  height: 4px !important;
+  background: #dfdfdf !important;
+  border-radius: 2px !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.ai-tts-scrubber::-moz-range-thumb {
+  width: 14px !important;
+  height: 14px !important;
+  background: #121212 !important;
+  border-radius: 50% !important;
+  cursor: pointer !important;
+  transition: transform 0.1s !important;
+
+  /* Border & Outline - reset */
+  border: none !important;
+  border-width: 0 !important;
+  outline: none !important;
+  outline-width: 0 !important;
+  box-shadow: none !important;
+}
+
+.ai-tts-scrubber::-moz-range-thumb:hover {
+  transform: scale(1.2) !important;
+}
+
+/* WCAG 2.2 AA Focus Indicator for scrubber (2.4.11, 2.4.7)
+ * - Minimum 2px outline thickness
+ * - 3:1 contrast ratio
+ * - Visible on all browsers
+ */
+.ai-tts-scrubber:focus,
+.ai-tts-scrubber:focus-visible {
+  /* Reset any theme outlines */
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-style: none !important;
+  outline-color: transparent !important;
+
+  /* WCAG compliant focus ring */
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #0078d4 !important;
+  border-radius: 4px !important;
+}
+
+/* Scrubber focus on track (Chrome/Safari) */
+.ai-tts-scrubber:focus::-webkit-slider-runnable-track,
+.ai-tts-scrubber:focus-visible::-webkit-slider-runnable-track {
+  outline: none !important;
+}
+
+/* Scrubber focus on track (Firefox) */
+.ai-tts-scrubber:focus::-moz-range-track,
+.ai-tts-scrubber:focus-visible::-moz-range-track {
+  outline: none !important;
+}
+
+/* Progress indicator (filled portion) - using gradient trick */
+.ai-tts-scrubber {
+  background: linear-gradient(to right, #121212 0%, #121212 0%, #dfdfdf 0%, #dfdfdf 100%);
+}
+
+.ai-tts-scrubber::-webkit-slider-runnable-track {
+  background: transparent;
+}
+
+.ai-tts-scrubber::-moz-range-track {
+  background: transparent;
+}
+
+/* Update progress dynamically via inline style */
+/* JavaScript will update: scrubberInput.style.background = linear-gradient(...) */
+
+/* Voice and speed controls (inline on right side, always visible) */
+.ai-tts-settings {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.ai-tts-settings .form-item {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ai-tts-settings label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #363636;
+  margin: 0;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
 }
 
-.ai-tts-button-wrapper .ai-tts-button {
-  padding-left: 2.25rem !important;
-  padding-right: 1rem !important;
-}
-
-.ai-tts-button-wrapper .ai-tts-icon {
-  width: 1rem;
-  height: 1rem;
+/* Voice icon (microphone) */
+.ai-tts-settings .form-item:has(.ai-tts-voice-select) label::before {
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background-image: url('../images/microphone.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
   flex-shrink: 0;
-  pointer-events: none;
-  position: absolute;
-  left: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
 }
 
-.ai-tts-button-wrapper .pause-icon {
-  display: none;
-}
-
-.ai-tts-button-wrapper:has(.playing) .play-icon {
-  display: none;
-}
-
-.ai-tts-button-wrapper:has(.playing) .pause-icon {
-  display: block;
-}
-
-.ai-tts-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.ai-tts-button.loading::before {
-  animation: ai-tts-spin 0.6s linear infinite;
-}
-
-@keyframes ai-tts-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.ai-tts-settings .form-item {
-  margin-right: 1rem;
-  margin-bottom: 0;
-}
-
-.ai-tts-settings label {
-  font-weight: 500;
-  margin-right: 0.5rem;
-  white-space: nowrap;
-}
-
-/* Add icons to labels using ::before */
-.ai-tts-settings .form-item:has(#ai-tts-voice-select) label::before {
+/* Speed icon (gauge/speedometer) */
+.ai-tts-settings .form-item:has(.ai-tts-speed-input) label::before {
   content: '';
   display: inline-block;
-  width: 1rem;
-  height: 1rem;
-  margin-right: 0.375rem;
-  background-image: url('../icons/microphone.svg');
+  width: 16px;
+  height: 16px;
+  background-image: url('../images/speedometer.svg');
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
-  vertical-align: middle;
-}
-
-.ai-tts-settings .form-item:has(#ai-tts-speed-input) label::before {
-  content: '';
-  display: inline-block;
-  width: 1rem;
-  height: 1rem;
-  margin-right: 0.375rem;
-  background-image: url('../icons/speed.svg');
-  background-size: contain;
-  background-repeat: no-repeat;
-  background-position: center;
-  vertical-align: middle;
+  flex-shrink: 0;
 }
 
 .ai-tts-settings select {
-  min-width: 120px;
+  /* Layout */
+  padding: 0.4rem 0.6rem !important;
+  font-size: 13px !important;
+  min-width: 120px !important;
+
+  /* Border */
+  border: 1px solid #dfdfdf !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+
+  /* Background */
+  background: white !important;
+  background-color: white !important;
+
+  /* Interaction */
+  cursor: pointer !important;
+
+  /* Reset theme styles */
+  outline: none !important;
+  text-transform: none !important;
+  font-weight: normal !important;
+  letter-spacing: normal !important;
+
+  /* Animation */
+  transition: all 0.2s ease !important;
 }
 
-@media (max-width: 768px) {
-  .ai-tts-container > div {
-    display: block;
-    margin-bottom: 1rem;
-  }
+/* WCAG 2.2 AA Focus Indicator for selects (2.4.11, 2.4.7)
+ * - Minimum 2px outline thickness
+ * - 3:1 contrast ratio
+ * - Clear visual indicator
+ */
+.ai-tts-settings select:focus,
+.ai-tts-settings select:focus-visible {
+  /* Reset any theme outlines */
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-style: none !important;
+  outline-color: transparent !important;
 
-  .ai-tts-settings .form-item {
-    display: block;
-    margin-bottom: 0.5rem;
-  }
-
-  .ai-tts-settings select {
-    width: 100%;
-  }
+  /* WCAG compliant focus ring */
+  border-color: #0078d4 !important;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #0078d4 !important;
+  background-color: white !important;
 }
 
+.ai-tts-settings select:hover:not(:disabled) {
+  border-color: #999 !important;
+  box-shadow: none !important;
+}
+
+.ai-tts-settings select:disabled {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+  background-color: #f5f5f5 !important;
+}
+
+/* Status messages */
 .ai-tts-status {
-  width: 100%;
-  min-height: 2rem;
+  margin: 1rem 0 0 65px;
+  min-height: 0;
 }
 
 .ai-tts-status:empty {
   display: none;
 }
 
+.ai-tts-status .messages {
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.ai-tts-status .messages--status {
+  background: #e6f4ff;
+  color: #004085;
+  border: 1px solid #b8daff;
+}
+
+.ai-tts-status .messages--error {
+  background: #fee;
+  color: #c00;
+  border: 1px solid #fcc;
+}
+
+/* Loading spinner (in label) */
 .ai-tts-loading {
   display: inline-block;
-  width: 1rem;
-  height: 1rem;
+  width: 14px;
+  height: 14px;
   border: 2px solid currentColor;
   border-right-color: transparent;
   border-radius: 50%;
@@ -147,11 +492,59 @@
   margin-right: 0.5rem;
 }
 
-.ai-tts-settings .description {
+@keyframes ai-tts-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Error indicator (in label) */
+.ai-tts-error {
+  display: inline-block;
+  font-size: 16px;
+  color: #c00;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+/* Error text in label */
+.ai-tts-label-text .ai-tts-error {
+  color: #c00;
+}
+
+/* Hide the actual audio element */
+audio {
   display: none;
 }
 
-/* Ensure audio element is hidden */
-#ai-tts-audio {
+/* Responsive design */
+@media (max-width: 768px) {
+  .ai-tts-play-wrapper {
+    flex-wrap: wrap;
+  }
+
+  .ai-tts-content {
+    flex: 1 1 100%;
+    order: 2;
+  }
+
+  .ai-tts-settings {
+    order: 1;
+    margin-left: 0;
+    margin-bottom: 0.5rem;
+  }
+
+  .ai-tts-settings .form-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ai-tts-settings select {
+    width: 100%;
+  }
+}
+
+/* Hide Drupal default form descriptions */
+.ai-tts-settings .form-item .description {
   display: none;
 }

@@ -1,6 +1,6 @@
 /**
  * @file
- * AI TTS player functionality.
+ * AI TTS player functionality - NYTimes-style interface.
  */
 
 (function (Drupal, drupalSettings, once) {
@@ -16,32 +16,20 @@
 
       players.forEach(function (player) {
         const playButton = player.querySelector('.ai-tts-play-button');
-        const stopButton = player.querySelector('.ai-tts-stop-button');
+        const labelContainer = player.querySelector('.ai-tts-label');
+        const labelText = player.querySelector('.ai-tts-label-text');
+        const labelDuration = player.querySelector('.ai-tts-label-duration');
+        const playbackControls = player.querySelector('.ai-tts-playback-controls');
+        const currentTimeDisplay = player.querySelector('.ai-tts-current-time');
+        const scrubberInput = player.querySelector('.ai-tts-scrubber');
+        const remainingTimeDisplay = player.querySelector('.ai-tts-remaining-time');
         const voiceSelect = player.querySelector('.ai-tts-voice-select');
         const speedInput = player.querySelector('.ai-tts-speed-input');
         const statusDiv = player.querySelector('.ai-tts-status');
-        const durationDiv = player.querySelector('.ai-tts-duration');
         const audioElement = player.querySelector('audio');
 
-        if (!playButton || !stopButton || !audioElement) {
+        if (!playButton || !audioElement) {
           return;
-        }
-
-        // Wrap buttons with icon containers (needed because buttons are input elements)
-        if (!playButton.parentElement.classList.contains('ai-tts-button-wrapper')) {
-          const playWrapper = document.createElement('span');
-          playWrapper.className = 'ai-tts-button-wrapper';
-          playWrapper.innerHTML = '<svg class="ai-tts-icon play-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg><svg class="ai-tts-icon pause-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>';
-          playButton.parentNode.insertBefore(playWrapper, playButton);
-          playWrapper.appendChild(playButton);
-        }
-
-        if (!stopButton.parentElement.classList.contains('ai-tts-button-wrapper')) {
-          const stopWrapper = document.createElement('span');
-          stopWrapper.className = 'ai-tts-button-wrapper';
-          stopWrapper.innerHTML = '<svg class="ai-tts-icon stop-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M6 6h12v12H6z"/></svg>';
-          stopButton.parentNode.insertBefore(stopWrapper, stopButton);
-          stopWrapper.appendChild(stopButton);
         }
 
         // ARCHITECTURE: Fail hard. If config missing, block wouldn't render.
@@ -49,9 +37,17 @@
 
         let isPlaying = false;
         let currentAudioUrl = null;
+        let lastAriaUpdate = 0;
+        const ARIA_THROTTLE_MS = 200;
 
         audioElement.loop = false;
+        audioElement.preload = 'metadata';
 
+        // Play/pause icons are handled via CSS background-images
+
+        /**
+         * Format seconds as M:SS or MM:SS.
+         */
         function formatDuration(seconds) {
           if (!seconds || !isFinite(seconds)) {
             return '';
@@ -61,16 +57,63 @@
           return mins + ':' + (secs < 10 ? '0' : '') + secs;
         }
 
-        function updateDuration(duration) {
-          if (durationDiv && duration) {
-            const formatted = formatDuration(duration);
-            if (formatted) {
-              durationDiv.textContent = Drupal.t('Duration: @duration', {'@duration': formatted});
-              durationDiv.style.display = '';
-            }
+        /**
+         * Format time for ARIA announcements (human-readable).
+         */
+        function formatTimeForAria(seconds) {
+          if (!seconds || !isFinite(seconds)) {
+            return '0 seconds';
+          }
+
+          const mins = Math.floor(seconds / 60);
+          const secs = Math.floor(seconds % 60);
+
+          let parts = [];
+          if (mins > 0) {
+            parts.push(mins + ' minute' + (mins !== 1 ? 's' : ''));
+          }
+          if (secs > 0 || mins === 0) {
+            parts.push(secs + ' second' + (secs !== 1 ? 's' : ''));
+          }
+
+          return parts.join(' ');
+        }
+
+        /**
+         * Get ARIA valuetext for scrubber.
+         */
+        function getAriaTimeText(currentTime, duration) {
+          const elapsed = formatTimeForAria(currentTime);
+          const remaining = duration ? formatTimeForAria(duration - currentTime) : 'duration unknown';
+
+          return elapsed + ' elapsed, ' + remaining + ' remaining';
+        }
+
+        /**
+         * Update duration displays when metadata loads.
+         */
+        function updateDurationDisplays(duration) {
+          if (!duration || !isFinite(duration)) {
+            return;
+          }
+
+          const formatted = formatDuration(duration);
+
+          // Update label: "Listen to this article · 7:35 min"
+          if (labelDuration) {
+            labelDuration.textContent = ' · ' + formatted + ' min';
+          }
+
+          // Update scrubber max.
+          if (scrubberInput) {
+            scrubberInput.max = duration;
+            scrubberInput.setAttribute('aria-valuemax', duration.toString());
           }
         }
 
+        /**
+         * Update status message.
+         */
         function updateStatus(message, type) {
           type = type || 'info';
           if (message) {
@@ -80,22 +123,56 @@
           }
         }
 
+        /**
+         * Update button and UI state.
+         */
         function updateButtonStates() {
           if (isPlaying) {
             playButton.setAttribute('aria-pressed', 'true');
             playButton.classList.add('playing');
-            stopButton.disabled = false;
+            playButton.setAttribute('aria-label', Drupal.t('Pause audio'));
           } else {
             playButton.setAttribute('aria-pressed', 'false');
             playButton.classList.remove('playing');
+            playButton.setAttribute('aria-label', Drupal.t('Play audio'));
           }
         }
 
+        /**
+         * Show playback controls (scrubber, time displays) and hide label.
+         */
+        function showPlaybackControls() {
+          if (labelContainer) {
+            labelContainer.style.display = 'none';
+          }
+          if (playbackControls) {
+            playbackControls.style.display = '';
+          }
+        }
+
+        /**
+         * Hide playback controls and show label.
+         */
+        function hidePlaybackControls() {
+          if (playbackControls) {
+            playbackControls.style.display = 'none';
+          }
+          if (labelContainer) {
+            labelContainer.style.display = '';
+          }
+        }
+
+        /**
+         * Generate speech via AJAX.
+         */
         function generateSpeech() {
           const voice = voiceSelect ? voiceSelect.value : config.defaultVoice;
           const speed = speedInput ? parseFloat(speedInput.value) : config.defaultSpeed;
 
-          updateStatus('<span class="ai-tts-loading"></span> ' + Drupal.t('Generating speech...'), 'status');
+          // Show loading in label area (replaces "Listen to this article").
+          if (labelText) {
+            labelText.innerHTML = '<span class="ai-tts-loading"></span> ' + Drupal.t('Generating speech...');
+          }
           playButton.disabled = true;
           playButton.classList.add('loading');
 
@@ -147,21 +224,14 @@
                 playSpeech(result.data.audio_url);
               } else {
                 // Handle error responses with user-friendly messages.
-                // Following Nielsen Norman Group UX best practices:
-                // - Be specific about what went wrong
-                // - Don't blame the user
-                // - Provide actionable guidance
                 let errorMessage = result.data.message || Drupal.t('Unable to generate audio');
 
                 // Provide context-appropriate messages based on HTTP status code.
                 if (result.status === 400) {
-                  // Bad Request - validation errors (user can fix).
                   errorMessage = result.data.message || Drupal.t('Please check your text and try again');
                 } else if (result.status === 408) {
-                  // Request Timeout (server-side, during processing).
                   errorMessage = Drupal.t('Audio generation is taking longer than expected. Please try with shorter text.');
                 } else if (result.status === 429) {
-                  // Too Many Requests - rate limiting (not user's fault, temporary).
                   let retryMsg = '';
                   if (result.data.retry_after) {
                     const minutes = Math.ceil(result.data.retry_after / 60);
@@ -169,32 +239,55 @@
                   }
                   errorMessage = Drupal.t('Too many requests at once.') + retryMsg;
                 } else if (result.status === 500) {
-                  // Internal Server Error (not user's fault).
                   errorMessage = Drupal.t('Something went wrong on our end. Please try again in a few moments.');
                 } else if (result.status === 503) {
-                  // Service Unavailable (not user's fault, may need support).
                   errorMessage = Drupal.t('The service is temporarily unavailable. Please try again later or contact support if this continues.');
                 } else if (result.status === 504) {
-                  // Gateway Timeout (server taking too long, not network issue).
                   errorMessage = Drupal.t('The server is taking too long to process your request. Please try with shorter text or contact support.');
                 }
 
+                // Show error in label area.
+                if (labelText) {
+                  labelText.innerHTML = '<span class="ai-tts-error">⚠</span> ' + errorMessage;
+                }
                 updateStatus(errorMessage, 'error');
                 playButton.disabled = false;
                 playButton.classList.remove('loading');
                 updateButtonStates();
+
+                // Restore original label after 5 seconds.
+                setTimeout(function() {
+                  if (labelText && !isPlaying) {
+                    labelText.textContent = Drupal.t('Listen to this article');
+                    updateStatus('', 'status');
+                  }
+                }, 5000);
               }
             })
             .catch(error => {
               // Actual network errors (user's connection or browser issues).
-              // Only reaches here if fetch itself fails (CORS, DNS, no internet, etc.).
-              updateStatus(Drupal.t('Unable to reach the server. Please check your internet connection and try again.'), 'error');
+              const errorMsg = Drupal.t('Unable to reach the server. Please check your internet connection and try again.');
+              if (labelText) {
+                labelText.innerHTML = '<span class="ai-tts-error">⚠</span> ' + errorMsg;
+              }
+              updateStatus(errorMsg, 'error');
               playButton.disabled = false;
               playButton.classList.remove('loading');
               updateButtonStates();
+
+              // Restore original label after 5 seconds.
+              setTimeout(function() {
+                if (labelText && !isPlaying) {
+                  labelText.textContent = Drupal.t('Listen to this article');
+                  updateStatus('', 'status');
+                }
+              }, 5000);
             });
         }
 
+        /**
+         * Load and play audio.
+         */
         function playSpeech(audioUrl) {
           audioElement.src = audioUrl;
           audioElement.load();
@@ -206,32 +299,33 @@
               playButton.disabled = false;
               playButton.classList.remove('loading');
               updateButtonStates();
+              showPlaybackControls();
               updateStatus('', 'status');
             }).catch(function(error) {
-              updateStatus(Drupal.t('Error playing audio.'), 'error');
+              const errorMsg = Drupal.t('Error playing audio.');
+              if (labelText) {
+                labelText.innerHTML = '<span class="ai-tts-error">⚠</span> ' + errorMsg;
+              }
+              updateStatus(errorMsg, 'error');
               playButton.disabled = false;
               playButton.classList.remove('loading');
               isPlaying = false;
               updateButtonStates();
+
+              // Restore original label after 5 seconds.
+              setTimeout(function() {
+                if (labelText && !isPlaying) {
+                  labelText.textContent = Drupal.t('Listen to this article');
+                  updateStatus('', 'status');
+                }
+              }, 5000);
             });
           }, { once: true });
         }
 
-        function stopSpeech() {
-          if (audioElement) {
-            audioElement.pause();
-            audioElement.currentTime = 0;
-          }
-          isPlaying = false;
-          currentAudioUrl = null;
-          stopButton.disabled = true;
-          updateButtonStates();
-          updateStatus('', 'status');
-          if (durationDiv) {
-            durationDiv.style.display = 'none';
-          }
-        }
-
+        /**
+         * Toggle play/pause.
+         */
         function togglePlay() {
           if (!isPlaying) {
             if (!currentAudioUrl || audioElement.ended) {
@@ -240,6 +334,7 @@
               audioElement.play().then(function() {
                 isPlaying = true;
                 updateButtonStates();
+                showPlaybackControls();
                 updateStatus('', 'status');
               });
             }
@@ -251,43 +346,52 @@
           }
         }
 
-        audioElement.addEventListener('ended', function() {
+        /**
+         * Stop and reset playback.
+         */
+        function stopPlayback() {
+          if (audioElement) {
+            audioElement.pause();
+            audioElement.currentTime = 0;
+          }
           isPlaying = false;
-          stopButton.disabled = true;
+          currentAudioUrl = null;
+
+          // Reset scrubber.
+          if (scrubberInput) {
+            scrubberInput.value = 0;
+            scrubberInput.disabled = true;
+          }
+
+          // Reset time displays.
+          if (currentTimeDisplay) {
+            currentTimeDisplay.textContent = '0:00';
+          }
+          if (remainingTimeDisplay) {
+            remainingTimeDisplay.textContent = '';
+          }
+
+          // Restore original label text.
+          if (labelText) {
+            labelText.textContent = Drupal.t('Listen to this article');
+          }
+
+          hidePlaybackControls();
           updateButtonStates();
           updateStatus('', 'status');
-        });
+        }
 
-        audioElement.addEventListener('pause', function() {
-          if (!audioElement.ended && audioElement.currentTime > 0) {
-            isPlaying = false;
-            updateButtonStates();
-          }
-        });
+        // =====================================================================
+        // EVENT LISTENERS
+        // =====================================================================
 
-        audioElement.addEventListener('play', function() {
-          isPlaying = true;
-          stopButton.disabled = false;
-          updateButtonStates();
-        });
-
-        audioElement.addEventListener('error', function() {
-          updateStatus(Drupal.t('Error playing audio.'), 'error');
-          playButton.disabled = false;
-          isPlaying = false;
-          stopButton.disabled = true;
-          updateButtonStates();
-        });
-
-        audioElement.addEventListener('loadedmetadata', function() {
-          updateDuration(audioElement.duration);
-        });
-
+        // Play button click.
         playButton.addEventListener('click', function(e) {
           e.preventDefault();
           togglePlay();
         });
 
+        // Play button keyboard (space bar).
         playButton.addEventListener('keydown', function(e) {
           if (e.key === ' ' || e.key === 'Spacebar') {
             e.preventDefault();
@@ -295,15 +399,139 @@
           }
         });
 
-        stopButton.addEventListener('click', function(e) {
-          e.preventDefault();
-          stopSpeech();
+        // Audio ended.
+        audioElement.addEventListener('ended', function() {
+          isPlaying = false;
+          updateButtonStates();
+          stopPlayback();
         });
 
+        // Audio pause.
+        audioElement.addEventListener('pause', function() {
+          if (!audioElement.ended && audioElement.currentTime > 0) {
+            isPlaying = false;
+            updateButtonStates();
+          }
+        });
+
+        // Audio play.
+        audioElement.addEventListener('play', function() {
+          isPlaying = true;
+          updateButtonStates();
+          showPlaybackControls();
+        });
+
+        // Audio error.
+        audioElement.addEventListener('error', function() {
+          const errorMsg = Drupal.t('Error playing audio.');
+          if (labelText) {
+            labelText.innerHTML = '<span class="ai-tts-error">⚠</span> ' + errorMsg;
+          }
+          updateStatus(errorMsg, 'error');
+          playButton.disabled = false;
+          isPlaying = false;
+          updateButtonStates();
+
+          // Restore original label after 5 seconds.
+          setTimeout(function() {
+            if (labelText && !isPlaying) {
+              labelText.textContent = Drupal.t('Listen to this article');
+              updateStatus('', 'status');
+            }
+          }, 5000);
+        });
+
+        // Audio metadata loaded (duration available).
+        audioElement.addEventListener('loadedmetadata', function() {
+          updateDurationDisplays(audioElement.duration);
+
+          if (scrubberInput) {
+            scrubberInput.disabled = false;
+          }
+        });
+
+        // Audio time update (during playback).
+        // A11Y: CRITICAL - Do NOT update aria-valuenow or aria-valuetext here!
+        // Only update visual displays. ARIA updates happen on user interaction only.
+        audioElement.addEventListener('timeupdate', function() {
+          if (!audioElement.duration) {
+            return;
+          }
+
+          const currentTime = audioElement.currentTime;
+          const duration = audioElement.duration;
+          const percentage = (currentTime / duration) * 100;
+
+          // Update scrubber position (visual only).
+          if (scrubberInput) {
+            scrubberInput.value = currentTime;
+
+            // Update progress bar fill (gradient background).
+            scrubberInput.style.background = 'linear-gradient(to right, #121212 0%, #121212 ' + percentage + '%, #dfdfdf ' + percentage + '%, #dfdfdf 100%)';
+          }
+
+          // Update current time display.
+          if (currentTimeDisplay) {
+            currentTimeDisplay.textContent = formatDuration(currentTime);
+          }
+
+          // Update remaining time display.
+          if (remainingTimeDisplay) {
+            const remaining = duration - currentTime;
+            remainingTimeDisplay.textContent = '-' + formatDuration(remaining);
+          }
+        });
+
+        // Scrubber input (user seeking).
+        if (scrubberInput) {
+          scrubberInput.addEventListener('input', function() {
+            const newTime = parseFloat(scrubberInput.value);
+            audioElement.currentTime = newTime;
+
+            // Update visual progress bar immediately.
+            if (audioElement.duration) {
+              const percentage = (newTime / audioElement.duration) * 100;
+              scrubberInput.style.background = 'linear-gradient(to right, #121212 0%, #121212 ' + percentage + '%, #dfdfdf ' + percentage + '%, #dfdfdf 100%)';
+            }
+
+            // A11Y: Throttle ARIA updates to prevent overwhelming screen readers.
+            const now = Date.now();
+            if (now - lastAriaUpdate > ARIA_THROTTLE_MS) {
+              scrubberInput.setAttribute('aria-valuenow', newTime.toString());
+              scrubberInput.setAttribute('aria-valuetext', getAriaTimeText(newTime, audioElement.duration));
+              lastAriaUpdate = now;
+            }
+          });
+
+          // A11Y: Update ARIA when user focuses on scrubber.
+          scrubberInput.addEventListener('focus', function() {
+            if (audioElement.duration) {
+              scrubberInput.setAttribute('aria-valuenow', audioElement.currentTime.toString());
+              scrubberInput.setAttribute('aria-valuetext', getAriaTimeText(audioElement.currentTime, audioElement.duration));
+            }
+          });
+
+          // Optional: Pause while dragging (NYTimes does this).
+          let wasPlaying = false;
+          scrubberInput.addEventListener('mousedown', function() {
+            wasPlaying = !audioElement.paused;
+            if (wasPlaying) {
+              audioElement.pause();
+            }
+          });
+
+          scrubberInput.addEventListener('mouseup', function() {
+            if (wasPlaying) {
+              audioElement.play();
+            }
+          });
+        }
+
+        // Voice/speed change listeners.
         if (voiceSelect) {
           voiceSelect.addEventListener('change', function() {
             if (isPlaying || currentAudioUrl) {
-              stopSpeech();
+              stopPlayback();
             }
           });
         }
@@ -311,7 +539,7 @@
         if (speedInput) {
           speedInput.addEventListener('change', function() {
             if (isPlaying || currentAudioUrl) {
-              stopSpeech();
+              stopPlayback();
             }
           });
         }
