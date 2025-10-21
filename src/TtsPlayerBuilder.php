@@ -18,9 +18,6 @@ class TtsPlayerBuilder {
 
   use StringTranslationTrait;
 
-  /**
-   * Allowed field types for TTS processing.
-   */
   const ALLOWED_FIELD_TYPES = [
     'string',
     'string_long',
@@ -32,9 +29,6 @@ class TtsPlayerBuilder {
     'telephone',
   ];
 
-  /**
-   * Base fields to exclude from TTS (administrative/metadata).
-   */
   const EXCLUDED_BASE_FIELDS = [
     'nid', 'uuid', 'vid', 'langcode', 'type', 'revision_timestamp',
     'revision_uid', 'revision_log', 'status', 'uid', 'created', 'changed',
@@ -44,26 +38,26 @@ class TtsPlayerBuilder {
   ];
 
   /**
-   * The config factory.
+   * Config factory.
    *
    * @var \Drupal\Core\Config\ConfigFactoryInterface
    */
   protected $configFactory;
 
   /**
-   * The TTS service.
+   * TTS service.
    *
    * @var \Drupal\ai_tts\TtsService
    */
   protected $ttsService;
 
   /**
-   * Constructs a TtsPlayerBuilder object.
+   * Constructs a TtsPlayerBuilder.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
-   *   The config factory.
+   *   Config factory.
    * @param \Drupal\ai_tts\TtsService $tts_service
-   *   The TTS service.
+   *   TTS service.
    */
   public function __construct(
     ConfigFactoryInterface $config_factory,
@@ -89,7 +83,6 @@ class TtsPlayerBuilder {
    *   Render array for the player, or empty array if player cannot be shown.
    */
   public function buildPlayer(?EntityInterface $entity, array $settings = []) {
-    // Default settings.
     $settings += [
       'show_voice_selector' => TRUE,
       'show_speed_control' => TRUE,
@@ -97,40 +90,31 @@ class TtsPlayerBuilder {
       'wrapper_classes' => '',
     ];
 
-    // Generate unique ID suffix to allow multiple players on same page.
     $id_suffix = substr(md5(microtime() . random_bytes(8)), 0, 8);
-
     $global_config = $this->configFactory->get('ai_tts.settings');
 
-    // Get entity language for voice filtering.
     $langcode = NULL;
     if ($entity && method_exists($entity, 'language')) {
       $langcode = $entity->language()->getId();
     }
 
-    // ARCHITECTURE: Fail hard, no defensive coding.
-    // If entity doesn't exist, return empty.
     if (!$entity) {
       return [];
     }
 
-    // Check access (valid check - prevents showing UI for private content).
     $anonymous = new AnonymousUserSession();
     if (!$entity->access('view', $anonymous)) {
       return [];
     }
 
-    // Voices check still valid (prevents UI for unsupported languages).
     $available_voices = $this->ttsService->getAvailableVoices($langcode);
     if (empty($available_voices)) {
       return [];
     }
 
-    // Build class list for container.
     $container_classes = ['ai-tts-container'];
     $custom_classes = trim($settings['wrapper_classes']);
     if (!empty($custom_classes)) {
-      // Split space-separated classes and clean each one.
       $additional_classes = array_filter(explode(' ', $custom_classes));
       foreach ($additional_classes as $class) {
         $container_classes[] = Html::cleanCssIdentifier($class);
@@ -142,7 +126,6 @@ class TtsPlayerBuilder {
       '#attributes' => ['class' => $container_classes],
     ];
 
-    // Main player wrapper - contains button, content area, and settings.
     $build['play_wrapper'] = [
       '#type' => 'container',
       '#attributes' => ['class' => ['ai-tts-play-wrapper']],
@@ -160,13 +143,11 @@ class TtsPlayerBuilder {
       ],
     ];
 
-    // Content area - label and playback controls toggle.
     $build['play_wrapper']['content'] = [
       '#type' => 'container',
       '#attributes' => ['class' => ['ai-tts-content']],
     ];
 
-    // Label (shown when not playing).
     $build['play_wrapper']['content']['label'] = [
       '#type' => 'container',
       '#attributes' => [
@@ -195,7 +176,6 @@ class TtsPlayerBuilder {
       '#value' => '',
     ];
 
-    // Playback controls (hidden initially, replaces label during playback).
     $build['play_wrapper']['content']['playback_controls'] = [
       '#type' => 'container',
       '#attributes' => [
@@ -205,7 +185,6 @@ class TtsPlayerBuilder {
       ],
     ];
 
-    // Current time display.
     $build['play_wrapper']['content']['playback_controls']['current_time'] = [
       '#type' => 'html_tag',
       '#tag' => 'span',
@@ -217,7 +196,6 @@ class TtsPlayerBuilder {
       '#value' => '0:00',
     ];
 
-    // Scrubber/seek bar.
     $build['play_wrapper']['content']['playback_controls']['scrubber'] = [
       '#type' => 'html_tag',
       '#tag' => 'input',
@@ -239,7 +217,6 @@ class TtsPlayerBuilder {
       ],
     ];
 
-    // Remaining time display.
     $build['play_wrapper']['content']['playback_controls']['remaining_time'] = [
       '#type' => 'html_tag',
       '#tag' => 'span',
@@ -250,7 +227,6 @@ class TtsPlayerBuilder {
       '#value' => '',
     ];
 
-    // Voice and speed controls (inline with player, always visible).
     $build['play_wrapper']['settings'] = [
       '#type' => 'container',
       '#attributes' => [
@@ -302,7 +278,6 @@ class TtsPlayerBuilder {
       ];
     }
 
-    // Status messages.
     $build['status'] = [
       '#type' => 'container',
       '#attributes' => [
@@ -323,14 +298,9 @@ class TtsPlayerBuilder {
       ],
     ];
 
-    // Use language-aware default voice for JavaScript.
-    $js_default_voice = $this->getValidDefaultVoice(
-      $available_voices,
-      $langcode
-    );
+    $js_default_voice = $this->getValidDefaultVoice($available_voices, $langcode);
 
     // SECURITY: Pass only entity reference to JavaScript, NOT the content.
-    // Server loads entity, validates access, extracts text.
     $build['#attached'] = [
       'library' => ['ai_tts/player'],
       'drupalSettings' => [
@@ -346,7 +316,6 @@ class TtsPlayerBuilder {
       ],
     ];
 
-    // Add cache contexts and tags.
     $build['#cache']['contexts'][] = 'route';
     $build['#cache']['contexts'][] = 'languages:language_content';
 
@@ -359,26 +328,24 @@ class TtsPlayerBuilder {
   }
 
   /**
-   * Get a valid default voice for the given language.
+   * Get valid default voice for given language.
    *
    * @param array $available_voices
-   *   Available voices for the language.
+   *   Available voices.
    * @param string $langcode
-   *   The language code.
+   *   Language code.
    *
    * @return string
-   *   A valid voice code.
+   *   Voice code.
    */
   protected function getValidDefaultVoice(array $available_voices, $langcode) {
     $config = $this->configFactory->get('ai_tts.settings');
     $default_voices = $config->get('default_voices') ?? [];
 
-    // Check language-specific default first.
     if (isset($default_voices[$langcode]) && isset($available_voices[$default_voices[$langcode]])) {
       return $default_voices[$langcode];
     }
 
-    // Fall back to first available voice for this language.
     return array_key_first($available_voices);
   }
 

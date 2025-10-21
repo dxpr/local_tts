@@ -361,9 +361,8 @@
           }
         });
 
-        // Audio time update (during playback).
-        // A11Y: CRITICAL - Do NOT update aria-valuenow or aria-valuetext here!
-        // Only update visual displays. ARIA updates happen on user interaction only.
+        // A11Y: CRITICAL - Do NOT update aria-valuenow or aria-valuetext during playback.
+        // Only update visual displays. ARIA updates on user interaction only.
         audioElement.addEventListener('timeupdate', function() {
           if (!audioElement.duration) {
             return;
@@ -373,39 +372,32 @@
           const duration = audioElement.duration;
           const percentage = (currentTime / duration) * 100;
 
-          // Update scrubber position (visual only).
           if (scrubberInput) {
             scrubberInput.value = currentTime;
-
-            // Update progress bar fill (gradient background).
             scrubberInput.style.background = 'linear-gradient(to right, #121212 0%, #121212 ' + percentage + '%, #dfdfdf ' + percentage + '%, #dfdfdf 100%)';
           }
 
-          // Update current time display.
           if (currentTimeDisplay) {
             currentTimeDisplay.textContent = formatDuration(currentTime);
           }
 
-          // Update remaining time display.
           if (remainingTimeDisplay) {
             const remaining = duration - currentTime;
             remainingTimeDisplay.textContent = '-' + formatDuration(remaining);
           }
         });
 
-        // Scrubber input (user seeking).
         if (scrubberInput) {
           scrubberInput.addEventListener('input', function() {
             const newTime = parseFloat(scrubberInput.value);
             audioElement.currentTime = newTime;
 
-            // Update visual progress bar immediately.
             if (audioElement.duration) {
               const percentage = (newTime / audioElement.duration) * 100;
               scrubberInput.style.background = 'linear-gradient(to right, #121212 0%, #121212 ' + percentage + '%, #dfdfdf ' + percentage + '%, #dfdfdf 100%)';
             }
 
-            // A11Y: Throttle ARIA updates to prevent overwhelming screen readers.
+            // A11Y: Throttle ARIA updates to 200ms.
             const now = Date.now();
             if (now - lastAriaUpdate > ARIA_THROTTLE_MS) {
               scrubberInput.setAttribute('aria-valuenow', newTime.toString());
@@ -414,7 +406,6 @@
             }
           });
 
-          // A11Y: Update ARIA when user focuses on scrubber.
           scrubberInput.addEventListener('focus', function() {
             if (audioElement.duration) {
               scrubberInput.setAttribute('aria-valuenow', audioElement.currentTime.toString());
@@ -422,7 +413,6 @@
             }
           });
 
-          // Optional: Pause while dragging (NYTimes does this).
           let wasPlaying = false;
           scrubberInput.addEventListener('mousedown', function() {
             wasPlaying = !audioElement.paused;
@@ -438,7 +428,6 @@
           });
         }
 
-        // Voice/speed change listeners.
         if (voiceSelect) {
           voiceSelect.addEventListener('change', function() {
             if (isPlaying || currentAudioUrl) {
