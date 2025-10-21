@@ -15,7 +15,8 @@ using the Kokoro TTS engine (Rust implementation).
 - Audio caching to reduce server load
 - Simple block-based integration
 - AJAX-powered audio generation
-- Drush commands for testing and cache management
+- Drush commands for testing, batch generation, and cache management
+- Batch generation UI for bulk processing
 - Accessibility-optimized with ARIA labels and keyboard shortcuts
 
 ## Security & Privacy
@@ -56,18 +57,22 @@ drush ai-tts:read node 123 --stream
 - Node module (core)
 - Composer
 
-### External Dependencies
+### Bundled Dependencies (Automatic)
 
-**Kokoro Binary (koko)**
+The following files are **bundled with this module** and downloaded automatically via Composer:
 
-This module requires the Kokoro Rust binary to be installed. The
-installation process is automated via Composer scripts (see Installation
-section below).
+- **Kokoro Binary (koko)** - Rust-based TTS engine (~31MB)
+- **Model file (kokoro-v1.0.onnx)** - AI model (~310MB)
+- **Voice data (voices-v1.0.bin)** - Voice style vectors (~27MB)
+
+These files are stored in `bin/` and `data/` directories within the module and are protected from web access via `.htaccess` files.
+
+### System Dependencies (Manual Installation Required)
 
 **eSpeak NG**
 
 The Kokoro binary requires eSpeak NG for text-to-phoneme conversion across
-multiple languages. This must be installed separately:
+multiple languages. This must be installed system-wide:
 
 ```bash
 # macOS
@@ -93,59 +98,35 @@ You'll need to configure this path in the module settings.
 
 ## Installation
 
-### File Placement and Security
+### Quick Start (Recommended)
 
-**Production installation - system-wide:**
+The module bundles all required TTS files and downloads them automatically:
 
-```bash
-# Download and install the Kokoro binary
-sudo curl -L -o /usr/local/bin/koko \
-  https://github.com/lucasjinreal/Kokoros/releases/download/v1.0/koko-linux-x64
-sudo chmod 755 /usr/local/bin/koko
-
-# Create directory for model and data files
-sudo mkdir -p /usr/local/share/kokoro/checkpoints
-sudo mkdir -p /usr/local/share/kokoro/data
-
-# Download model and data files (replace URLs with actual releases)
-sudo curl -L -o /usr/local/share/kokoro/checkpoints/kokoro-v1.0.onnx \
-  https://github.com/lucasjinreal/Kokoros/releases/download/v1.0/kokoro-v1.0.onnx
-sudo curl -L -o /usr/local/share/kokoro/data/voices-v1.0.bin \
-  https://github.com/lucasjinreal/Kokoros/releases/download/v1.0/voices-v1.0.bin
-
-# Set proper permissions
-sudo chmod 644 /usr/local/share/kokoro/checkpoints/kokoro-v1.0.onnx
-sudo chmod 644 /usr/local/share/kokoro/data/voices-v1.0.bin
-sudo chown root:root /usr/local/bin/koko
-sudo chown -R root:root /usr/local/share/kokoro
-```
-
-**Configure in Drupal:**
-- Binary path: `/usr/local/bin/koko`
-- Model file:
-  `/usr/local/share/kokoro/checkpoints/kokoro-v1.0.onnx`
-- Data file: `/usr/local/share/kokoro/data/voices-v1.0.bin`
-- eSpeak NG data path: `/usr/share/espeak-ng-data`
-  (or appropriate path for your system)
-
-**Security:**
-- Binary: 755 permissions, owned by root or deployment user
-- Model/data: 644 permissions, owned by root or deployment user
-- Never store files in `sites/default/files/` (user upload directory)
-
-### Quick Start
-
-**Step 1: Install the module**
+**Step 1: Install the module via Composer**
 
 ```bash
 cd web/modules/custom/ai_tts
 composer install
 ```
 
-**Step 2: Install Kokoro files**
+This automatically:
+- Creates `bin/` and `data/` directories
+- Downloads the Kokoro binary (~31MB)
+- Downloads model and voice data files (~337MB total)
+- Sets up `.htaccess` protection
 
-See "File Placement and Security" section above for production
-installation.
+**Step 2: Install eSpeak NG (system-wide)**
+
+```bash
+# macOS
+brew install espeak-ng
+
+# Ubuntu/Debian
+sudo apt-get install espeak-ng
+
+# Fedora/RHEL
+sudo dnf install espeak-ng
+```
 
 **Step 3: Enable the module**
 
@@ -153,11 +134,13 @@ installation.
 drush en ai_tts -y
 ```
 
-**Step 4: Configure the module**
+**Step 4: Configure eSpeak path**
 
 Go to: Configuration > Media > AI TTS Settings (`/admin/config/media/ai-tts`)
 
-Set the file paths from the installation above.
+Set the eSpeak NG data path (module will auto-detect bundled files):
+- macOS: `/opt/homebrew/Cellar/espeak-ng/[version]/share/espeak-ng-data`
+- Linux: `/usr/share/espeak-ng-data`
 
 **Step 5: Test the installation**
 
@@ -165,39 +148,40 @@ Set the file paths from the installation above.
 drush ai-tts:test "Hello World"
 ```
 
-### Manual Installation (Advanced)
+### Bundled Files Structure
 
-If you prefer manual installation or need a system-wide binary:
-
-1. **Install Kokoro binary to system path:**
-   ```bash
-   git clone https://github.com/lucasjinreal/Kokoros.git
-   cd Kokoros
-   bash download_all.sh
-   cargo build --release
-   sudo cp target/release/koko /usr/local/bin/
-   chmod +x /usr/local/bin/koko
-   ```
-
-2. **Enable the module:**
-   ```bash
-   drush en ai_tts -y
-   ```
-
-3. **Configure with system binary path:**
-   - Go to: Configuration > Media > AI TTS Settings
-   - Set the path to: `/usr/local/bin/koko`
-   - Configure other settings as needed
-
-### Docker Alternative (Testing)
-
-For quick testing with Docker:
-```bash
-docker pull ghcr.io/lucasjinreal/kokoros:latest
+```
+ai_tts/
+├── bin/
+│   ├── .htaccess          # Blocks web access
+│   ├── LICENSE            # Apache 2.0 license
+│   └── koko               # Kokoro binary (downloaded)
+├── data/
+│   ├── .htaccess          # Blocks web access
+│   ├── LICENSE            # Apache 2.0 license
+│   ├── kokoro-v1.0.onnx   # Model file (downloaded)
+│   └── voices-v1.0.bin    # Voice data (downloaded)
 ```
 
-Note: Using Docker requires additional configuration to make the binary
-accessible to Drupal.
+**Security:**
+- All files protected by `.htaccess` (no web access)
+- Binary and data files never served via HTTP
+- Only accessed server-side by PHP
+
+### Manual Download (If Automatic Fails)
+
+If Composer scripts fail to download files:
+
+```bash
+cd web/modules/custom/ai_tts
+composer run download-files
+```
+
+Or build the binary from source:
+
+```bash
+composer run build-binary
+```
 
 ## Usage
 
@@ -488,6 +472,78 @@ drush ai-tts:read node 456 --voice=ef_dora --language=es
 - `media` - Media entities (if they have text fields)
 - Any entity with text fields
 
+#### Batch Generate TTS Audio
+
+Generate TTS audio for multiple entities at once:
+
+```bash
+# Generate audio for all English articles (up to 10)
+drush ai-tts:batch --entity-type=node --bundle=article --language=en --limit=10
+drush tts-batch  # Short alias
+
+# Generate for multiple languages
+drush ai-tts:batch --entity-type=node --bundle=page --language=en,es,fr
+
+# Force regeneration even if cached
+drush ai-tts:batch --entity-type=node --bundle=article --language=en --force
+
+# Filter by date (only content updated after date)
+drush ai-tts:batch --entity-type=node --bundle=article \
+  --language=en --updated-after=2025-01-01
+
+# Process all articles without limit
+drush ai-tts:batch --entity-type=node --bundle=article --language=en --limit=0
+```
+
+**Available Options:**
+- `--entity-type` - Entity type to process (e.g., node, taxonomy_term)
+- `--bundle` - Bundle to process (e.g., article, page)
+- `--language` - Language code(s), comma-separated (e.g., en,es,fr)
+- `--limit` - Maximum number of entities (0 for no limit)
+- `--force` - Force regeneration even if cached
+- `--updated-after` - Only process entities updated after date (Y-m-d format)
+
+**How It Works:**
+1. Queries entities matching your criteria
+2. Processes each entity sequentially
+3. Shows real-time progress for each item
+4. Provides detailed summary (processed, generated, cached, errors)
+
+**Benefits:**
+- Pre-generate audio for frequently accessed content
+- Reduce server load during peak hours
+- Ensure consistent audio quality across content
+- Automate TTS generation for new content
+
+**Example Output:**
+```
+=== TTS Batch Generation ===
+Entity type: node
+Bundle: article
+Languages: en, es
+Limit: 10
+Force refresh: No
+
+Found 10 entities to process.
+
+[1/10] Processing node:123 (en)... Generated
+[2/10] Processing node:124 (en)... Cached
+[3/10] Processing node:125 (es)... Generated
+...
+
+=== Summary ===
+Processed: 10
+Generated: 5
+Cached: 5
+Errors: 0
+```
+
+**Use Cases:**
+- Pre-generate audio before content launch
+- Refresh audio after voice/speed changes
+- Automate TTS in deployment scripts
+- Process large content libraries overnight
+
 #### Clear Audio Cache
 
 Remove all cached audio files:
@@ -592,11 +648,12 @@ language.
 
 Go to: Configuration > Media > AI TTS Settings
 
-**File Paths**
-- **Koko executable path** - Path to koko binary
-- **Model file path** - Path to kokoro-v1.0.onnx
-- **Voices data path** - Path to voices-v1.0.bin
-- **eSpeak NG data path** - Path to espeak-ng-data directory
+**Installation Status**
+- Shows status of bundled binary and model files
+- All files automatically detected in module directory
+
+**eSpeak NG Configuration**
+- **eSpeak NG data path** - Path to espeak-ng-data directory (system-wide installation)
 
 **Voice Settings**
 - **Default voice for [language]** - Default voice per enabled language
@@ -731,18 +788,18 @@ When contributing to this module:
 
 **Fix:**
 ```bash
-# Download binary
+# Download all files
 cd web/modules/custom/ai_tts
-composer run download-binary
+composer run download-files
 
 # Make executable
 chmod +x bin/koko
 
 # Verify
-ls -la bin/koko
+ls -la bin/koko data/
 ```
 
-Update path in Configuration > Media > AI TTS Settings if needed.
+No configuration needed - module auto-detects bundled files.
 
 ### eSpeak NG errors
 
@@ -832,16 +889,15 @@ drush ai-tts:test "Hello World"
 ## Known Limitations
 
 - Text content is truncated to 5000 characters
-- No progress indicator during generation
-- No batch generation for multiple elements
+- No progress indicator during generation (except in batch mode)
 - Limited error handling
 - No voice style mixing (advanced Kokoro feature)
 - No streaming playback (audio generates fully before playing)
 
 ## Future Enhancements
 
-- [ ] Progress indicator during audio generation
-- [ ] Batch generation for multiple content blocks
+- [ ] Progress indicator during audio generation (web UI)
+- [x] Batch generation for multiple content blocks (Drush + web UI)
 - [ ] Voice style mixing support
 - [ ] Streaming playback
 - [ ] User preferences storage
