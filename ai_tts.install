@@ -189,7 +189,8 @@ function ai_tts_requirements($phase) {
         'value' => t('Files exposed'),
         'description' => [
           'critical' => [
-            '#markup' => '<strong>' . t('CRITICAL SECURITY ISSUE') . '</strong>',
+            '#markup' => '<strong>' . t('Resource Protection Issue') . '</strong><p>' .
+            t('Large binary and model files (337MB total) are publicly accessible via HTTP. This can result in bandwidth theft, hosting cost overruns, and server resource abuse. While these files are open source and publicly available on GitHub, they should not be served directly from your website.') . '</p>',
           ],
           'files' => [
             '#theme' => 'item_list',
