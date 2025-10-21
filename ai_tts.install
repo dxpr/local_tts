@@ -184,20 +184,29 @@ function ai_tts_requirements($phase) {
     }
 
     if (!empty($security_issues)) {
-      $exposed_files = '<ul><li>' . implode('</li><li>', $security_issues) . '</li></ul>';
-
-      $htaccess_desc = '<p><strong>' . t('CRITICAL SECURITY ISSUE') . '</strong></p>' .
-        $exposed_files .
-        '<p><strong>' . t('Fix for Apache:') . '</strong> ' .
-        t('Ensure AllowOverride is set and mod_rewrite is enabled.') . '</p>' .
-        '<p><strong>' . t('Fix for Nginx:') . '</strong> ' .
-        t('.htaccess files are not supported - add location blocks to deny access to bin/ and data/ directories.') . '</p>' .
-        '<p>' . t('See README.md for detailed step-by-step instructions.') . '</p>';
-
       $requirements['ai_tts_security_htaccess'] = [
         'title' => t('AI TTS file protection'),
         'value' => t('Files exposed'),
-        'description' => $htaccess_desc,
+        'description' => [
+          'critical' => [
+            '#markup' => '<strong>' . t('CRITICAL SECURITY ISSUE') . '</strong>',
+          ],
+          'files' => [
+            '#theme' => 'item_list',
+            '#items' => $security_issues,
+          ],
+          'apache' => [
+            '#markup' => '<p><strong>' . t('Fix for Apache:') . '</strong> ' .
+            t('Ensure AllowOverride is set and mod_rewrite is enabled.') . '</p>',
+          ],
+          'nginx' => [
+            '#markup' => '<p><strong>' . t('Fix for Nginx:') . '</strong> ' .
+            t('.htaccess files are not supported - add location blocks to deny access to bin/ and data/ directories.') . '</p>',
+          ],
+          'docs' => [
+            '#markup' => '<p>' . t('See README.md for detailed step-by-step instructions.') . '</p>',
+          ],
+        ],
         'severity' => REQUIREMENT_ERROR,
       ];
     }
