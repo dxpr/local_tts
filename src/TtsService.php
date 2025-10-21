@@ -56,6 +56,13 @@ class TtsService {
   protected $logger;
 
   /**
+   * The module path.
+   *
+   * @var string
+   */
+  protected $modulePath;
+
+  /**
    * Constructs a TtsService object.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
@@ -69,6 +76,7 @@ class TtsService {
     $this->configFactory = $config_factory;
     $this->fileSystem = $file_system;
     $this->logger = $logger_factory->get('ai_tts');
+    $this->modulePath = \Drupal::service('extension.list.module')->getPath('ai_tts');
   }
 
   /**
@@ -194,34 +202,30 @@ class TtsService {
     }
 
     $output_file = $directory . '/' . $cache_key . '.wav';
-    $binary_path = $config->get('koko_binary_path');
+
+    // Use bundled binary and data files from module directory.
+    $binary_path = DRUPAL_ROOT . '/' . $this->modulePath . '/bin/koko';
+    $model_path = DRUPAL_ROOT . '/' . $this->modulePath . '/data/kokoro-v1.0.onnx';
+    $data_path = DRUPAL_ROOT . '/' . $this->modulePath . '/data/voices-v1.0.bin';
 
     if (!file_exists($binary_path)) {
       $this->logger->error('Koko binary not found at: @path', ['@path' => $binary_path]);
-      throw new TtsServiceUnavailableException(sprintf('TTS binary not found at: %s', $binary_path));
+      throw new TtsServiceUnavailableException(sprintf('TTS binary not found at: %s. Please run: composer install', $binary_path));
     }
 
     if (!is_executable($binary_path)) {
       $this->logger->error('Koko binary not executable at: @path', ['@path' => $binary_path]);
-      throw new TtsServiceUnavailableException(sprintf('TTS binary not executable at: %s', $binary_path));
+      throw new TtsServiceUnavailableException(sprintf('TTS binary not executable at: %s. Please run: chmod +x %s', $binary_path, $binary_path));
     }
-
-    // Get model paths from configuration.
-    $model_path = $config->get('model_path');
-    $data_path = $config->get('data_path');
-
-    // Expand tilde in paths.
-    $model_path = $this->expandPath($model_path);
-    $data_path = $this->expandPath($data_path);
 
     // Validate model files exist.
     if (!file_exists($model_path)) {
       $this->logger->error('Model file not found at: @path', ['@path' => $model_path]);
-      throw new TtsServiceUnavailableException(sprintf('Model file not found at: %s', $model_path));
+      throw new TtsServiceUnavailableException(sprintf('Model file not found at: %s. Please run: composer install', $model_path));
     }
     if (!file_exists($data_path)) {
       $this->logger->error('Data file not found at: @path', ['@path' => $data_path]);
-      throw new TtsServiceUnavailableException(sprintf('Data file not found at: %s', $data_path));
+      throw new TtsServiceUnavailableException(sprintf('Data file not found at: %s. Please run: composer install', $data_path));
     }
 
     $command = sprintf(
