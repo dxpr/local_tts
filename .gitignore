@@ -1,5 +1,14 @@
-# Kokoro binary (platform-specific, should be built/downloaded locally)
+# Binary and model files - downloaded via Composer scripts
+# These are large files (370MB total) that should not be in version control
 bin/koko
+data/kokoro-v1.0.onnx
+data/voices-v1.0.bin
+
+# Keep directory structure and protection files
+!bin/.htaccess
+!bin/LICENSE
+!data/.htaccess
+!data/LICENSE
 
 # Composer dependencies
 vendor/
