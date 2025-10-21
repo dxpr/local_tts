@@ -118,6 +118,7 @@ class AiTtsPlayerFormatter extends FormatterBase implements ContainerFactoryPlug
       'show_voice_selector' => TRUE,
       'show_speed_control' => TRUE,
       'fields' => [],
+      'wrapper_classes' => '',
     ] + parent::defaultSettings();
   }
 
@@ -139,6 +140,13 @@ class AiTtsPlayerFormatter extends FormatterBase implements ContainerFactoryPlug
       '#title' => $this->t('Show Speed Control'),
       '#default_value' => $this->getSetting('show_speed_control'),
       '#description' => $this->t('Allow users to adjust speech speed.'),
+    ];
+
+    $elements['wrapper_classes'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Additional CSS Classes'),
+      '#default_value' => $this->getSetting('wrapper_classes'),
+      '#description' => $this->t('Add custom CSS classes to the player wrapper (space-separated).'),
     ];
 
     // Get text fields for the current entity type/bundle.
@@ -170,6 +178,11 @@ class AiTtsPlayerFormatter extends FormatterBase implements ContainerFactoryPlug
     $summary[] = $this->getSetting('show_speed_control')
       ? $this->t('Speed control: Shown')
       : $this->t('Speed control: Hidden');
+
+    $wrapper_classes = trim($this->getSetting('wrapper_classes'));
+    if (!empty($wrapper_classes)) {
+      $summary[] = $this->t('Custom classes: @classes', ['@classes' => $wrapper_classes]);
+    }
 
     $selected_fields = array_filter($this->getSetting('fields'));
     if (empty($selected_fields)) {

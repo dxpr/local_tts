@@ -149,6 +149,7 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
       'show_voice_selector' => TRUE,
       'show_speed_control' => TRUE,
       'fields' => [],
+      'wrapper_classes' => '',
     ] + parent::defaultConfiguration();
   }
 
@@ -171,6 +172,13 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
       '#title' => $this->t('Show Speed Control'),
       '#default_value' => $config['show_speed_control'],
       '#description' => $this->t('Allow users to adjust speech speed.'),
+    ];
+
+    $form['wrapper_classes'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Additional CSS Classes'),
+      '#default_value' => $config['wrapper_classes'],
+      '#description' => $this->t('Add custom CSS classes to the player wrapper (space-separated).'),
     ];
 
     $field_options = [];
@@ -204,6 +212,7 @@ class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
     $this->configuration['show_voice_selector'] = $form_state->getValue('show_voice_selector');
     $this->configuration['show_speed_control'] = $form_state->getValue('show_speed_control');
     $this->configuration['fields'] = array_filter($form_state->getValue('fields') ?? []);
+    $this->configuration['wrapper_classes'] = $form_state->getValue('wrapper_classes');
   }
 
   /**

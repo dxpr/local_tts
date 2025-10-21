@@ -2,6 +2,7 @@
 
 namespace Drupal\ai_tts;
 
+use Drupal\Component\Utility\Html;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Session\AnonymousUserSession;
@@ -82,6 +83,7 @@ class TtsPlayerBuilder {
    *   - show_voice_selector: (bool) Show voice dropdown.
    *   - show_speed_control: (bool) Show speed control.
    *   - fields: (array) Field names to include (empty = all).
+   *   - wrapper_classes: (string) Additional CSS classes for the wrapper.
    *
    * @return array
    *   Render array for the player, or empty array if player cannot be shown.
@@ -92,6 +94,7 @@ class TtsPlayerBuilder {
       'show_voice_selector' => TRUE,
       'show_speed_control' => TRUE,
       'fields' => [],
+      'wrapper_classes' => '',
     ];
 
     // Generate unique ID suffix to allow multiple players on same page.
@@ -123,9 +126,20 @@ class TtsPlayerBuilder {
       return [];
     }
 
+    // Build class list for container.
+    $container_classes = ['ai-tts-container'];
+    $custom_classes = trim($settings['wrapper_classes']);
+    if (!empty($custom_classes)) {
+      // Split space-separated classes and clean each one.
+      $additional_classes = array_filter(explode(' ', $custom_classes));
+      foreach ($additional_classes as $class) {
+        $container_classes[] = Html::cleanCssIdentifier($class);
+      }
+    }
+
     $build = [
       '#type' => 'container',
-      '#attributes' => ['class' => ['ai-tts-container']],
+      '#attributes' => ['class' => $container_classes],
     ];
 
     // Main player wrapper - contains button, content area, and settings.
