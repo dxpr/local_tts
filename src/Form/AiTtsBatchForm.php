@@ -4,6 +4,8 @@ namespace Drupal\ai_tts\Form;
 
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Language\LanguageInterface;
+use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\ai_tts\Service\TtsBatchService;
 use Drupal\ai_tts\TtsService;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -28,12 +30,20 @@ class AiTtsBatchForm extends FormBase {
   protected $ttsService;
 
   /**
+   * The language manager.
+   *
+   * @var \Drupal\Core\Language\LanguageManagerInterface
+   */
+  protected $languageManager;
+
+  /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('ai_tts.batch_service'),
-      $container->get('ai_tts.tts_service')
+      $container->get('ai_tts.tts_service'),
+      $container->get('language_manager')
     );
   }
 
@@ -44,10 +54,13 @@ class AiTtsBatchForm extends FormBase {
    *   The batch service.
    * @param \Drupal\ai_tts\TtsService $tts_service
    *   The TTS service.
+   * @param \Drupal\Core\Language\LanguageManagerInterface $language_manager
+   *   The language manager.
    */
-  public function __construct(TtsBatchService $batch_service, TtsService $tts_service) {
+  public function __construct(TtsBatchService $batch_service, TtsService $tts_service, LanguageManagerInterface $language_manager) {
     $this->batchService = $batch_service;
     $this->ttsService = $tts_service;
+    $this->languageManager = $language_manager;
   }
 
   /**
@@ -64,6 +77,14 @@ class AiTtsBatchForm extends FormBase {
     $config = $this->config('ai_tts.settings');
 
     $form['#attributes']['class'][] = 'ai-tts-batch-form';
+
+    // Drush command info.
+    $form['drush_info'] = [
+      '#type' => 'details',
+      '#title' => $this->t('Alternative: Drush Command'),
+      '#description' => $this->t('<p><strong>For automation or CLI preference, use the Drush command:</strong></p><pre>drush ai-tts:batch --entity-type=node --bundle=article --language=en --limit=10</pre><p>Options: <code>--force</code> (regenerate), <code>--updated-after=2025-01-01</code> (date filter)</p>'),
+      '#open' => FALSE,
+    ];
 
     // Entity selection.
     $form['entity_selection'] = [
@@ -88,23 +109,21 @@ class AiTtsBatchForm extends FormBase {
       '#description' => $this->t('Select content types to generate audio for. Only types with TTS field enabled are shown.'),
       '#options' => $bundle_options,
       '#required' => TRUE,
+      '#ajax' => [
+        'callback' => '::updateSubmitButton',
+        'wrapper' => 'submit-button-wrapper',
+        'event' => 'change',
+      ],
     ];
 
-    $form['entity_selection']['date_filter'] = [
-      '#type' => 'details',
-      '#title' => $this->t('Date filter'),
-      '#description' => $this->t('Optionally filter entities by update date.'),
-      '#open' => FALSE,
-    ];
-
-    $form['entity_selection']['date_filter']['enable_date_filter'] = [
+    $form['entity_selection']['enable_date_filter'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Enable date filtering'),
+      '#title' => $this->t('Filter by date'),
       '#description' => $this->t('Only process entities updated after a specific date.'),
       '#default_value' => FALSE,
     ];
 
-    $form['entity_selection']['date_filter']['updated_after'] = [
+    $form['entity_selection']['updated_after'] = [
       '#type' => 'date',
       '#title' => $this->t('Updated after'),
       '#description' => $this->t('Only process entities updated after this date (e.g., 2025-01-01).'),
@@ -125,22 +144,25 @@ class AiTtsBatchForm extends FormBase {
       '#open' => TRUE,
     ];
 
-    $form['generation_settings']['language'] = [
-      '#type' => 'select',
-      '#title' => $this->t('Language'),
-      '#description' => $this->t('Generate audio for this language. Only entities with this language will be processed.'),
-      '#options' => [
-        'en' => $this->t('English'),
-        'es' => $this->t('Spanish'),
-        'fr' => $this->t('French'),
-        'ja' => $this->t('Japanese'),
-        'zh' => $this->t('Chinese (Mandarin)'),
-        'hi' => $this->t('Hindi'),
-        'it' => $this->t('Italian'),
-        'pt' => $this->t('Portuguese'),
-      ],
-      '#default_value' => 'en',
+    // Get configurable languages (user-facing languages).
+    // Following core pattern from locale module ImportForm.
+    $languages = $this->languageManager->getLanguages(LanguageInterface::STATE_CONFIGURABLE);
+    $language_options = [];
+    foreach ($languages as $langcode => $language) {
+      $language_options[$langcode] = $language->getName();
+    }
+
+    $form['generation_settings']['languages'] = [
+      '#type' => 'checkboxes',
+      '#title' => $this->t('Languages'),
+      '#description' => $this->t('Select one or more languages to generate audio for. Only content in the selected languages will be processed.'),
+      '#options' => $language_options,
       '#required' => TRUE,
+      '#ajax' => [
+        'callback' => '::updateSubmitButton',
+        'wrapper' => 'submit-button-wrapper',
+        'event' => 'change',
+      ],
     ];
 
     // Get available voices.
@@ -173,6 +195,11 @@ class AiTtsBatchForm extends FormBase {
       '#title' => $this->t('Force regeneration'),
       '#description' => $this->t('Regenerate audio even if cached files already exist. <strong>Warning:</strong> This will significantly increase processing time and server load.'),
       '#default_value' => FALSE,
+      '#ajax' => [
+        'callback' => '::updateSubmitButton',
+        'wrapper' => 'submit-button-wrapper',
+        'event' => 'change',
+      ],
     ];
 
     $form['generation_settings']['limit'] = [
@@ -181,6 +208,11 @@ class AiTtsBatchForm extends FormBase {
       '#description' => $this->t('Maximum number of entities to process. Leave at 0 for no limit.'),
       '#default_value' => 0,
       '#min' => 0,
+      '#ajax' => [
+        'callback' => '::updateSubmitButton',
+        'wrapper' => 'submit-button-wrapper',
+        'event' => 'change',
+      ],
     ];
 
     // Server load management.
@@ -194,15 +226,14 @@ class AiTtsBatchForm extends FormBase {
     $form['load_management']['batch_size'] = [
       '#type' => 'select',
       '#title' => $this->t('Batch size'),
-      '#description' => $this->t('Number of entities to process per batch operation. Smaller batches reduce memory usage but take longer overall.'),
+      '#description' => $this->t('Number of entities to process per batch operation. Each generation runs AI inference on the machine. Conservative sizes recommended.'),
       '#options' => [
-        '1' => $this->t('1 (Safest, slowest)'),
-        '5' => $this->t('5 (Conservative)'),
-        '10' => $this->t('10 (Balanced)'),
-        '25' => $this->t('25 (Aggressive)'),
-        '50' => $this->t('50 (Maximum)'),
+        '1' => $this->t('1 (Safest)'),
+        '3' => $this->t('3 (Conservative)'),
+        '5' => $this->t('5 (Balanced)'),
+        '10' => $this->t('10 (Aggressive)'),
       ],
-      '#default_value' => '10',
+      '#default_value' => '3',
       '#required' => TRUE,
     ];
 
@@ -280,31 +311,25 @@ class AiTtsBatchForm extends FormBase {
       ],
     ];
 
-    // Preview section.
-    $form['preview'] = [
-      '#type' => 'details',
-      '#title' => $this->t('Preview'),
-      '#open' => FALSE,
-    ];
-
-    $form['preview']['info'] = [
-      '#type' => 'markup',
-      '#markup' => '<div id="batch-preview">' . $this->t('Select options above to see estimate.') . '</div>',
-    ];
-
     // Actions.
     $form['actions'] = [
       '#type' => 'actions',
+      '#prefix' => '<div id="submit-button-wrapper">',
+      '#suffix' => '</div>',
     ];
+
+    // Calculate entity count for button text using shared method.
+    $entities = $this->getEntitiesFromFormState($form_state);
+    $entity_count = count($entities);
+    $button_text = $entity_count > 0
+      ? $this->t('Batch generate @count items', ['@count' => $entity_count])
+      : $this->t('Start batch generation');
 
     $form['actions']['submit'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Start batch generation'),
+      '#value' => $button_text,
       '#button_type' => 'primary',
     ];
-
-    // Attach library for preview functionality.
-    $form['#attached']['library'][] = 'ai_tts/batch_form';
 
     return $form;
   }
@@ -338,23 +363,15 @@ class AiTtsBatchForm extends FormBase {
   public function submitForm(array &$form, FormStateInterface $form_state) {
     $values = $form_state->getValues();
 
-    // Get selected bundles.
-    $selected_bundles = array_filter($values['entity_bundles']);
-
-    // Prepare date filter.
-    $updated_after = NULL;
-    if (!empty($values['enable_date_filter']) && !empty($values['updated_after'])) {
-      $updated_after = $values['updated_after'];
+    // Get selected languages.
+    $selected_languages = array_filter($values['languages']);
+    if (empty($selected_languages)) {
+      $this->messenger()->addError($this->t('Please select at least one language.'));
+      return;
     }
 
-    // Get entities to process.
-    $entities = $this->batchService->getEntitiesForGeneration(
-      array_values($selected_bundles),
-      $values['language'],
-      (bool) $values['force_refresh'],
-      (int) $values['limit'],
-      $updated_after
-    );
+    // Get entities to process using shared method.
+    $entities = $this->getEntitiesFromFormState($form_state);
 
     if (empty($entities)) {
       $this->messenger()->addWarning($this->t('No entities found to process. All may already have cached audio.'));
@@ -385,11 +402,11 @@ class AiTtsBatchForm extends FormBase {
 
     foreach ($chunks as $chunk) {
       $batch['operations'][] = [
-        [$this->batchService, 'processBatch'],
+        [static::class, 'processBatchOperation'],
         [
           $chunk,
           [
-            'language' => $values['language'],
+            // Note: language is already stored in each entity's data array.
             'voice' => $values['voice'] !== '_default' ? $values['voice'] : NULL,
             'speed' => (float) $values['speed'],
             'force_refresh' => (bool) $values['force_refresh'],
@@ -404,6 +421,31 @@ class AiTtsBatchForm extends FormBase {
     }
 
     batch_set($batch);
+  }
+
+  /**
+   * Static batch operation callback.
+   *
+   * @param array $entities
+   *   Array of entity data to process.
+   * @param array $options
+   *   Batch options.
+   * @param int $total_entities
+   *   Total number of entities in entire batch.
+   * @param array $context
+   *   Batch API context array.
+   */
+  public static function processBatchOperation(
+    array $entities,
+    array $options,
+    int $total_entities,
+    array &$context,
+  ): void {
+    // Get the batch service without serializing it.
+    $batch_service = \Drupal::service('ai_tts.batch_service');
+
+    // Call the actual processing method.
+    $batch_service->processBatch($entities, $options, $total_entities, $context);
   }
 
   /**
@@ -469,6 +511,75 @@ class AiTtsBatchForm extends FormBase {
     else {
       $messenger->addError(t('Batch processing failed with errors.'));
     }
+  }
+
+  /**
+   * AJAX callback to update submit button text with entity count.
+   *
+   * @param array $form
+   *   The form array.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The form state.
+   *
+   * @return array
+   *   The actions element to replace.
+   */
+  public function updateSubmitButton(array &$form, FormStateInterface $form_state) {
+    return $form['actions'];
+  }
+
+  /**
+   * Get entities based on current form selections.
+   *
+   * Single source of truth for entity query logic - used by both
+   * button text updates and actual batch processing.
+   *
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The form state.
+   *
+   * @return array
+   *   Array of entity data to process, or empty array if invalid selection.
+   */
+  protected function getEntitiesFromFormState(FormStateInterface $form_state) {
+    $values = $form_state->getValues();
+
+    // If form not submitted yet, return empty.
+    if (empty($values)) {
+      return [];
+    }
+
+    // Get selected bundles.
+    $selected_bundles = !empty($values['entity_bundles']) ? array_filter($values['entity_bundles']) : [];
+    if (empty($selected_bundles)) {
+      return [];
+    }
+
+    // Get selected languages.
+    $selected_languages = !empty($values['languages']) ? array_filter($values['languages']) : [];
+    if (empty($selected_languages)) {
+      return [];
+    }
+
+    // Prepare date filter.
+    $updated_after = NULL;
+    if (!empty($values['enable_date_filter']) && !empty($values['updated_after'])) {
+      $updated_after = $values['updated_after'];
+    }
+
+    // Get force refresh.
+    $force_refresh = !empty($values['force_refresh']);
+
+    // Get limit.
+    $limit = !empty($values['limit']) ? (int) $values['limit'] : 0;
+
+    // Query entities using batch service.
+    return $this->batchService->getEntitiesForGeneration(
+      array_values($selected_bundles),
+      array_values($selected_languages),
+      $force_refresh,
+      $limit,
+      $updated_after
+    );
   }
 
 }
