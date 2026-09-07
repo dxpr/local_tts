@@ -22,6 +22,11 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
   description: new TranslatableMarkup('Shows an audio player that reads content aloud'),
   field_types: [
     'local_tts_player',
+    'string',
+    'string_long',
+    'text',
+    'text_long',
+    'text_with_summary',
   ],
 )]
 final class LocalTtsPlayerFormatter extends FormatterBase implements ContainerFactoryPluginInterface {

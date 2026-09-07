@@ -5,6 +5,7 @@
  * Local Text-to-Speech module.
  */
 
+use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
 use Drupal\Core\Entity\EntityFormInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\EntityInterface;
@@ -29,6 +30,65 @@ function local_tts_help($route_name, RouteMatchInterface $route_match) {
       $output .= '<p>' . t('Configure the module at Administration &gt; Configuration &gt; Media &gt; Local Text-to-Speech.') . '</p>';
       return $output;
   }
+}
+
+/**
+ * Implements hook_entity_extra_field_info().
+ */
+function local_tts_entity_extra_field_info() {
+  $extra = [];
+
+  $entity_types = \Drupal::entityTypeManager()->getDefinitions();
+  $bundle_info = \Drupal::service('entity_type.bundle.info');
+
+  foreach ($entity_types as $entity_type_id => $entity_type) {
+    if (!$entity_type->entityClassImplements(FieldableEntityInterface::class)) {
+      continue;
+    }
+    if (!$entity_type->hasViewBuilderClass()) {
+      continue;
+    }
+
+    foreach (array_keys($bundle_info->getBundleInfo($entity_type_id)) as $bundle) {
+      $extra[$entity_type_id][$bundle]['display']['local_tts_player'] = [
+        'label' => t('TTS Player'),
+        'description' => t('Audio player that reads this content aloud.'),
+        'weight' => 100,
+        'visible' => FALSE,
+      ];
+    }
+  }
+
+  return $extra;
+}
+
+/**
+ * Implements hook_entity_view().
+ */
+function local_tts_entity_view(array &$build, EntityInterface $entity, EntityViewDisplayInterface $display, $view_mode) {
+  if (!$display->getComponent('local_tts_player')) {
+    return;
+  }
+  if (!($entity instanceof FieldableEntityInterface)) {
+    return;
+  }
+
+  $build['local_tts_player'] = [
+    '#create_placeholder' => TRUE,
+    '#lazy_builder' => [
+      'local_tts.player_builder:buildPlayerLazy',
+      [
+        $entity->getEntityTypeId(),
+        (string) $entity->id(),
+        json_encode([
+          'show_voice_selector' => TRUE,
+          'show_speed_control' => TRUE,
+          'fields' => [],
+          'wrapper_classes' => '',
+        ]),
+      ],
+    ],
+  ];
 }
 
 /**
