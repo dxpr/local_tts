@@ -5,12 +5,14 @@ namespace Drupal\local_tts\Plugin\Block;
 use Drupal\local_tts\TtsPlayerBuilder;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Block\BlockBase;
+use Drupal\Core\Cache\Cache;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Session\AccountInterface;
 
@@ -24,31 +26,6 @@ use Drupal\Core\Session\AccountInterface;
  * )
  */
 final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
-
-  /**
-   * Allowed field types for TTS processing.
-   */
-  const ALLOWED_FIELD_TYPES = [
-    'string',
-    'string_long',
-    'text',
-    'text_long',
-    'text_with_summary',
-    'text_plain',
-    'email',
-    'telephone',
-  ];
-
-  /**
-   * Base fields to exclude from TTS (administrative/metadata).
-   */
-  const EXCLUDED_BASE_FIELDS = [
-    'nid', 'uuid', 'vid', 'langcode', 'type', 'revision_timestamp',
-    'revision_uid', 'revision_log', 'status', 'uid', 'created', 'changed',
-    'promote', 'sticky', 'default_langcode', 'revision_default',
-    'revision_translation_affected', 'metatag', 'path', 'menu_link',
-    'tid', 'weight', 'parent', 'description__format',
-  ];
 
   /**
    * The config factory.
@@ -93,6 +70,13 @@ final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInt
   protected $currentUser;
 
   /**
+   * The entity type manager.
+   *
+   * @var \Drupal\Core\Entity\EntityTypeManagerInterface
+   */
+  protected $entityTypeManager;
+
+  /**
    * Constructs a new LocalTtsBlock instance.
    *
    * @param array $configuration
@@ -113,8 +97,10 @@ final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInt
    *   The route match service.
    * @param \Drupal\Core\Session\AccountInterface $current_user
    *   The current user.
+   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
+   *   The entity type manager.
    */
-  public function __construct(array $configuration, $plugin_id, $plugin_definition, ConfigFactoryInterface $config_factory, TtsPlayerBuilder $player_builder, EntityFieldManagerInterface $entity_field_manager, EntityTypeBundleInfoInterface $entity_type_bundle_info, RouteMatchInterface $route_match, AccountInterface $current_user) {
+  public function __construct(array $configuration, $plugin_id, $plugin_definition, ConfigFactoryInterface $config_factory, TtsPlayerBuilder $player_builder, EntityFieldManagerInterface $entity_field_manager, EntityTypeBundleInfoInterface $entity_type_bundle_info, RouteMatchInterface $route_match, AccountInterface $current_user, EntityTypeManagerInterface $entity_type_manager) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->configFactory = $config_factory;
     $this->playerBuilder = $player_builder;
@@ -122,6 +108,7 @@ final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInt
     $this->entityTypeBundleInfo = $entity_type_bundle_info;
     $this->routeMatch = $route_match;
     $this->currentUser = $current_user;
+    $this->entityTypeManager = $entity_type_manager;
   }
 
   /**
@@ -137,7 +124,8 @@ final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInt
       $container->get('entity_field.manager'),
       $container->get('entity_type.bundle.info'),
       $container->get('current_route_match'),
-      $container->get('current_user')
+      $container->get('current_user'),
+      $container->get('entity_type.manager')
     );
   }
 
@@ -148,6 +136,7 @@ final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInt
     return [
       'show_voice_selector' => TRUE,
       'show_speed_control' => TRUE,
+      'show_volume_control' => TRUE,
       'fields' => [],
       'wrapper_classes' => '',
     ] + parent::defaultConfiguration();
@@ -174,6 +163,13 @@ final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInt
       '#description' => $this->t('Allow users to adjust speech speed.'),
     ];
 
+    $form['show_volume_control'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Show Volume Control'),
+      '#default_value' => $config['show_volume_control'],
+      '#description' => $this->t('Show volume slider and mute button during playback.'),
+    ];
+
     $form['wrapper_classes'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Additional CSS Classes'),
@@ -182,13 +178,21 @@ final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInt
     ];
 
     $field_options = [];
-    $bundle_info = $this->entityTypeBundleInfo->getBundleInfo('node');
-    foreach (array_keys($bundle_info) as $bundle) {
-      $definitions = $this->entityFieldManager->getFieldDefinitions('node', $bundle);
-      foreach ($definitions as $field_name => $definition) {
-        $type = $definition->getType();
-        if (in_array($type, self::ALLOWED_FIELD_TYPES)) {
-          $field_options[$field_name] = $definition->getLabel() . ' (' . $field_name . ')';
+    foreach ($this->entityTypeManager->getDefinitions() as $entity_type_id => $entity_type) {
+      if (!$entity_type->entityClassImplements(FieldableEntityInterface::class)) {
+        continue;
+      }
+      if (!$entity_type->hasViewBuilderClass()) {
+        continue;
+      }
+      $bundles = $this->entityTypeBundleInfo->getBundleInfo($entity_type_id);
+      foreach (array_keys($bundles) as $bundle) {
+        $definitions = $this->entityFieldManager->getFieldDefinitions($entity_type_id, $bundle);
+        foreach ($definitions as $field_name => $definition) {
+          $type = $definition->getType();
+          if (in_array($type, TtsPlayerBuilder::ALLOWED_FIELD_TYPES)) {
+            $field_options[$field_name] = $definition->getLabel() . ' (' . $field_name . ')';
+          }
         }
       }
     }
@@ -211,8 +215,16 @@ final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInt
   public function blockSubmit($form, FormStateInterface $form_state) {
     $this->configuration['show_voice_selector'] = $form_state->getValue('show_voice_selector');
     $this->configuration['show_speed_control'] = $form_state->getValue('show_speed_control');
+    $this->configuration['show_volume_control'] = $form_state->getValue('show_volume_control');
     $this->configuration['fields'] = array_filter($form_state->getValue('fields') ?? []);
     $this->configuration['wrapper_classes'] = $form_state->getValue('wrapper_classes');
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getCacheContexts() {
+    return Cache::mergeContexts(parent::getCacheContexts(), ['route']);
   }
 
   /**

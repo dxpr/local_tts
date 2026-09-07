@@ -7,6 +7,7 @@ use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Drupal\Core\Queue\Attribute\QueueWorker;
 use Drupal\Core\Queue\QueueWorkerBase;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\Core\TypedData\TranslatableInterface;
 use Drupal\local_tts\TtsService;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -77,9 +78,23 @@ final class TtsGenerationWorker extends QueueWorkerBase implements ContainerFact
    * {@inheritdoc}
    */
   public function processItem($data) {
-    if (empty($data['text']) || empty($data['entity_type']) || empty($data['entity_id'])) {
+    if (empty($data['entity_type']) || empty($data['entity_id'])) {
       $this->logger->warning('Queue item missing required fields; skipping.');
       return;
+    }
+
+    $text = $data['text'] ?? '';
+
+    // Extract text from entity when not provided in queue item.
+    if (empty($text)) {
+      $text = $this->extractTextForQueueItem($data);
+      if (empty($text)) {
+        $this->logger->warning('No text could be extracted for @type:@id; skipping.', [
+          '@type' => $data['entity_type'],
+          '@id' => $data['entity_id'],
+        ]);
+        return;
+      }
     }
 
     $options = [
@@ -91,7 +106,7 @@ final class TtsGenerationWorker extends QueueWorkerBase implements ContainerFact
     ];
 
     try {
-      $this->ttsService->generateSpeech($data['text'], $options);
+      $this->ttsService->generateSpeech($text, $options);
     }
     catch (\Exception $e) {
       $this->logger->error('Queue TTS generation failed for @type:@id: @msg', [
@@ -100,6 +115,42 @@ final class TtsGenerationWorker extends QueueWorkerBase implements ContainerFact
         '@msg' => $e->getMessage(),
       ]);
       throw $e;
+    }
+  }
+
+  /**
+   * Load and extract text from an entity for a queue item.
+   *
+   * @param array $data
+   *   Queue item data with entity_type and entity_id.
+   *
+   * @return string
+   *   Extracted text, or empty string on failure.
+   */
+  protected function extractTextForQueueItem(array $data): string {
+    try {
+      $entity = \Drupal::entityTypeManager()
+        ->getStorage($data['entity_type'])
+        ->load($data['entity_id']);
+
+      if (!$entity) {
+        return '';
+      }
+
+      $langcode = $data['language'] ?? NULL;
+      if ($langcode && $entity instanceof TranslatableInterface && $entity->hasTranslation($langcode)) {
+        $entity = $entity->getTranslation($langcode);
+      }
+
+      return $this->ttsService->extractTextFromEntity($entity);
+    }
+    catch (\Exception $e) {
+      $this->logger->error('Failed to extract text for @type:@id: @msg', [
+        '@type' => $data['entity_type'],
+        '@id' => $data['entity_id'],
+        '@msg' => $e->getMessage(),
+      ]);
+      return '';
     }
   }
 

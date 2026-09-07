@@ -6,6 +6,7 @@ use Drupal\Component\Utility\Html;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Security\TrustedCallbackInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\Core\Session\AnonymousUserSession;
@@ -127,6 +128,7 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
     $settings += [
       'show_voice_selector' => TRUE,
       'show_speed_control' => TRUE,
+      'show_volume_control' => TRUE,
       'fields' => [],
       'wrapper_classes' => '',
     ];
@@ -148,6 +150,10 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
       return [];
     }
 
+    if (!$this->entityHasTextContent($entity, $settings['fields'])) {
+      return [];
+    }
+
     $available_voices = $this->ttsService->getAvailableVoices($langcode);
     if (empty($available_voices)) {
       return [];
@@ -164,7 +170,10 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
 
     $build = [
       '#type' => 'container',
-      '#attributes' => ['class' => $container_classes],
+      '#attributes' => [
+        'class' => $container_classes,
+        'data-tts-id' => $id_suffix,
+      ],
     ];
 
     $build['play_wrapper'] = [
@@ -268,43 +277,45 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
       '#value' => '',
     ];
 
-    $build['play_wrapper']['content']['playback_controls']['volume_wrapper'] = [
-      '#type' => 'container',
-      '#attributes' => [
-        'class' => ['local-tts-volume-wrapper'],
-      ],
-    ];
+    if ($settings['show_volume_control']) {
+      $build['play_wrapper']['content']['playback_controls']['volume_wrapper'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'class' => ['local-tts-volume-wrapper'],
+        ],
+      ];
 
-    $build['play_wrapper']['content']['playback_controls']['volume_wrapper']['mute_button'] = [
-      '#type' => 'html_tag',
-      '#tag' => 'button',
-      '#attributes' => [
-        'type' => 'button',
-        'class' => ['local-tts-mute-button'],
-        'aria-label' => $this->t('Mute'),
-        'aria-pressed' => 'false',
-      ],
-      '#value' => '',
-    ];
+      $build['play_wrapper']['content']['playback_controls']['volume_wrapper']['mute_button'] = [
+        '#type' => 'html_tag',
+        '#tag' => 'button',
+        '#attributes' => [
+          'type' => 'button',
+          'class' => ['local-tts-mute-button'],
+          'aria-label' => $this->t('Mute'),
+          'aria-pressed' => 'false',
+        ],
+        '#value' => '',
+      ];
 
-    $build['play_wrapper']['content']['playback_controls']['volume_wrapper']['volume_slider'] = [
-      '#type' => 'html_tag',
-      '#tag' => 'input',
-      '#attributes' => [
-        'type' => 'range',
-        'class' => ['local-tts-volume-slider'],
-        'min' => '0',
-        'max' => '1',
-        'value' => '1',
-        'step' => '0.05',
-        'role' => 'slider',
-        'aria-label' => $this->t('Volume'),
-        'aria-valuemin' => '0',
-        'aria-valuemax' => '100',
-        'aria-valuenow' => '100',
-        'aria-valuetext' => $this->t('Volume 100%'),
-      ],
-    ];
+      $build['play_wrapper']['content']['playback_controls']['volume_wrapper']['volume_slider'] = [
+        '#type' => 'html_tag',
+        '#tag' => 'input',
+        '#attributes' => [
+          'type' => 'range',
+          'class' => ['local-tts-volume-slider'],
+          'min' => '0',
+          'max' => '1',
+          'value' => '1',
+          'step' => '0.05',
+          'role' => 'slider',
+          'aria-label' => $this->t('Volume'),
+          'aria-valuemin' => '0',
+          'aria-valuemax' => '100',
+          'aria-valuenow' => '100',
+          'aria-valuetext' => $this->t('Volume 100%'),
+        ],
+      ];
+    }
 
     $build['play_wrapper']['settings'] = [
       '#type' => 'container',
@@ -405,17 +416,21 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
       'library' => ['local_tts/player'],
       'drupalSettings' => [
         'aiTts' => [
-          'defaultVoice' => $js_default_voice,
-          'defaultSpeed' => $global_config->get('default_speed'),
           'generateUrl' => Url::fromRoute('local_tts.generate')->toString(),
           'statusBaseUrl' => $status_base_url,
-          'language' => $langcode,
-          'entityType' => $entity->getEntityTypeId(),
-          'entityId' => $entity->id(),
-          'fields' => array_values(array_filter($settings['fields'] ?? [])),
-          'showDownload' => (bool) $show_download,
           'isAdmin' => (bool) $this->currentUser->hasPermission('administer local tts settings'),
           'settingsUrl' => Url::fromRoute('local_tts.settings')->toString(),
+          'instances' => [
+            $id_suffix => [
+              'defaultVoice' => $js_default_voice,
+              'defaultSpeed' => $global_config->get('default_speed'),
+              'language' => $langcode,
+              'entityType' => $entity->getEntityTypeId(),
+              'entityId' => $entity->id(),
+              'fields' => array_values(array_filter($settings['fields'] ?? [])),
+              'showDownload' => (bool) $show_download,
+            ],
+          ],
         ],
       ],
     ];
@@ -452,6 +467,42 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
     }
 
     return array_key_first($available_voices);
+  }
+
+  /**
+   * Check whether an entity has non-empty text content.
+   *
+   * @param \Drupal\Core\Entity\EntityInterface $entity
+   *   The entity to check.
+   * @param array $field_filter
+   *   Field names to check (empty = all text fields).
+   *
+   * @return bool
+   *   TRUE if the entity has text content.
+   */
+  protected function entityHasTextContent(EntityInterface $entity, array $field_filter = []): bool {
+    if (!($entity instanceof FieldableEntityInterface)) {
+      return FALSE;
+    }
+
+    $field_filter = array_filter($field_filter);
+
+    foreach ($entity->getFieldDefinitions() as $field_name => $definition) {
+      if (in_array($field_name, self::EXCLUDED_BASE_FIELDS, TRUE)) {
+        continue;
+      }
+      if (!empty($field_filter) && !in_array($field_name, $field_filter, TRUE)) {
+        continue;
+      }
+      if (!in_array($definition->getType(), self::ALLOWED_FIELD_TYPES, TRUE)) {
+        continue;
+      }
+      if (!$entity->get($field_name)->isEmpty()) {
+        return TRUE;
+      }
+    }
+
+    return FALSE;
   }
 
 }

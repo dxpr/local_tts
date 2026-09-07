@@ -12,8 +12,11 @@ local_tts.settings:
       type: string
       label: 'Default speech speed'
     default_voices:
-      type: mapping
+      type: sequence
       label: 'Default voices per language'
+      sequence:
+        type: string
+        label: 'Voice code'
     cache_audio:
       type: boolean
       label: 'Cache generated audio files'

@@ -35,7 +35,10 @@
           return;
         }
 
-        const config = drupalSettings.aiTts;
+        const ttsId = player.getAttribute('data-tts-id');
+        const globalConfig = drupalSettings.aiTts || {};
+        const instanceConfig = (globalConfig.instances || {})[ttsId] || {};
+        const config = Object.assign({}, globalConfig, instanceConfig);
         let isPlaying = false;
         let currentAudioUrl = null;
         let lastAriaUpdate = 0;
@@ -101,11 +104,47 @@
 
         function updateStatus(message, type) {
           type = type || 'info';
-          if (message) {
-            statusDiv.innerHTML = '<div class="messages messages--' + type + '">' + message + '</div>';
-          } else {
-            statusDiv.innerHTML = '';
+          while (statusDiv.firstChild) {
+            statusDiv.removeChild(statusDiv.firstChild);
           }
+          if (message) {
+            var div = document.createElement('div');
+            div.className = 'messages messages--' + type;
+            div.textContent = message;
+            statusDiv.appendChild(div);
+          }
+        }
+
+        function setLabelWithIcon(iconClass, iconText, text) {
+          while (labelText.firstChild) {
+            labelText.removeChild(labelText.firstChild);
+          }
+          var icon = document.createElement('span');
+          icon.className = iconClass;
+          if (iconText) {
+            icon.textContent = iconText;
+          }
+          labelText.appendChild(icon);
+          labelText.appendChild(document.createTextNode(' ' + text));
+        }
+
+        function showResumePrompt(savedPosition) {
+          while (statusDiv.firstChild) {
+            statusDiv.removeChild(statusDiv.firstChild);
+          }
+          var div = document.createElement('div');
+          div.className = 'messages messages--status';
+          var link = document.createElement('a');
+          link.href = '#';
+          link.className = 'local-tts-resume';
+          link.textContent = Drupal.t('Resume from @time?', {'@time': formatDuration(savedPosition)});
+          link.addEventListener('click', function(e) {
+            e.preventDefault();
+            audioElement.currentTime = savedPosition;
+            updateStatus('', 'status');
+          });
+          div.appendChild(link);
+          statusDiv.appendChild(div);
         }
 
         function updateButtonStates() {
@@ -187,7 +226,7 @@
             if (Date.now() - startTime > maxPollTime) {
               var timeoutMsg = Drupal.t('Audio generation timed out. Please try again later.');
               if (labelText) {
-                labelText.innerHTML = '<span class="local-tts-error">⚠</span> ' + timeoutMsg;
+                setLabelWithIcon('local-tts-error', '⚠', timeoutMsg);
               }
               updateStatus(timeoutMsg, 'error');
               playButton.disabled = false;
@@ -220,7 +259,7 @@
           const speed = speedInput ? parseFloat(speedInput.value) : config.defaultSpeed;
 
           if (labelText) {
-            labelText.innerHTML = '<span class="local-tts-loading"></span> ' + Drupal.t('Generating speech...');
+            setLabelWithIcon('local-tts-loading', '', Drupal.t('Generating speech...'));
           }
           playButton.disabled = true;
           playButton.classList.add('loading');
@@ -266,7 +305,7 @@
                 playSpeech(result.data.audio_url);
               } else if (result.ok && result.data.status === 'processing' && result.data.poll_url) {
                 if (labelText) {
-                  labelText.innerHTML = '<span class="local-tts-loading"></span> ' + Drupal.t('Generating speech... This may take a moment.');
+                  setLabelWithIcon('local-tts-loading', '', Drupal.t('Generating speech... This may take a moment.'));
                 }
                 pollForAudio(result.data.poll_url);
               } else {
@@ -316,13 +355,20 @@
           audioElement.src = audioUrl;
           audioElement.load();
 
-          audioElement.addEventListener('canplaythrough', function onCanPlay() {
-            audioElement.removeEventListener('canplaythrough', onCanPlay);
+          var loadTimeout = setTimeout(function () {
+            handleError(Drupal.t('Audio could not be loaded. Try refreshing the page.'));
+          }, 15000);
 
+          var readyFired = false;
+          function onReady() {
+            if (readyFired) { return; }
+            readyFired = true;
+            clearTimeout(loadTimeout);
             var savedPosition = getSavedProgress();
 
             audioElement.play().then(function() {
               isPlaying = true;
+              audioElement.playbackRate = speedInput ? parseFloat(speedInput.value) : 1;
               playButton.disabled = false;
               playButton.classList.remove('loading');
               updateButtonStates();
@@ -331,23 +377,9 @@
               updateDownloadButton(audioUrl);
               dispatchAnalytics('play');
 
-              // Offer to resume from saved position.
               if (savedPosition > 5 && isFinite(savedPosition) && savedPosition < audioElement.duration - 5) {
-                var formatted = formatDuration(savedPosition);
-                var resumeHtml = '<a href="#" class="local-tts-resume">' +
-                  Drupal.t('Resume from @time?', {'@time': formatted}) + '</a>';
-                updateStatus(resumeHtml, 'status');
+                showResumePrompt(savedPosition);
 
-                var resumeLink = statusDiv.querySelector('.local-tts-resume');
-                if (resumeLink) {
-                  resumeLink.addEventListener('click', function (e) {
-                    e.preventDefault();
-                    audioElement.currentTime = savedPosition;
-                    updateStatus('', 'status');
-                  });
-                }
-
-                // Auto-dismiss after 10 seconds.
                 setTimeout(function () {
                   if (statusDiv.querySelector('.local-tts-resume')) {
                     updateStatus('', 'status');
@@ -359,6 +391,13 @@
               handleError(Drupal.t('Error playing audio.'));
               isPlaying = false;
             });
+          }
+
+          audioElement.addEventListener('canplaythrough', onReady, { once: true });
+          audioElement.addEventListener('canplay', onReady, { once: true });
+          audioElement.addEventListener('error', function () {
+            clearTimeout(loadTimeout);
+            handleError(Drupal.t('Audio could not be loaded. The file may be corrupted.'));
           }, { once: true });
         }
 
@@ -473,7 +512,7 @@
 
           if (scrubberInput) {
             scrubberInput.value = currentTime;
-            scrubberInput.style.background = 'linear-gradient(to right, #121212 0%, #121212 ' + percentage + '%, #dfdfdf ' + percentage + '%, #dfdfdf 100%)';
+            scrubberInput.style.background = 'linear-gradient(to right, var(--ltt-color-thumb) 0%, var(--ltt-color-thumb) ' + percentage + '%, var(--ltt-color-track) ' + percentage + '%, var(--ltt-color-track) 100%)';
           }
 
           if (currentTimeDisplay) {
@@ -500,7 +539,7 @@
 
             if (audioElement.duration) {
               const percentage = (newTime / audioElement.duration) * 100;
-              scrubberInput.style.background = 'linear-gradient(to right, #121212 0%, #121212 ' + percentage + '%, #dfdfdf ' + percentage + '%, #dfdfdf 100%)';
+              scrubberInput.style.background = 'linear-gradient(to right, var(--ltt-color-thumb) 0%, var(--ltt-color-thumb) ' + percentage + '%, var(--ltt-color-track) ' + percentage + '%, var(--ltt-color-track) 100%)';
             }
 
             // A11Y: Throttle ARIA updates to 200ms.
@@ -605,9 +644,7 @@
 
         if (speedInput) {
           speedInput.addEventListener('change', function() {
-            if (isPlaying || currentAudioUrl) {
-              stopPlayback();
-            }
+            audioElement.playbackRate = parseFloat(speedInput.value);
           });
         }
       });

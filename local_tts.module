@@ -12,6 +12,7 @@ use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\StringTranslation\ByteSizeMarkup;
+use Drupal\local_tts\TtsPlayerBuilder;
 
 /**
  * Implements hook_help().
@@ -83,6 +84,7 @@ function local_tts_entity_view(array &$build, EntityInterface $entity, EntityVie
         json_encode([
           'show_voice_selector' => TRUE,
           'show_speed_control' => TRUE,
+          'show_volume_control' => TRUE,
           'fields' => [],
           'wrapper_classes' => '',
         ]),
@@ -118,10 +120,13 @@ function local_tts_entity_update(EntityInterface $entity) {
     return;
   }
 
-  // Content changed: invalidate all cached audio for this entity.
-  \Drupal::service('local_tts.tts_service')->deleteAudioForEntity(
+  // Invalidate only the changed translation's cached audio.
+  $tts_service = \Drupal::service('local_tts.tts_service');
+  $langcode = $entity->language()->getId();
+  $tts_service->deleteAudioForEntityTranslation(
     $entity->getEntityTypeId(),
-    $entity->id()
+    $entity->id(),
+    $langcode
   );
 
   _local_tts_auto_generate($entity);
@@ -199,16 +204,8 @@ function _local_tts_text_content_changed($entity, $original) {
     return TRUE;
   }
 
-  $text_field_types = [
-    'string',
-    'string_long',
-    'text',
-    'text_long',
-    'text_with_summary',
-  ];
-
   foreach ($entity->getFieldDefinitions() as $field_name => $field_definition) {
-    if (!in_array($field_definition->getType(), $text_field_types, TRUE)) {
+    if (!in_array($field_definition->getType(), TtsPlayerBuilder::ALLOWED_FIELD_TYPES, TRUE)) {
       continue;
     }
 
@@ -245,32 +242,48 @@ function _local_tts_cleanup_stale_content() {
     ->execute()
     ->fetchAll();
 
+  // Group records by entity type for batch loading.
+  $grouped = [];
   foreach ($records as $record) {
-    $should_delete = FALSE;
+    $grouped[$record->entity_type][$record->entity_id][] = $record;
+  }
 
+  $entity_type_manager = \Drupal::entityTypeManager();
+  $stale_records = [];
+
+  foreach ($grouped as $entity_type => $id_records) {
     try {
-      $entity = \Drupal::entityTypeManager()
-        ->getStorage($record->entity_type)
-        ->load($record->entity_id);
+      $storage = $entity_type_manager->getStorage($entity_type);
+      $ids = array_keys($id_records);
+      $loaded = $storage->loadMultiple($ids);
 
-      if (!$entity) {
-        $should_delete = TRUE;
+      foreach ($ids as $id) {
+        if (!isset($loaded[$id])) {
+          foreach ($id_records[$id] as $record) {
+            $stale_records[] = $record;
+          }
+        }
       }
     }
     catch (\Exception $e) {
-      $should_delete = TRUE;
-    }
-
-    if ($should_delete) {
-      $file_path = $directory . '/' . $record->cache_key . '.ogg';
-      if (file_exists($file_path)) {
-        @unlink($file_path);
+      // Storage unavailable; mark all records for this type as stale.
+      foreach ($id_records as $entity_records) {
+        foreach ($entity_records as $record) {
+          $stale_records[] = $record;
+        }
       }
-      \Drupal::database()->delete('local_tts_cache')
-        ->condition('id', $record->id)
-        ->execute();
-      $deleted++;
     }
+  }
+
+  foreach ($stale_records as $record) {
+    $file_path = $directory . '/' . $record->cache_key . '.ogg';
+    if (file_exists($file_path)) {
+      @unlink($file_path);
+    }
+    \Drupal::database()->delete('local_tts_cache')
+      ->condition('id', $record->id)
+      ->execute();
+    $deleted++;
   }
 
   if ($deleted > 0) {

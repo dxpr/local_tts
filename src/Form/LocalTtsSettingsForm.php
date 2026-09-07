@@ -328,7 +328,7 @@ final class LocalTtsSettingsForm extends ConfigFormBase {
   public function validateForm(array &$form, FormStateInterface $form_state) {
     $espeak_path = $form_state->getValue('espeak_data_path');
     if ($espeak_path) {
-      $real_path = $this->expandPath($espeak_path);
+      $real_path = TtsService::expandPath($espeak_path);
       if (!is_dir($real_path)) {
         $form_state->setErrorByName('espeak_data_path', $this->t('The eSpeak NG data directory does not exist at: @path', ['@path' => $real_path]));
       }
@@ -393,25 +393,6 @@ final class LocalTtsSettingsForm extends ConfigFormBase {
   protected function getAvailableVoices() {
     // Get voices from the TTS service.
     return $this->ttsService->getAvailableVoices();
-  }
-
-  /**
-   * Expand path with tilde (~) to full path.
-   *
-   * @param string $path
-   *   Path potentially containing ~.
-   *
-   * @return string
-   *   Expanded path.
-   */
-  protected function expandPath($path) {
-    if (strpos($path, '~') === 0) {
-      $home = getenv('HOME');
-      if ($home) {
-        return str_replace('~', $home, $path);
-      }
-    }
-    return $path;
   }
 
   /**

@@ -2,13 +2,19 @@
 
 namespace Drupal\local_tts;
 
+use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\local_tts\Exception\TtsServiceUnavailableException;
 use Drupal\local_tts\Exception\TtsTimeoutException;
 use Drupal\Core\Config\ConfigFactoryInterface;
-use Drupal\Core\File\FileSystemInterface;
+use Drupal\Core\Database\Connection;
 use Drupal\Core\Database\Database;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Extension\ModuleExtensionList;
+use Drupal\Core\Extension\ModuleHandlerInterface;
+use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\Core\Render\RendererInterface;
 
 /**
  * Service for interfacing with Kokoro TTS binary.
@@ -73,6 +79,41 @@ class TtsService {
   protected $modulePath;
 
   /**
+   * The time service.
+   *
+   * @var \Drupal\Component\Datetime\TimeInterface
+   */
+  protected $time;
+
+  /**
+   * The database connection.
+   *
+   * @var \Drupal\Core\Database\Connection
+   */
+  protected $database;
+
+  /**
+   * The entity type manager.
+   *
+   * @var \Drupal\Core\Entity\EntityTypeManagerInterface
+   */
+  protected $entityTypeManager;
+
+  /**
+   * The renderer service.
+   *
+   * @var \Drupal\Core\Render\RendererInterface
+   */
+  protected $renderer;
+
+  /**
+   * The module handler.
+   *
+   * @var \Drupal\Core\Extension\ModuleHandlerInterface
+   */
+  protected $moduleHandler;
+
+  /**
    * Constructs a TtsService object.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
@@ -81,12 +122,39 @@ class TtsService {
    *   The file system service.
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
    *   The logger factory.
+   * @param \Drupal\Core\Extension\ModuleExtensionList $extension_list_module
+   *   The module extension list.
+   * @param \Drupal\Component\Datetime\TimeInterface $time
+   *   The time service.
+   * @param \Drupal\Core\Database\Connection $database
+   *   The database connection.
+   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
+   *   The entity type manager.
+   * @param \Drupal\Core\Render\RendererInterface $renderer
+   *   The renderer service.
+   * @param \Drupal\Core\Extension\ModuleHandlerInterface $module_handler
+   *   The module handler.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, FileSystemInterface $file_system, LoggerChannelFactoryInterface $logger_factory) {
+  public function __construct(
+    ConfigFactoryInterface $config_factory,
+    FileSystemInterface $file_system,
+    LoggerChannelFactoryInterface $logger_factory,
+    ModuleExtensionList $extension_list_module,
+    TimeInterface $time,
+    Connection $database,
+    EntityTypeManagerInterface $entity_type_manager,
+    RendererInterface $renderer,
+    ModuleHandlerInterface $module_handler,
+  ) {
     $this->configFactory = $config_factory;
     $this->fileSystem = $file_system;
     $this->logger = $logger_factory->get('local_tts');
-    $this->modulePath = \Drupal::service('extension.list.module')->getPath('local_tts');
+    $this->modulePath = $extension_list_module->getPath('local_tts');
+    $this->time = $time;
+    $this->database = $database;
+    $this->entityTypeManager = $entity_type_manager;
+    $this->renderer = $renderer;
+    $this->moduleHandler = $module_handler;
   }
 
   /**
@@ -130,7 +198,7 @@ class TtsService {
     // Security: Only generate audio for publicly accessible content.
     if (!$skip_access_check) {
       try {
-        $entity = \Drupal::entityTypeManager()
+        $entity = $this->entityTypeManager
           ->getStorage($entity_type)
           ->load($entity_id);
 
@@ -185,7 +253,7 @@ class TtsService {
     $espeak_lang = $this->mapLanguageToEspeak($language);
 
     // Language is part of the cache KEY (separate files per language).
-    $cache_key = md5($text . $voice . $speed . $espeak_lang);
+    $cache_key = $this->computeCacheKey($text, $voice, $speed, $language);
     $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
 
     if ($use_cache) {
@@ -605,7 +673,7 @@ class TtsService {
    *
    * @see https://github.com/espeak-ng/espeak-ng/blob/master/docs/languages.md
    */
-  protected function mapLanguageToEspeak($langcode) {
+  public function mapLanguageToEspeak($langcode) {
     // Normalize to lowercase.
     $langcode = strtolower($langcode);
 
@@ -629,6 +697,26 @@ class TtsService {
     ];
 
     return $map[$langcode] ?? 'en-us';
+  }
+
+  /**
+   * Compute a TTS cache key.
+   *
+   * @param string $text
+   *   The source text.
+   * @param string $voice
+   *   The voice code.
+   * @param float $speed
+   *   The speech speed.
+   * @param string $language
+   *   The Drupal language code.
+   *
+   * @return string
+   *   The MD5 cache key.
+   */
+  public function computeCacheKey(string $text, string $voice, float $speed, string $language): string {
+    $espeak_lang = $this->mapLanguageToEspeak($language);
+    return md5($text . $voice . $speed . $espeak_lang);
   }
 
   /**
@@ -844,7 +932,7 @@ class TtsService {
 
     $file_path = $directory . '/' . $cache_key . '.ogg';
     $file_size = file_exists($file_path) ? filesize($file_path) : 0;
-    $now = \Drupal::time()->getRequestTime();
+    $now = $this->time->getRequestTime();
 
     $record = [
       'cache_key' => $cache_key,
@@ -863,14 +951,12 @@ class TtsService {
     }
 
     // Reconnect if the database timed out during long TTS generation.
-    $database = \Drupal::database();
-
     try {
-      $database->query('SELECT 1')->fetchField();
+      $this->database->query('SELECT 1')->fetchField();
     }
     catch (\Exception $e) {
       Database::closeConnection();
-      $database = \Drupal::database();
+      $this->database = Database::getConnection();
       $this->logger->info('Database connection refreshed before saving metadata.');
     }
 
@@ -887,7 +973,7 @@ class TtsService {
       $merge_keys = ['cache_key' => $cache_key];
     }
 
-    $database->merge('local_tts_cache')
+    $this->database->merge('local_tts_cache')
       ->keys($merge_keys)
       ->fields($record)
       ->execute();
@@ -903,15 +989,15 @@ class TtsService {
    *   The metadata array, or NULL if not found.
    */
   public function loadMetadata($cache_key) {
-    $result = \Drupal::database()->select('local_tts_cache', 'a')
+    $result = $this->database->select('local_tts_cache', 'a')
       ->fields('a')
       ->condition('cache_key', $cache_key)
       ->execute()
       ->fetchAssoc();
 
     if ($result) {
-      \Drupal::database()->update('local_tts_cache')
-        ->fields(['accessed' => \Drupal::time()->getRequestTime()])
+      $this->database->update('local_tts_cache')
+        ->fields(['accessed' => $this->time->getRequestTime()])
         ->condition('cache_key', $cache_key)
         ->execute();
     }
@@ -943,7 +1029,7 @@ class TtsService {
       return 0;
     }
 
-    $cache_keys = \Drupal::database()->select('local_tts_cache', 'a')
+    $cache_keys = $this->database->select('local_tts_cache', 'a')
       ->fields('a', ['cache_key'])
       ->condition('entity_type', $entity_type)
       ->condition('entity_id', $entity_id)
@@ -963,7 +1049,7 @@ class TtsService {
       }
     }
 
-    \Drupal::database()->delete('local_tts_cache')
+    $this->database->delete('local_tts_cache')
       ->condition('entity_type', $entity_type)
       ->condition('entity_id', $entity_id)
       ->execute();
@@ -980,6 +1066,127 @@ class TtsService {
   }
 
   /**
+   * Delete audio for a single entity translation.
+   *
+   * @param string $entity_type
+   *   The entity type.
+   * @param int|string $entity_id
+   *   The entity ID.
+   * @param string $langcode
+   *   The language code of the translation to invalidate.
+   *
+   * @return int
+   *   The number of files deleted.
+   */
+  public function deleteAudioForEntityTranslation($entity_type, $entity_id, $langcode) {
+    $config = $this->configFactory->get('local_tts.settings');
+    $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
+    $directory = $this->fileSystem->realpath($audio_dir);
+
+    if (!$directory || !is_dir($directory)) {
+      return 0;
+    }
+
+    $cache_keys = $this->database->select('local_tts_cache', 'a')
+      ->fields('a', ['cache_key'])
+      ->condition('entity_type', $entity_type)
+      ->condition('entity_id', $entity_id)
+      ->condition('language', $langcode)
+      ->execute()
+      ->fetchCol();
+
+    if (empty($cache_keys)) {
+      return 0;
+    }
+
+    $deleted = 0;
+    foreach ($cache_keys as $cache_key) {
+      $file_path = $directory . '/' . $cache_key . '.ogg';
+      if (file_exists($file_path)) {
+        @unlink($file_path);
+        $deleted++;
+      }
+    }
+
+    $this->database->delete('local_tts_cache')
+      ->condition('entity_type', $entity_type)
+      ->condition('entity_id', $entity_id)
+      ->condition('language', $langcode)
+      ->execute();
+
+    if ($deleted > 0) {
+      $this->logger->info('Deleted @count audio files for @type:@id (@lang)', [
+        '@count' => $deleted,
+        '@type' => $entity_type,
+        '@id' => $entity_id,
+        '@lang' => $langcode,
+      ]);
+    }
+
+    return $deleted;
+  }
+
+  /**
+   * Extract text from an entity using Drupal's render system.
+   *
+   * @param \Drupal\Core\Entity\EntityInterface $entity
+   *   The entity to extract text from.
+   *
+   * @return string
+   *   The extracted and sanitised plain text content.
+   */
+  public function extractTextFromEntity($entity) {
+    try {
+      $langcode = $entity->language()->getId();
+      $entity_type_id = $entity->getEntityTypeId();
+      $view_builder = $this->entityTypeManager->getViewBuilder($entity_type_id);
+      $view = $view_builder->view($entity, 'default', $langcode);
+      $rendered = $this->renderer->renderPlain($view);
+      $text = $this->htmlToPlainText((string) $rendered);
+
+      $context = [
+        'entity' => $entity,
+        'langcode' => $langcode,
+      ];
+      $this->moduleHandler->alter('local_tts_text', $text, $context);
+
+      return $text;
+    }
+    catch (\Exception $e) {
+      $this->logger->warning('Render-based text extraction failed: @msg', [
+        '@msg' => $e->getMessage(),
+      ]);
+      return '';
+    }
+  }
+
+  /**
+   * Convert HTML to plain text with sentence breaks.
+   *
+   * @param string $html
+   *   The HTML string to convert.
+   *
+   * @return string
+   *   Clean plain text with natural sentence breaks.
+   */
+  public function htmlToPlainText(string $html): string {
+    $block_tags = 'h[1-6]|p|div|section|article|header|footer|nav|aside|main|'
+      . 'blockquote|pre|figure|figcaption|details|summary|'
+      . 'li|dt|dd|tr|th|td|caption';
+
+    $html = preg_replace('#</(' . $block_tags . ')>#i', '. ', $html);
+    $html = preg_replace('#<br\s*/?\s*>#i', '. ', $html);
+    $html = preg_replace('#<hr\s*/?\s*>#i', '. ', $html);
+
+    $text = html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5);
+    // Collapse doubled punctuation from injected full stops.
+    $text = preg_replace('/([.!?])\s*\.(\s)/', '$1$2', $text);
+    $text = preg_replace('/\s+/', ' ', $text);
+
+    return trim($text);
+  }
+
+  /**
    * Expand path with tilde (~) to full path.
    *
    * @param string $path
@@ -988,7 +1195,7 @@ class TtsService {
    * @return string
    *   Expanded path.
    */
-  protected function expandPath($path) {
+  public static function expandPath($path) {
     if (strpos($path, '~') === 0) {
       $home = getenv('HOME');
       if ($home) {

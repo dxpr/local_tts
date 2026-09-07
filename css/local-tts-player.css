@@ -75,6 +75,7 @@
   text-indent: -9999px;
   overflow: hidden;
   cursor: pointer;
+  pointer-events: auto;
   transition: background-image var(--ltt-transition-speed) ease;
 }
 

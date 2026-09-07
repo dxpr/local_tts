@@ -1,7 +1,7 @@
 services:
   local_tts.tts_service:
     class: Drupal\local_tts\TtsService
-    arguments: ['@config.factory', '@file_system', '@logger.factory']
+    arguments: ['@config.factory', '@file_system', '@logger.factory', '@extension.list.module', '@datetime.time', '@database', '@entity_type.manager', '@renderer', '@module_handler']
   local_tts.player_builder:
     class: Drupal\local_tts\TtsPlayerBuilder
     arguments: ['@config.factory', '@local_tts.tts_service', '@current_user', '@entity_type.manager']

@@ -32,8 +32,8 @@ function local_tts_schema() {
         'not null' => FALSE,
       ],
       'entity_id' => [
-        'type' => 'int',
-        'unsigned' => TRUE,
+        'type' => 'varchar',
+        'length' => 255,
         'not null' => FALSE,
       ],
       'language' => [
@@ -532,6 +532,19 @@ function _local_tts_count_files($path) {
   }
 
   return $count;
+}
+
+/**
+ * Change entity_id column from INT to VARCHAR(255) to support string IDs.
+ */
+function local_tts_update_10001() {
+  $schema = \Drupal::database()->schema();
+  $spec = [
+    'type' => 'varchar',
+    'length' => 255,
+    'not null' => FALSE,
+  ];
+  $schema->changeField('local_tts_cache', 'entity_id', 'entity_id', $spec);
 }
 
 /**

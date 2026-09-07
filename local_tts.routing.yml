@@ -44,6 +44,7 @@ local_tts.generate:
     _controller: '\Drupal\local_tts\Controller\TtsController::generate'
   requirements:
     _permission: 'generate local tts'
+  methods: [POST]
   options:
     no_cache: TRUE
 

@@ -2,8 +2,5 @@ name: Local Text-to-Speech
 type: module
 description: 'Provides local text-to-speech using Kokoro TTS (Rust implementation).'
 package: Media
-core_version_requirement: ^9 || ^10 || ^11
+core_version_requirement: ^10.3 || ^11
 configure: local_tts.settings
-
-dependencies:
-  - drupal:node
