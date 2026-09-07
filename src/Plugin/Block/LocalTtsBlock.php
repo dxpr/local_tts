@@ -229,8 +229,22 @@ final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInt
       }
     }
 
-    // Delegate to the player builder service.
-    return $this->playerBuilder->buildPlayer($entity, $this->getConfiguration());
+    if (!$entity) {
+      return [];
+    }
+
+    $config = $this->getConfiguration();
+    return [
+      '#create_placeholder' => TRUE,
+      '#lazy_builder' => [
+        'local_tts.player_builder:buildPlayerLazy',
+        [
+          $entity->getEntityTypeId(),
+          (string) $entity->id(),
+          json_encode($config),
+        ],
+      ],
+    ];
   }
 
 }

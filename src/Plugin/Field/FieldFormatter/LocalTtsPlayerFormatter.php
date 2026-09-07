@@ -201,12 +201,19 @@ final class LocalTtsPlayerFormatter extends FormatterBase implements ContainerFa
   public function viewElements(FieldItemListInterface $items, $langcode) {
     $elements = [];
 
-    // Only render if field value is TRUE (enabled).
     if (!empty($items[0]->value)) {
       $entity = $items->getEntity();
-
-      // Delegate to the player builder service.
-      $elements[0] = $this->playerBuilder->buildPlayer($entity, $this->getSettings());
+      $elements[0] = [
+        '#create_placeholder' => TRUE,
+        '#lazy_builder' => [
+          'local_tts.player_builder:buildPlayerLazy',
+          [
+            $entity->getEntityTypeId(),
+            (string) $entity->id(),
+            json_encode($this->getSettings()),
+          ],
+        ],
+      ];
     }
 
     return $elements;

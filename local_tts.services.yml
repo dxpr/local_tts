@@ -4,7 +4,7 @@ services:
     arguments: ['@config.factory', '@file_system', '@logger.factory']
   local_tts.player_builder:
     class: Drupal\local_tts\TtsPlayerBuilder
-    arguments: ['@config.factory', '@local_tts.tts_service', '@current_user']
+    arguments: ['@config.factory', '@local_tts.tts_service', '@current_user', '@entity_type.manager']
   local_tts.batch_service:
     class: Drupal\local_tts\Service\TtsBatchService
     arguments: ['@entity_type.manager', '@local_tts.tts_service', '@config.factory', '@entity_type.bundle.info', '@logger.factory']

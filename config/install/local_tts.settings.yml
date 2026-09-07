@@ -1,11 +1,16 @@
 espeak_data_path: '/usr/share/espeak-ng-data'
 default_voice: 'af_sky'
 default_speed: '1'
+default_voices: {}
 cache_audio: true
 audio_directory: 'public://local-tts'
 cache_size_limit_enabled: true
 cache_max_size: 1073741824
 max_text_length: 1000000
+max_server_load: 2
 generation_timeout: 900
 rate_limit_enabled: true
 rate_limit_threshold: 20
+auto_generate: false
+allowed_bundles: {}
+show_download: false

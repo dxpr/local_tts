@@ -66,18 +66,27 @@
 
           fetch(url, {credentials: 'same-origin'})
             .then(function (response) {
-              return response.json();
+              var contentType = response.headers.get('content-type') || '';
+              if (contentType.indexOf('application/json') === -1) {
+                throw new Error(Drupal.t('The server returned an unexpected response. Check that the TTS binary and ffmpeg are installed.'));
+              }
+              return response.json().then(function (data) {
+                return {ok: response.ok, status: response.status, data: data};
+              });
             })
-            .then(function (data) {
-              if (data.success && data.audio_url) {
-                playPreview(data.audio_url, button);
+            .then(function (result) {
+              if (result.ok && result.data.success && result.data.audio_url) {
+                playPreview(result.data.audio_url, button);
+              }
+              else if (result.status === 503) {
+                showError(button, result.data.message || Drupal.t('The TTS service is unavailable. The TTS binary or ffmpeg may not be installed.'));
               }
               else {
-                showError(button, data.message || 'Generation failed');
+                showError(button, result.data.message || Drupal.t('Voice preview failed.'));
               }
             })
-            .catch(function () {
-              showError(button, 'Request failed');
+            .catch(function (err) {
+              showError(button, err.message || Drupal.t('Could not connect to the server.'));
             });
         });
       });
@@ -101,13 +110,13 @@
         });
 
         audio.addEventListener('error', function () {
-          showError(button, 'Playback error');
+          showError(button, Drupal.t('Audio playback failed. The file may be corrupted.'));
           currentAudio = null;
           currentButton = null;
         });
 
         audio.play().catch(function () {
-          showError(button, 'Playback blocked');
+          showError(button, Drupal.t('Audio playback was blocked by the browser.'));
           currentAudio = null;
           currentButton = null;
         });
@@ -138,17 +147,13 @@
       }
 
       /**
-       * Show a temporary error state on a button.
+       * Show an error via Drupal's messages API and reset the button.
        */
       function showError(button, message) {
-        button.textContent = Drupal.t('Error');
-        button.title = message;
-        button.disabled = false;
-        button.classList.remove('is-active');
-        setTimeout(function () {
-          button.textContent = Drupal.t('Preview');
-          button.title = '';
-        }, 2000);
+        resetButton(button);
+        var messenger = new Drupal.Message();
+        messenger.clear();
+        messenger.add(message, {type: 'error'});
       }
     }
   };

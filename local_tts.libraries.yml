@@ -16,5 +16,6 @@ voice-preview:
     js/local-tts-voice-preview.js: {}
   dependencies:
     - core/drupal
+    - core/drupal.message
     - core/drupalSettings
     - core/once

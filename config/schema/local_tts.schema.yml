@@ -11,6 +11,9 @@ local_tts.settings:
     default_speed:
       type: string
       label: 'Default speech speed'
+    default_voices:
+      type: mapping
+      label: 'Default voices per language'
     cache_audio:
       type: boolean
       label: 'Cache generated audio files'
@@ -26,6 +29,9 @@ local_tts.settings:
     max_text_length:
       type: integer
       label: 'Maximum text length in characters (0 for unlimited)'
+    max_server_load:
+      type: float
+      label: 'Maximum server load threshold'
     generation_timeout:
       type: integer
       label: 'Maximum generation timeout in seconds'
@@ -35,3 +41,12 @@ local_tts.settings:
     rate_limit_threshold:
       type: integer
       label: 'Maximum requests per hour per user'
+    auto_generate:
+      type: boolean
+      label: 'Auto-generate audio on entity save'
+    allowed_bundles:
+      type: mapping
+      label: 'Allowed content type bundles'
+    show_download:
+      type: boolean
+      label: 'Show download button on player'

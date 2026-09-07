@@ -27,6 +27,9 @@
         const speedInput = player.querySelector('.local-tts-speed-input');
         const statusDiv = player.querySelector('.local-tts-status');
         const audioElement = player.querySelector('audio');
+        const muteButton = player.querySelector('.local-tts-mute-button');
+        const volumeSlider = player.querySelector('.local-tts-volume-slider');
+        const downloadButton = player.querySelector('.local-tts-download-button');
 
         if (!playButton || !audioElement) {
           return;
@@ -37,6 +40,7 @@
         let currentAudioUrl = null;
         let lastAriaUpdate = 0;
         let lastProgressSave = 0;
+        let previousVolume = 1;
         const ARIA_THROTTLE_MS = 200;
         const PROGRESS_SAVE_MS = 5000;
         const storageKey = 'local_tts_progress_' + config.entityType + '_' + config.entityId;
@@ -238,19 +242,20 @@
 
           fetch(config.generateUrl, {
             method: 'POST',
-            body: formData
+            body: formData,
+            credentials: 'same-origin'
           })
             .then(response => {
-              if (response.status === 504) {
-                return { ok: false, status: 504, data: {} };
+              var contentType = response.headers.get('content-type') || '';
+              if (contentType.indexOf('application/json') === -1) {
+                return { ok: false, status: response.status, data: {}, htmlResponse: true };
               }
-
               return response.json().then(data => ({
                 ok: response.ok,
                 status: response.status,
                 data: data
               })).catch(() => ({
-                ok: response.ok,
+                ok: false,
                 status: response.status,
                 data: {}
               }));
@@ -265,34 +270,46 @@
                 }
                 pollForAudio(result.data.poll_url);
               } else {
-                var errorMessage = result.data.message || Drupal.t('Unable to generate audio. Please try again later.');
-
-                if (result.status === 429 && result.data.retry_after) {
-                  var minutes = Math.ceil(result.data.retry_after / 60);
-                  errorMessage = result.data.message || Drupal.t('Too many requests. Please try again in @minutes minutes.', {'@minutes': minutes});
-                }
-
-                if (labelText) {
-                  labelText.innerHTML = '<span class="local-tts-error">⚠</span> ' + errorMessage;
-                }
-                updateStatus(errorMessage, 'error');
-                playButton.disabled = false;
-                playButton.classList.remove('loading');
-                updateButtonStates();
-                restoreLabelAfterDelay();
+                showGenerateError(result);
               }
             })
-            .catch(error => {
-              const errorMsg = Drupal.t('Unable to reach the server. Please check your internet connection and try again.');
-              if (labelText) {
-                labelText.innerHTML = '<span class="local-tts-error">⚠</span> ' + errorMsg;
-              }
-              updateStatus(errorMsg, 'error');
-              playButton.disabled = false;
-              playButton.classList.remove('loading');
-              updateButtonStates();
-              restoreLabelAfterDelay();
+            .catch(() => {
+              handleError(Drupal.t('Could not connect to the server. Check your internet connection.'));
             });
+        }
+
+        function showGenerateError(result) {
+          var msg;
+          if (result.htmlResponse) {
+            msg = Drupal.t('The server did not return a valid response. This usually means the "Generate local text-to-speech audio" permission is not granted for your role.');
+          } else if (result.status === 403) {
+            msg = result.data.message || Drupal.t('Access denied. Check that the "Generate local text-to-speech audio" permission is granted.');
+          } else if (result.status === 404) {
+            msg = result.data.message || Drupal.t('Content not found.');
+          } else if (result.status === 429) {
+            var minutes = result.data.retry_after ? Math.ceil(result.data.retry_after / 60) : 1;
+            msg = result.data.message || Drupal.t('Too many requests. Please try again in @minutes minutes.', {'@minutes': minutes});
+          } else if (result.status === 503) {
+            msg = result.data.message || Drupal.t('The text-to-speech service is temporarily unavailable. The TTS binary or ffmpeg may not be installed.');
+          } else if (result.status === 504) {
+            msg = Drupal.t('Audio generation timed out. The content may be too long.');
+          } else if (result.status >= 500) {
+            msg = result.data.message || Drupal.t('Server error during audio generation. Check the Drupal logs for details.');
+          } else {
+            msg = result.data.message || Drupal.t('Audio generation failed (HTTP @status).', {'@status': result.status});
+          }
+          handleError(msg);
+        }
+
+        function handleError(msg) {
+          if (labelText) {
+            labelText.textContent = msg;
+          }
+          updateStatus(msg, 'error');
+          playButton.disabled = false;
+          playButton.classList.remove('loading');
+          updateButtonStates();
+          restoreLabelAfterDelay();
         }
 
         function playSpeech(audioUrl) {
@@ -311,6 +328,8 @@
               updateButtonStates();
               showPlaybackControls();
               updateStatus('', 'status');
+              updateDownloadButton(audioUrl);
+              dispatchAnalytics('play');
 
               // Offer to resume from saved position.
               if (savedPosition > 5 && isFinite(savedPosition) && savedPosition < audioElement.duration - 5) {
@@ -336,17 +355,9 @@
                   }
                 }, 10000);
               }
-            }).catch(function(error) {
-              const errorMsg = Drupal.t('Error playing audio.');
-              if (labelText) {
-                labelText.innerHTML = '<span class="local-tts-error">⚠</span> ' + errorMsg;
-              }
-              updateStatus(errorMsg, 'error');
-              playButton.disabled = false;
-              playButton.classList.remove('loading');
+            }).catch(function() {
+              handleError(Drupal.t('Error playing audio.'));
               isPlaying = false;
-              updateButtonStates();
-              restoreLabelAfterDelay();
             });
           }, { once: true });
         }
@@ -368,6 +379,7 @@
             isPlaying = false;
             updateButtonStates();
             updateStatus('', 'status');
+            dispatchAnalytics('pause');
           }
         }
 
@@ -398,6 +410,9 @@
           hidePlaybackControls();
           updateButtonStates();
           updateStatus('', 'status');
+          if (downloadButton) {
+            downloadButton.hidden = true;
+          }
         }
 
         playButton.addEventListener('click', function(e) {
@@ -417,6 +432,7 @@
           clearSavedProgress();
           updateButtonStates();
           stopPlayback();
+          dispatchAnalytics('ended');
         });
 
         audioElement.addEventListener('pause', function() {
@@ -433,15 +449,8 @@
         });
 
         audioElement.addEventListener('error', function() {
-          const errorMsg = Drupal.t('Error playing audio.');
-          if (labelText) {
-            labelText.innerHTML = '<span class="local-tts-error">⚠</span> ' + errorMsg;
-          }
-          updateStatus(errorMsg, 'error');
-          playButton.disabled = false;
+          handleError(Drupal.t('Error playing audio.'));
           isPlaying = false;
-          updateButtonStates();
-          restoreLabelAfterDelay();
         });
 
         audioElement.addEventListener('loadedmetadata', function() {
@@ -523,6 +532,67 @@
               audioElement.play();
             }
           });
+        }
+
+        if (muteButton) {
+          muteButton.addEventListener('click', function() {
+            if (audioElement.muted) {
+              audioElement.muted = false;
+              audioElement.volume = previousVolume || 1;
+              muteButton.setAttribute('aria-pressed', 'false');
+              muteButton.classList.remove('muted');
+              if (volumeSlider) {
+                volumeSlider.value = audioElement.volume;
+                updateVolumeAria(volumeSlider, audioElement.volume);
+              }
+            } else {
+              previousVolume = audioElement.volume;
+              audioElement.muted = true;
+              muteButton.setAttribute('aria-pressed', 'true');
+              muteButton.classList.add('muted');
+              if (volumeSlider) {
+                volumeSlider.value = 0;
+                updateVolumeAria(volumeSlider, 0);
+              }
+            }
+          });
+        }
+
+        if (volumeSlider) {
+          volumeSlider.addEventListener('input', function() {
+            var vol = parseFloat(volumeSlider.value);
+            audioElement.volume = vol;
+            audioElement.muted = vol === 0;
+            if (muteButton) {
+              muteButton.setAttribute('aria-pressed', vol === 0 ? 'true' : 'false');
+              muteButton.classList.toggle('muted', vol === 0);
+            }
+            updateVolumeAria(volumeSlider, vol);
+          });
+        }
+
+        function updateVolumeAria(slider, vol) {
+          var pct = Math.round(vol * 100);
+          slider.setAttribute('aria-valuenow', pct.toString());
+          slider.setAttribute('aria-valuetext', Drupal.t('Volume @pct%', {'@pct': pct}));
+        }
+
+        function updateDownloadButton(url) {
+          if (downloadButton && url) {
+            downloadButton.href = url;
+            downloadButton.hidden = false;
+          }
+        }
+
+        function dispatchAnalytics(action) {
+          player.dispatchEvent(new CustomEvent('localTtsEvent', {
+            bubbles: true,
+            detail: {
+              action: action,
+              entityType: config.entityType,
+              entityId: config.entityId
+            }
+          }));
         }
 
         if (voiceSelect) {

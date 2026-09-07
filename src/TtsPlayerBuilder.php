@@ -5,6 +5,8 @@ namespace Drupal\local_tts;
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Security\TrustedCallbackInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
@@ -15,7 +17,7 @@ use Drupal\Core\Url;
  *
  * Shared logic between LocalTtsBlock and LocalTtsPlayerFormatter.
  */
-class TtsPlayerBuilder {
+class TtsPlayerBuilder implements TrustedCallbackInterface {
 
   use StringTranslationTrait;
 
@@ -60,6 +62,13 @@ class TtsPlayerBuilder {
   protected $currentUser;
 
   /**
+   * The entity type manager.
+   *
+   * @var \Drupal\Core\Entity\EntityTypeManagerInterface
+   */
+  protected $entityTypeManager;
+
+  /**
    * Constructs a TtsPlayerBuilder.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
@@ -68,15 +77,35 @@ class TtsPlayerBuilder {
    *   TTS service.
    * @param \Drupal\Core\Session\AccountProxyInterface $current_user
    *   The current user.
+   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
+   *   The entity type manager.
    */
   public function __construct(
     ConfigFactoryInterface $config_factory,
     TtsService $tts_service,
     AccountProxyInterface $current_user,
+    EntityTypeManagerInterface $entity_type_manager,
   ) {
     $this->configFactory = $config_factory;
     $this->ttsService = $tts_service;
     $this->currentUser = $current_user;
+    $this->entityTypeManager = $entity_type_manager;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function trustedCallbacks(): array {
+    return ['buildPlayerLazy'];
+  }
+
+  /**
+   * Lazy builder callback for the TTS player.
+   */
+  public function buildPlayerLazy(string $entity_type, string $entity_id, string $settings_json): array {
+    $entity = $this->entityTypeManager->getStorage($entity_type)->load($entity_id);
+    $settings = json_decode($settings_json, TRUE) ?: [];
+    return $this->buildPlayer($entity, $settings);
   }
 
   /**
@@ -239,6 +268,44 @@ class TtsPlayerBuilder {
       '#value' => '',
     ];
 
+    $build['play_wrapper']['content']['playback_controls']['volume_wrapper'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['local-tts-volume-wrapper'],
+      ],
+    ];
+
+    $build['play_wrapper']['content']['playback_controls']['volume_wrapper']['mute_button'] = [
+      '#type' => 'html_tag',
+      '#tag' => 'button',
+      '#attributes' => [
+        'type' => 'button',
+        'class' => ['local-tts-mute-button'],
+        'aria-label' => $this->t('Mute'),
+        'aria-pressed' => 'false',
+      ],
+      '#value' => '',
+    ];
+
+    $build['play_wrapper']['content']['playback_controls']['volume_wrapper']['volume_slider'] = [
+      '#type' => 'html_tag',
+      '#tag' => 'input',
+      '#attributes' => [
+        'type' => 'range',
+        'class' => ['local-tts-volume-slider'],
+        'min' => '0',
+        'max' => '1',
+        'value' => '1',
+        'step' => '0.05',
+        'role' => 'slider',
+        'aria-label' => $this->t('Volume'),
+        'aria-valuemin' => '0',
+        'aria-valuemax' => '100',
+        'aria-valuenow' => '100',
+        'aria-valuetext' => $this->t('Volume 100%'),
+      ],
+    ];
+
     $build['play_wrapper']['settings'] = [
       '#type' => 'container',
       '#attributes' => [
@@ -290,6 +357,22 @@ class TtsPlayerBuilder {
       ];
     }
 
+    $show_download = $global_config->get('show_download') ?? FALSE;
+    if ($show_download) {
+      $build['play_wrapper']['settings']['download_button'] = [
+        '#type' => 'html_tag',
+        '#tag' => 'a',
+        '#attributes' => [
+          'class' => ['local-tts-download-button', 'button', 'button--small'],
+          'role' => 'button',
+          'aria-label' => $this->t('Download audio'),
+          'download' => '',
+          'hidden' => 'hidden',
+        ],
+        '#value' => $this->t('Download'),
+      ];
+    }
+
     $build['status'] = [
       '#type' => 'container',
       '#attributes' => [
@@ -330,6 +413,7 @@ class TtsPlayerBuilder {
           'entityType' => $entity->getEntityTypeId(),
           'entityId' => $entity->id(),
           'fields' => array_values(array_filter($settings['fields'] ?? [])),
+          'showDownload' => (bool) $show_download,
           'isAdmin' => (bool) $this->currentUser->hasPermission('administer local tts settings'),
           'settingsUrl' => Url::fromRoute('local_tts.settings')->toString(),
         ],

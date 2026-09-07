@@ -3,6 +3,7 @@
 namespace Drupal\local_tts\Form;
 
 use Drupal\local_tts\TtsService;
+use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Language\LanguageManagerInterface;
@@ -29,19 +30,30 @@ final class LocalTtsSettingsForm extends ConfigFormBase {
   protected $languageManager;
 
   /**
+   * The entity type bundle info service.
+   *
+   * @var \Drupal\Core\Entity\EntityTypeBundleInfoInterface
+   */
+  protected $bundleInfo;
+
+  /**
    * Constructs an LocalTtsSettingsForm object.
    *
    * @param \Drupal\local_tts\TtsService $tts_service
    *   The TTS service.
    * @param \Drupal\Core\Language\LanguageManagerInterface $language_manager
    *   The language manager.
+   * @param \Drupal\Core\Entity\EntityTypeBundleInfoInterface $bundle_info
+   *   The entity type bundle info.
    */
   public function __construct(
     TtsService $tts_service,
     LanguageManagerInterface $language_manager,
+    EntityTypeBundleInfoInterface $bundle_info,
   ) {
     $this->ttsService = $tts_service;
     $this->languageManager = $language_manager;
+    $this->bundleInfo = $bundle_info;
   }
 
   /**
@@ -50,7 +62,8 @@ final class LocalTtsSettingsForm extends ConfigFormBase {
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('local_tts.tts_service'),
-      $container->get('language_manager')
+      $container->get('language_manager'),
+      $container->get('entity_type.bundle.info')
     );
   }
 
@@ -263,6 +276,45 @@ final class LocalTtsSettingsForm extends ConfigFormBase {
       '#field_suffix' => $this->t('load average'),
     ];
 
+    $form['generation'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Generation'),
+    ];
+
+    $form['generation']['auto_generate'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Auto-generate audio on content save'),
+      '#description' => $this->t('Queue a TTS generation job whenever content is created or updated, so audio is ready before the first visitor arrives.'),
+      '#default_value' => $config->get('auto_generate') ?? FALSE,
+    ];
+
+    $bundle_options = [];
+    $node_bundles = $this->bundleInfo->getBundleInfo('node');
+    foreach ($node_bundles as $bundle_id => $bundle_data) {
+      $bundle_options['node:' . $bundle_id] = $bundle_data['label'];
+    }
+    $allowed_bundles = $config->get('allowed_bundles') ?? [];
+
+    $form['generation']['allowed_bundles'] = [
+      '#type' => 'checkboxes',
+      '#title' => $this->t('Content types'),
+      '#description' => $this->t('Limit TTS to these content types. Leave all unchecked to allow all types.'),
+      '#options' => $bundle_options,
+      '#default_value' => array_keys(array_filter($allowed_bundles)),
+    ];
+
+    $form['player_settings'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Player'),
+    ];
+
+    $form['player_settings']['show_download'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Show download button'),
+      '#description' => $this->t('Allow visitors to download the generated audio file.'),
+      '#default_value' => $config->get('show_download') ?? FALSE,
+    ];
+
     // Attach voice preview JS and pass the preview endpoint URL.
     $form['#attached']['library'][] = 'local_tts/voice-preview';
     $form['#attached']['drupalSettings']['localTts']['voicePreviewUrl'] = Url::fromRoute('local_tts.voice_preview')->toString();
@@ -301,6 +353,12 @@ final class LocalTtsSettingsForm extends ConfigFormBase {
     unset($voice_settings['default_speed']);
     unset($voice_settings['description']);
 
+    $allowed_bundles = array_filter($form_state->getValue('allowed_bundles') ?? []);
+    $bundles_map = [];
+    foreach ($allowed_bundles as $key) {
+      $bundles_map[$key] = TRUE;
+    }
+
     $this->config('local_tts.settings')
       ->set('espeak_data_path', $form_state->getValue('espeak_data_path'))
       ->set('default_voices', $voice_settings)
@@ -314,6 +372,9 @@ final class LocalTtsSettingsForm extends ConfigFormBase {
       ->set('rate_limit_enabled', $form_state->getValue('rate_limit_enabled'))
       ->set('rate_limit_threshold', $form_state->getValue('rate_limit_threshold'))
       ->set('max_server_load', $form_state->getValue('max_server_load'))
+      ->set('auto_generate', (bool) $form_state->getValue('auto_generate'))
+      ->set('allowed_bundles', $bundles_map)
+      ->set('show_download', (bool) $form_state->getValue('show_download'))
       ->clear('default_voice')
       ->clear('koko_binary_path')
       ->clear('model_path')

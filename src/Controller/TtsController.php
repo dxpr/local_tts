@@ -501,7 +501,15 @@ final class TtsController extends ControllerBase {
       $view_builder = $this->entityTypeManager->getViewBuilder($entity_type_id);
       $view = $view_builder->view($entity, 'default', $langcode);
       $rendered = $this->renderer->renderPlain($view);
-      return $this->htmlToPlainText((string) $rendered);
+      $text = $this->htmlToPlainText((string) $rendered);
+
+      $context = [
+        'entity' => $entity,
+        'langcode' => $langcode,
+      ];
+      $this->moduleHandler()->alter('local_tts_text', $text, $context);
+
+      return $text;
     }
     catch (\Exception $e) {
       $this->getLogger('local_tts')->warning('Render-based text extraction failed: @msg', [

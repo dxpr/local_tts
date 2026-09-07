@@ -448,7 +448,8 @@ class TtsService {
     file_put_contents($list_file, implode("\n", $lines));
 
     $command = sprintf(
-      'ffmpeg -y -f concat -safe 0 -i %s -c:a libopus -b:a 48k %s 2>&1',
+      '%s -y -f concat -safe 0 -i %s -c:a libopus -b:a 48k %s 2>&1',
+      escapeshellarg($this->findFfmpeg()),
       escapeshellarg($list_file),
       escapeshellarg($ogg_output)
     );
@@ -480,7 +481,8 @@ class TtsService {
    */
   protected function transcodeToOpus($wav_path, $ogg_path) {
     $command = sprintf(
-      'ffmpeg -y -i %s -c:a libopus -b:a 48k %s 2>&1',
+      '%s -y -i %s -c:a libopus -b:a 48k %s 2>&1',
+      escapeshellarg($this->findFfmpeg()),
       escapeshellarg($wav_path),
       escapeshellarg($ogg_path)
     );
@@ -500,6 +502,29 @@ class TtsService {
 
     // Remove the intermediate WAV file.
     @unlink($wav_path);
+  }
+
+  /**
+   * Resolve the absolute path to the ffmpeg binary.
+   */
+  protected function findFfmpeg(): string {
+    $candidates = [
+      '/usr/bin/ffmpeg',
+      '/usr/local/bin/ffmpeg',
+      '/opt/homebrew/bin/ffmpeg',
+    ];
+    foreach ($candidates as $path) {
+      if (is_executable($path)) {
+        return $path;
+      }
+    }
+    $output = [];
+    $code = 0;
+    @exec('which ffmpeg 2>/dev/null', $output, $code);
+    if ($code === 0 && !empty($output[0]) && is_executable($output[0])) {
+      return $output[0];
+    }
+    throw new TtsServiceUnavailableException('ffmpeg not found. Install ffmpeg for audio transcoding.');
   }
 
   /**

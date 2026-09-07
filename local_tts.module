@@ -55,15 +55,62 @@ function local_tts_cron() {
 function local_tts_entity_update(EntityInterface $entity) {
   // Check if any text fields changed by comparing to original.
   if (!empty($entity->original) && !_local_tts_text_content_changed($entity, $entity->original)) {
-    // Content unchanged - keep cached audio files.
     return;
   }
 
-  // Content changed - invalidate all cached audio for this entity.
+  // Content changed: invalidate all cached audio for this entity.
   \Drupal::service('local_tts.tts_service')->deleteAudioForEntity(
     $entity->getEntityTypeId(),
     $entity->id()
   );
+
+  _local_tts_auto_generate($entity);
+}
+
+/**
+ * Implements hook_entity_insert().
+ */
+function local_tts_entity_insert(EntityInterface $entity) {
+  _local_tts_auto_generate($entity);
+}
+
+/**
+ * Queue a TTS generation job when auto-generate is enabled.
+ */
+function _local_tts_auto_generate(EntityInterface $entity) {
+  $config = \Drupal::config('local_tts.settings');
+  if (!$config->get('auto_generate')) {
+    return;
+  }
+  if (!($entity instanceof FieldableEntityInterface)) {
+    return;
+  }
+  if (!_local_tts_bundle_allowed($entity->getEntityTypeId(), $entity->bundle())) {
+    return;
+  }
+
+  $langcode = $entity->language()->getId();
+  $tts_service = \Drupal::service('local_tts.tts_service');
+  $voices = $tts_service->getAvailableVoices($langcode);
+  if (empty($voices)) {
+    return;
+  }
+
+  $default_voices = $config->get('default_voices') ?? [];
+  $voice = $default_voices[$langcode] ?? array_key_first($voices);
+  $speed = $config->get('default_speed') ?: '1';
+
+  /** @var \Drupal\Core\Queue\QueueFactory $queue_factory */
+  $queue_factory = \Drupal::service('queue');
+  $queue = $queue_factory->get('local_tts_generate');
+  $queue->createItem([
+    'entity_type' => $entity->getEntityTypeId(),
+    'entity_id' => $entity->id(),
+    'voice' => $voice,
+    'speed' => $speed,
+    'language' => $langcode,
+    'fields' => [],
+  ]);
 }
 
 /**
@@ -280,6 +327,27 @@ function _local_tts_cleanup_orphan_files() {
       '@count' => $deleted,
     ]);
   }
+}
+
+/**
+ * Check whether an entity bundle is allowed for TTS.
+ *
+ * @param string $entity_type
+ *   Entity type ID.
+ * @param string $bundle
+ *   Bundle machine name.
+ *
+ * @return bool
+ *   TRUE if allowed (or no whitelist is configured).
+ */
+function _local_tts_bundle_allowed($entity_type, $bundle) {
+  $config = \Drupal::config('local_tts.settings');
+  $allowed = $config->get('allowed_bundles') ?? [];
+  if (empty($allowed)) {
+    return TRUE;
+  }
+  $key = $entity_type . ':' . $bundle;
+  return !empty($allowed[$key]);
 }
 
 /**
