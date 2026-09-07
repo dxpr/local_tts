@@ -7,6 +7,7 @@ use Drupal\ai_tts\Exception\TtsServiceUnavailableException;
 use Drupal\ai_tts\Exception\TtsTimeoutException;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\File\FileSystemInterface;
+use Drupal\Core\Database\Database;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 
 /**
@@ -98,6 +99,10 @@ class TtsService {
    *
    * @throws \InvalidArgumentException
    *   When validation fails for text length, voice, or speed.
+   * @throws \Drupal\ai_tts\Exception\TtsTimeoutException
+   * @throws \Drupal\ai_tts\Exception\TtsServiceUnavailableException
+   * @throws \RuntimeException
+   * @throws \Exception
    */
   public function generateSpeech($text, array $options = []) {
     $config = $this->configFactory->get('ai_tts.settings');
@@ -207,8 +212,19 @@ class TtsService {
 
     // Use bundled binary and data files from module directory.
     $binary_path = DRUPAL_ROOT . '/' . $this->modulePath . '/bin/koko';
-    $model_path = DRUPAL_ROOT . '/' . $this->modulePath . '/data/kokoro-v1.0.onnx';
-    $data_path = DRUPAL_ROOT . '/' . $this->modulePath . '/data/voices-v1.0.bin';
+    $data_dir = DRUPAL_ROOT . '/' . $this->modulePath . '/data';
+
+    // Select model and voice data by language: Chinese voices use the v1.1-zh
+    // model; all others use the standard v1.0 model.
+    $is_chinese = str_starts_with($voice, 'z');
+    if ($is_chinese && file_exists($data_dir . '/kokoro-v1.1-zh.onnx')) {
+      $model_path = $data_dir . '/kokoro-v1.1-zh.onnx';
+      $data_path = $data_dir . '/voices-v1.1-zh.bin';
+    }
+    else {
+      $model_path = $data_dir . '/kokoro-v1.0.onnx';
+      $data_path = $data_dir . '/voices-v1.0.bin';
+    }
 
     if (!file_exists($binary_path)) {
       $this->logger->error('Koko binary not found at: @path', ['@path' => $binary_path]);
@@ -248,7 +264,7 @@ class TtsService {
     $max_load = $config->get('max_server_load') ?? 2;
     if ($max_load > 0 && function_exists('sys_getloadavg')) {
       $load = sys_getloadavg();
-      if ($load !== FALSE && isset($load[0])) {
+      if ($load !== FALSE) {
         $current_load = (float) $load[0];
         if ($current_load > $max_load) {
           $this->logger->warning('TTS generation blocked due to high server load: current @current exceeds threshold @max', [
@@ -596,9 +612,7 @@ class TtsService {
       $database->query('SELECT 1')->fetchField();
     }
     catch (\Exception $e) {
-      // Connection is gone. Destroy it to force reconnection.
-      $database->destroy();
-      // Get fresh connection.
+      Database::closeConnection();
       $database = \Drupal::database();
       $this->logger->info('Database connection refreshed before saving metadata.');
     }
@@ -607,7 +621,7 @@ class TtsService {
     // entities to share the same audio file (same cache_key) when they have
     // identical content.
     $merge_keys = [];
-    if (!empty($record['entity_type']) && !empty($record['entity_id'])) {
+    if (isset($record['entity_type'], $record['entity_id'])) {
       $merge_keys = [
         'entity_type' => $record['entity_type'],
         'entity_id' => $record['entity_id'],
@@ -615,12 +629,11 @@ class TtsService {
       ];
     }
     else {
-      // Fallback to cache_key for non-entity cached files.
       $merge_keys = ['cache_key' => $cache_key];
     }
 
     $database->merge('ai_tts_cache')
-      ->key($merge_keys)
+      ->keys($merge_keys)
       ->fields($record)
       ->execute();
   }
@@ -759,9 +772,12 @@ class TtsService {
     if ($espeak_data_path) {
       // Get parent directory that contains espeak-ng-data.
       $espeak_parent = dirname($espeak_data_path);
-      // Filter $_SERVER to only include string values (proc_open requires string env vars).
+      // proc_open requires string env vars.
       $server_env = array_filter($_SERVER, 'is_string');
-      $env = array_merge($server_env, ['PIPER_ESPEAKNG_DATA_DIRECTORY' => $espeak_parent]);
+      $env = array_merge($server_env, [
+        'ESPEAK_DATA_PATH' => $espeak_parent,
+        'PIPER_ESPEAKNG_DATA_DIRECTORY' => $espeak_parent,
+      ]);
     }
 
     $process = proc_open($command, $descriptors, $pipes, NULL, $env);

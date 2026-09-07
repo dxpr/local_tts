@@ -5,10 +5,12 @@
  * AI Text-to-Speech module.
  */
 
+use Drupal\Core\Entity\EntityFormInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\Core\StringTranslation\ByteSizeMarkup;
 
 /**
  * Implements hook_help().
@@ -18,13 +20,13 @@ function ai_tts_help($route_name, RouteMatchInterface $route_match) {
     case 'help.page.ai_tts':
       $output = '';
       $output .= '<h3>' . t('About') . '</h3>';
-      $output .= '<p>' . t('The AI Text-to-Speech module provides high-quality AI-powered text-to-speech functionality using the Kokoro TTS engine (Rust implementation).') . '</p>';
+      $output .= '<p>' . t('The AI Text-to-Speech module adds audio players to your content that read text aloud using AI-generated voices. It uses the Kokoro text-to-speech engine to create high-quality, natural-sounding speech in multiple languages.') . '</p>';
       $output .= '<h3>' . t('Requirements') . '</h3>';
-      $output .= '<p>' . t('This module requires the Kokoro binary (koko) to be installed on the server. Download from: <a href="@url">@url</a>', [
+      $output .= '<p>' . t('You need to install the Kokoro binary (koko) on your server. <a href="@url">Download and installation instructions</a>', [
         '@url' => 'https://github.com/lucasjinreal/Kokoros',
       ]) . '</p>';
       $output .= '<h3>' . t('Configuration') . '</h3>';
-      $output .= '<p>' . t('Configure the module at Administration > Configuration > Media > AI TTS.') . '</p>';
+      $output .= '<p>' . t('Configure the module at Administration &gt; Configuration &gt; Media &gt; AI Text-to-Speech.') . '</p>';
       return $output;
   }
 }
@@ -84,8 +86,7 @@ function ai_tts_entity_delete(EntityInterface $entity) {
  *   TRUE if text content changed, FALSE otherwise.
  */
 function _ai_tts_text_content_changed($entity, $original) {
-  // Only check FieldableEntity types.
-  if (!($entity instanceof FieldableEntityInterface)) {
+  if (!($entity instanceof FieldableEntityInterface) || !($original instanceof FieldableEntityInterface)) {
     return TRUE;
   }
 
@@ -98,19 +99,16 @@ function _ai_tts_text_content_changed($entity, $original) {
   ];
 
   foreach ($entity->getFieldDefinitions() as $field_name => $field_definition) {
-    // Only check text fields.
     if (!in_array($field_definition->getType(), $text_field_types, TRUE)) {
       continue;
     }
 
-    // Skip if field doesn't exist on original.
     if (!$original->hasField($field_name)) {
       continue;
     }
 
-    // Compare field values.
-    $current_value = $entity->get($field_name)->value;
-    $original_value = $original->get($field_name)->value;
+    $current_value = $entity->get($field_name)->getString();
+    $original_value = $original->get($field_name)->getString();
 
     if ($current_value !== $original_value) {
       return TRUE;
@@ -221,7 +219,7 @@ function _ai_tts_enforce_size_limit() {
   if ($deleted > 0) {
     \Drupal::logger('ai_tts')->info('Deleted @count files (@size freed)', [
       '@count' => $deleted,
-      '@size' => format_size($bytes_freed),
+      '@size' => ByteSizeMarkup::create($bytes_freed),
     ]);
   }
 }
@@ -262,8 +260,12 @@ function ai_tts_form_node_form_alter(&$form, FormStateInterface $form_state, $fo
     if (isset($element['#type']) && $element['#type'] === 'container') {
       if (isset($element['widget']['#field_name'])) {
         $field_name = $element['widget']['#field_name'];
+        $form_object = $form_state->getFormObject();
+        if (!($form_object instanceof EntityFormInterface)) {
+          continue;
+        }
         $field_definitions = \Drupal::service('entity_field.manager')
-          ->getFieldDefinitions('node', $form_state->getFormObject()->getEntity()->bundle());
+          ->getFieldDefinitions('node', $form_object->getEntity()->bundle());
 
         if (isset($field_definitions[$field_name]) && $field_definitions[$field_name]->getType() === 'ai_tts_player') {
           $has_tts_field = TRUE;

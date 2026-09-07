@@ -1,8 +1,7 @@
 # Binary and model files - downloaded via Composer scripts
-# These are large files (370MB total) that should not be in version control
 bin/koko
-data/kokoro-v1.0.onnx
-data/voices-v1.0.bin
+data/*.onnx
+data/*.bin
 
 # Keep directory structure and protection files
 !bin/.htaccess
@@ -13,5 +12,14 @@ data/voices-v1.0.bin
 # Composer dependencies
 vendor/
 
+# Node dependencies
+node_modules/
+
 # Composer lock file (for modules, typically not committed)
 composer.lock
+
+# Linter config and lock files
+.eslintrc.json
+.stylelintrc.json
+package.json
+package-lock.json

@@ -11,7 +11,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 /**
  * Configure AI TTS settings.
  */
-class AiTtsSettingsForm extends ConfigFormBase {
+final class AiTtsSettingsForm extends ConfigFormBase {
 
   /**
    * The TTS service.
@@ -253,30 +253,11 @@ class AiTtsSettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
-    $binary_path = $form_state->getValue('koko_binary_path');
-
-    if (!file_exists($binary_path)) {
-      $form_state->setErrorByName('koko_binary_path', $this->t('The binary file does not exist at the specified path.'));
-    }
-    elseif (!is_executable($binary_path)) {
-      $form_state->setErrorByName('koko_binary_path', $this->t('The binary file is not executable.'));
-    }
-
-    // Validate model path.
-    $model_path = $form_state->getValue('model_path');
-    if ($model_path) {
-      $model_real = $this->expandPath($model_path);
-      if (!file_exists($model_real)) {
-        $form_state->setErrorByName('model_path', $this->t('Model file does not exist at: @path', ['@path' => $model_real]));
-      }
-    }
-
-    // Validate data path.
-    $data_path = $form_state->getValue('data_path');
-    if ($data_path) {
-      $data_real = $this->expandPath($data_path);
-      if (!file_exists($data_real)) {
-        $form_state->setErrorByName('data_path', $this->t('Data file does not exist at: @path', ['@path' => $data_real]));
+    $espeak_path = $form_state->getValue('espeak_data_path');
+    if ($espeak_path) {
+      $real_path = $this->expandPath($espeak_path);
+      if (!is_dir($real_path)) {
+        $form_state->setErrorByName('espeak_data_path', $this->t('The eSpeak NG data directory does not exist at: @path', ['@path' => $real_path]));
       }
     }
 

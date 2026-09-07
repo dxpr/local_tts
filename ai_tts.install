@@ -5,6 +5,7 @@
  * Install, update and uninstall functions for the AI TTS module.
  */
 
+use Drupal\Core\StringTranslation\ByteSizeMarkup;
 use Drupal\Core\Url;
 use Drupal\Core\File\FileSystemInterface;
 
@@ -114,7 +115,7 @@ function ai_tts_requirements($phase) {
     }
     else {
       $binary_size = filesize($binary_path);
-      $details[] = t('Binary: @size', ['@size' => format_size($binary_size)]);
+      $details[] = t('Binary: @size', ['@size' => ByteSizeMarkup::create($binary_size)]);
     }
 
     // Model file checks.
@@ -123,7 +124,7 @@ function ai_tts_requirements($phase) {
     }
     else {
       $model_size = filesize($model_path);
-      $details[] = t('Model: @size', ['@size' => format_size($model_size)]);
+      $details[] = t('Model: @size', ['@size' => ByteSizeMarkup::create($model_size)]);
     }
 
     // Data file checks.
@@ -132,7 +133,7 @@ function ai_tts_requirements($phase) {
     }
     else {
       $data_size = filesize($data_path);
-      $details[] = t('Voice data: @size', ['@size' => format_size($data_size)]);
+      $details[] = t('Voice data: @size', ['@size' => ByteSizeMarkup::create($data_size)]);
     }
 
     // Create single requirement entry.
@@ -280,7 +281,7 @@ function ai_tts_requirements($phase) {
         ];
       }
       else {
-        $size_formatted = format_size($cache_size);
+        $size_formatted = ByteSizeMarkup::create($cache_size);
         $max_size = $config->get('cache_max_size') ?: 1073741824;
         $percent_used = ($cache_size / $max_size) * 100;
 
@@ -289,7 +290,7 @@ function ai_tts_requirements($phase) {
           'value' => t('@size (@percent% of @limit)', [
             '@size' => $size_formatted,
             '@percent' => round($percent_used),
-            '@limit' => format_size($max_size),
+            '@limit' => ByteSizeMarkup::create($max_size),
           ]),
         ];
 
@@ -359,8 +360,10 @@ function ai_tts_requirements($phase) {
     $max_server_load = $config->get('max_server_load') ?? 2;
     if ($max_server_load > 0 && function_exists('sys_getloadavg')) {
       $load = sys_getloadavg();
-      if ($load !== FALSE && isset($load[0])) {
+      if ($load !== FALSE) {
         $current_load = (float) $load[0];
+        $settings_url = Url::fromRoute('ai_tts.settings')->toString();
+
         if ($current_load > $max_server_load) {
           $requirements['ai_tts_server_load'] = [
             'title' => t('AI TTS server load'),
@@ -368,8 +371,22 @@ function ai_tts_requirements($phase) {
               '@current' => number_format($current_load, 2),
               '@max' => number_format($max_server_load, 2),
             ]),
-            'description' => t('Server load exceeds threshold. TTS generation is currently disabled.'),
+            'description' => t('Audio generation is paused because server load (@current) exceeds the threshold (@max). Visitors will see "Audio temporarily unavailable." To resolve this: wait for load to drop, or <a href="@url">raise the threshold</a> in TTS settings.', [
+              '@current' => number_format($current_load, 2),
+              '@max' => number_format($max_server_load, 2),
+              '@url' => $settings_url,
+            ]),
             'severity' => REQUIREMENT_WARNING,
+          ];
+        }
+        else {
+          $requirements['ai_tts_server_load'] = [
+            'title' => t('AI TTS server load'),
+            'value' => t('@current (threshold: @max)', [
+              '@current' => number_format($current_load, 2),
+              '@max' => number_format($max_server_load, 2),
+            ]),
+            'severity' => REQUIREMENT_OK,
           ];
         }
       }

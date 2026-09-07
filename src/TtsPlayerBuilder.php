@@ -5,6 +5,7 @@ namespace Drupal\ai_tts;
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\Url;
@@ -52,19 +53,30 @@ class TtsPlayerBuilder {
   protected $ttsService;
 
   /**
+   * The current user.
+   *
+   * @var \Drupal\Core\Session\AccountProxyInterface
+   */
+  protected $currentUser;
+
+  /**
    * Constructs a TtsPlayerBuilder.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   Config factory.
    * @param \Drupal\ai_tts\TtsService $tts_service
    *   TTS service.
+   * @param \Drupal\Core\Session\AccountProxyInterface $current_user
+   *   The current user.
    */
   public function __construct(
     ConfigFactoryInterface $config_factory,
     TtsService $tts_service,
+    AccountProxyInterface $current_user,
   ) {
     $this->configFactory = $config_factory;
     $this->ttsService = $tts_service;
+    $this->currentUser = $current_user;
   }
 
   /**
@@ -94,7 +106,7 @@ class TtsPlayerBuilder {
     $global_config = $this->configFactory->get('ai_tts.settings');
 
     $langcode = NULL;
-    if ($entity && method_exists($entity, 'language')) {
+    if ($entity) {
       $langcode = $entity->language()->getId();
     }
 
@@ -312,12 +324,15 @@ class TtsPlayerBuilder {
           'entityType' => $entity->getEntityTypeId(),
           'entityId' => $entity->id(),
           'fields' => array_values(array_filter($settings['fields'] ?? [])),
+          'isAdmin' => (bool) $this->currentUser->hasPermission('administer ai tts settings'),
+          'settingsUrl' => Url::fromRoute('ai_tts.settings')->toString(),
         ],
       ],
     ];
 
     $build['#cache']['contexts'][] = 'route';
     $build['#cache']['contexts'][] = 'languages:language_content';
+    $build['#cache']['contexts'][] = 'user.permissions';
 
     $entity_type = $entity->getEntityTypeId();
     $entity_id = $entity->id();

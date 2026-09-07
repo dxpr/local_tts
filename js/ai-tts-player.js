@@ -137,7 +137,7 @@
               labelText.textContent = Drupal.t('Listen to this article');
               updateStatus('', 'status');
             }
-          }, 5000);
+          }, 8000);
         }
 
         function generateSpeech() {
@@ -189,25 +189,11 @@
                 currentAudioUrl = result.data.audio_url;
                 playSpeech(result.data.audio_url);
               } else {
-                let errorMessage = result.data.message || Drupal.t('Unable to generate audio');
+                var errorMessage = result.data.message || Drupal.t('Unable to generate audio. Please try again later.');
 
-                if (result.status === 400) {
-                  errorMessage = result.data.message || Drupal.t('Please check your text and try again');
-                } else if (result.status === 408) {
-                  errorMessage = Drupal.t('Audio generation is taking longer than expected. Please try with shorter text.');
-                } else if (result.status === 429) {
-                  let retryMsg = '';
-                  if (result.data.retry_after) {
-                    const minutes = Math.ceil(result.data.retry_after / 60);
-                    retryMsg = Drupal.t(' Please try again in @minutes minutes.', {'@minutes': minutes});
-                  }
-                  errorMessage = Drupal.t('Too many requests at once.') + retryMsg;
-                } else if (result.status === 500) {
-                  errorMessage = Drupal.t('Something went wrong on our end. Please try again in a few moments.');
-                } else if (result.status === 503) {
-                  errorMessage = Drupal.t('The service is temporarily unavailable. Please try again later or contact support if this continues.');
-                } else if (result.status === 504) {
-                  errorMessage = Drupal.t('The server is taking too long to process your request. Please try with shorter text or contact support.');
+                if (result.status === 429 && result.data.retry_after) {
+                  var minutes = Math.ceil(result.data.retry_after / 60);
+                  errorMessage = result.data.message || Drupal.t('Too many requests. Please try again in @minutes minutes.', {'@minutes': minutes});
                 }
 
                 if (labelText) {

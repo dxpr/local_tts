@@ -12,13 +12,13 @@ use Drupal\Core\TypedData\DataDefinition;
 /**
  * Defines the 'ai_tts_player' field type.
  *
- * A simple boolean field that triggers the TTS player formatter.
+ * A simple boolean field that controls the text-to-speech player display.
  * Stores a single boolean value (1 = enabled, 0 = disabled).
  */
 #[FieldType(
   id: "ai_tts_player",
-  label: new TranslatableMarkup("AI TTS Player"),
-  description: new TranslatableMarkup("Displays a text-to-speech audio player for this content"),
+  label: new TranslatableMarkup("AI text-to-speech player"),
+  description: new TranslatableMarkup("Add an audio player that reads your content aloud using AI-generated speech"),
   default_widget: "ai_tts_player_widget",
   default_formatter: "ai_tts_player_formatter",
   cardinality: 1,

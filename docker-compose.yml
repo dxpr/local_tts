@@ -27,3 +27,19 @@ services:
     tty: true
     volumes:
       - .:/src
+
+  eslint:
+    image: node:20-alpine
+    profiles: ["lint"]
+    working_dir: /src
+    command: sh -c "./scripts/linters/run-eslint.sh"
+    volumes:
+      - .:/src
+
+  stylelint:
+    image: node:20-alpine
+    profiles: ["lint"]
+    working_dir: /src
+    command: sh -c "./scripts/linters/run-stylelint.sh"
+    volumes:
+      - .:/src

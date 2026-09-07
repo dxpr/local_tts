@@ -25,3 +25,23 @@ jobs:
     - name: Check Drupal compatibility
       run: |
         docker compose --profile lint run drupal-check
+
+  eslint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Lint JavaScript
+      run: |
+        docker compose --profile lint run eslint
+
+  stylelint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Lint CSS
+      run: |
+        docker compose --profile lint run stylelint

@@ -11,11 +11,11 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
 /**
  * Plugin implementation of the 'ai_tts_player_widget' widget.
  *
- * Provides a checkbox to enable/disable the TTS player per entity.
+ * Provides a checkbox to enable/disable the text-to-speech player per entity.
  */
 #[FieldWidget(
   id: 'ai_tts_player_widget',
-  label: new TranslatableMarkup('AI TTS Player Toggle'),
+  label: new TranslatableMarkup('Text-to-speech player toggle'),
   field_types: ['ai_tts_player'],
   multiple_values: TRUE,
 )]

@@ -107,7 +107,6 @@
   background: #dfdfdf !important;
   border-radius: 2px !important;
   cursor: pointer !important;
-  -webkit-appearance: none !important;
   appearance: none !important;
 }
 
@@ -131,7 +130,6 @@
   border-radius: 50% !important;
   cursor: pointer !important;
   transition: transform 0.1s !important;
-  -webkit-appearance: none !important;
   appearance: none !important;
 }
 
@@ -266,7 +264,7 @@
   width: 14px;
   height: 14px;
   margin-right: 0.5rem;
-  border: 2px solid currentColor;
+  border: 2px solid currentcolor;
   border-right-color: transparent;
   border-radius: 50%;
   vertical-align: middle;
@@ -290,7 +288,7 @@ audio {
 }
 
 /* Responsive */
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .ai-tts-play-wrapper {
     flex-wrap: wrap;
   }
@@ -318,5 +316,10 @@ audio {
 
 /* Hide Drupal form descriptions */
 .ai-tts-settings .form-item .description {
+  display: none;
+}
+
+/* Hide theme block separator inside TTS player */
+.ai-tts-container > .block-hr {
   display: none;
 }

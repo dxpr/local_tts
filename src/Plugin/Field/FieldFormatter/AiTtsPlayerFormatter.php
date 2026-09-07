@@ -18,13 +18,13 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  */
 #[FieldFormatter(
   id: 'ai_tts_player_formatter',
-  label: new TranslatableMarkup('TTS Player'),
-  description: new TranslatableMarkup('Displays an audio player for text-to-speech.'),
+  label: new TranslatableMarkup('Text-to-speech audio player'),
+  description: new TranslatableMarkup('Shows an audio player that reads content aloud'),
   field_types: [
     'ai_tts_player',
   ],
 )]
-class AiTtsPlayerFormatter extends FormatterBase implements ContainerFactoryPluginInterface {
+final class AiTtsPlayerFormatter extends FormatterBase implements ContainerFactoryPluginInterface {
 
   /**
    * Allowed field types for TTS processing.
@@ -130,23 +130,23 @@ class AiTtsPlayerFormatter extends FormatterBase implements ContainerFactoryPlug
 
     $elements['show_voice_selector'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Show Voice Selection Dropdown'),
+      '#title' => $this->t('Show voice selector'),
       '#default_value' => $this->getSetting('show_voice_selector'),
-      '#description' => $this->t('Allow users to select from available voices.'),
+      '#description' => $this->t('Let visitors choose from different voices.'),
     ];
 
     $elements['show_speed_control'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Show Speed Control'),
+      '#title' => $this->t('Show playback speed control'),
       '#default_value' => $this->getSetting('show_speed_control'),
-      '#description' => $this->t('Allow users to adjust speech speed.'),
+      '#description' => $this->t('Let visitors adjust how fast the content is read.'),
     ];
 
     $elements['wrapper_classes'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Additional CSS Classes'),
+      '#title' => $this->t('Custom CSS classes'),
       '#default_value' => $this->getSetting('wrapper_classes'),
-      '#description' => $this->t('Add custom CSS classes to the player wrapper (space-separated).'),
+      '#description' => $this->t('Add CSS classes to the player wrapper for custom styling (separate multiple classes with spaces).'),
     ];
 
     // Get text fields for the current entity type/bundle.
@@ -155,8 +155,8 @@ class AiTtsPlayerFormatter extends FormatterBase implements ContainerFactoryPlug
     if (!empty($field_options)) {
       $elements['fields'] = [
         '#type' => 'checkboxes',
-        '#title' => $this->t('Fields to include'),
-        '#description' => $this->t('Select the text fields that should be read. Leave empty to include all text fields.'),
+        '#title' => $this->t('Text fields to read aloud'),
+        '#description' => $this->t('Select which text fields the player will read. Leave all unchecked to include all text fields.'),
         '#options' => $field_options,
         '#default_value' => $this->getSetting('fields'),
       ];

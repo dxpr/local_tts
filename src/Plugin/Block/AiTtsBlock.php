@@ -23,7 +23,7 @@ use Drupal\Core\Session\AccountInterface;
  *   category = @Translation("Media")
  * )
  */
-class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
+final class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
 
   /**
    * Allowed field types for TTS processing.

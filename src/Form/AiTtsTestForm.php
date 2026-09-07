@@ -7,13 +7,14 @@ use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\StringTranslation\ByteSizeMarkup;
 use Drupal\Core\Url;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Test form for AI TTS.
  */
-class AiTtsTestForm extends FormBase {
+final class AiTtsTestForm extends FormBase {
 
   /**
    * The TTS service.
@@ -162,7 +163,7 @@ class AiTtsTestForm extends FormBase {
 
       if ($audio_uri) {
         $real_path = $this->fileSystem->realpath($audio_uri);
-        $file_size = file_exists($real_path) ? format_size(filesize($real_path)) : 'unknown';
+        $file_size = file_exists($real_path) ? ByteSizeMarkup::create(filesize($real_path)) : 'unknown';
 
         $audio_url = $this->fileUrlGenerator->generateAbsoluteString($audio_uri);
 

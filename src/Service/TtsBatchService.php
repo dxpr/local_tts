@@ -2,11 +2,15 @@
 
 namespace Drupal\ai_tts\Service;
 
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Database\Database;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\Core\TypedData\TranslatableInterface;
 use Drupal\ai_tts\TtsService;
 use Drupal\ai_tts\Exception\TtsServiceUnavailableException;
 use Drupal\ai_tts\Exception\TtsTimeoutException;
@@ -332,9 +336,7 @@ class TtsBatchService {
             $database->query('SELECT 1')->fetchField();
           }
           catch (\Exception $e) {
-            // Connection lost. Force reconnection by destroying old connection.
-            $database->destroy();
-            // Get fresh database connection.
+            Database::closeConnection();
             $database = \Drupal::database();
             $logger->info('Database connection refreshed during batch processing.');
           }
@@ -352,9 +354,16 @@ class TtsBatchService {
             break;
           }
 
-          // Get translation if needed.
+          if (!($entity instanceof FieldableEntityInterface)) {
+            $context['results']['errors'][] = $this->t('Entity @type:@id has no fields.', [
+              '@type' => $entity_data['entity_type'],
+              '@id' => $entity_data['entity_id'],
+            ]);
+            break;
+          }
+
           $langcode = $entity_data['langcode'] ?? $entity->language()->getId();
-          if ($entity->hasTranslation($langcode)) {
+          if ($entity instanceof TranslatableInterface && $entity->hasTranslation($langcode)) {
             $entity = $entity->getTranslation($langcode);
           }
 
@@ -538,13 +547,13 @@ class TtsBatchService {
   /**
    * Extract text content from an entity.
    *
-   * @param \Drupal\Core\Entity\EntityInterface $entity
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
    *   The entity to extract text from.
    *
    * @return string
    *   The extracted text content.
    */
-  protected function extractTextFromEntity($entity): string {
+  protected function extractTextFromEntity(FieldableEntityInterface $entity): string {
     // Auto-detect common text fields.
     $common_fields = [
       'body',
@@ -568,7 +577,7 @@ class TtsBatchService {
   /**
    * Extract text from a specific field.
    *
-   * @param \Drupal\Core\Entity\EntityInterface $entity
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
    *   The entity.
    * @param string $field_name
    *   The field name.
@@ -576,7 +585,7 @@ class TtsBatchService {
    * @return string
    *   The extracted text.
    */
-  protected function extractFieldText($entity, $field_name): string {
+  protected function extractFieldText(FieldableEntityInterface $entity, string $field_name): string {
     if (!$entity->hasField($field_name)) {
       return '';
     }
@@ -606,9 +615,11 @@ class TtsBatchService {
       elseif (is_string($item->value)) {
         $text_parts[] = $item->value;
       }
-      // Entity reference fields - get labels.
-      elseif (method_exists($item, 'entity') && $item->entity) {
-        $text_parts[] = $item->entity->label();
+      elseif (property_exists($item, 'entity') && $item->entity) {
+        $referenced = $item->entity;
+        if ($referenced instanceof EntityInterface) {
+          $text_parts[] = $referenced->label() ?? '';
+        }
       }
     }
 

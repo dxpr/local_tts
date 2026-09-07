@@ -2,6 +2,7 @@
 
 namespace Drupal\ai_tts\Controller;
 
+use Drupal\Core\TypedData\TranslatableInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\ai_tts\Exception\TtsServiceUnavailableException;
@@ -19,7 +20,7 @@ use Symfony\Component\HttpFoundation\Request;
 /**
  * Controller for TTS generation endpoints.
  */
-class TtsController extends ControllerBase {
+final class TtsController extends ControllerBase {
 
   /**
    * Rate limit time window in seconds (1 hour).
@@ -120,8 +121,8 @@ class TtsController extends ControllerBase {
    * @param \Symfony\Component\HttpFoundation\Request $request
    *   The request object.
    *
-   * @return \Symfony\Component\HttpFoundation\JsonResponse|\Symfony\Component\HttpFoundation\BinaryFileResponse
-   *   JSON response with file URL or binary audio response.
+   * @return \Symfony\Component\HttpFoundation\JsonResponse
+   *   JSON response with file URL or error details.
    */
   public function generate(Request $request) {
     $voice = $request->request->get('voice') ?: $request->query->get('voice');
@@ -147,11 +148,10 @@ class TtsController extends ControllerBase {
 
       // Load specific translation if language provided.
       // Follow Drupal core pattern: try exact match, then base language.
-      if ($entity && $language_from_request) {
+      if ($entity && $language_from_request && $entity instanceof TranslatableInterface) {
         if ($entity->hasTranslation($language_from_request)) {
           $entity = $entity->getTranslation($language_from_request);
         }
-        // Fallback: Try base language (e.g., 'pt' from 'pt-br').
         elseif (strpos($language_from_request, '-') !== FALSE) {
           $base_lang = explode('-', $language_from_request)[0];
           if ($entity->hasTranslation($base_lang)) {
@@ -186,7 +186,7 @@ class TtsController extends ControllerBase {
       }
 
       // Detect language from entity.
-      $language = method_exists($entity, 'language') ? $entity->language()->getId() : 'en';
+      $language = $entity->language()->getId();
     }
     catch (\Exception $e) {
       $this->getLogger('ai_tts')->error('Error loading entity: @message', ['@message' => $e->getMessage()]);
@@ -199,9 +199,11 @@ class TtsController extends ControllerBase {
     // HTTP 429: Too Many Requests - Rate limiting.
     if (!$this->checkRateLimit()) {
       $retry_after = $this->getRetryAfter();
+      $minutes = max(1, (int) ceil($retry_after / 60));
       return new JsonResponse([
         'error' => 'Too Many Requests',
-        'message' => 'Rate limit exceeded. Please try again later.',
+        'error_code' => 'rate_limit',
+        'message' => 'You have made too many requests. Please try again in ' . $minutes . ' minutes.',
         'retry_after' => $retry_after,
       ], 429, ['Retry-After' => $retry_after]);
     }
@@ -244,22 +246,10 @@ class TtsController extends ControllerBase {
         '@message' => $e->getMessage(),
       ]);
 
-      // Provide user-friendly message from exception if available.
-      $user_message = $e->getMessage();
+      $raw = $e->getMessage();
+      $response = $this->buildServiceErrorResponse($raw);
 
-      // If it's a generic message, provide more helpful default.
-      if (strpos($user_message, 'TTS binary not found') !== FALSE ||
-          strpos($user_message, 'not executable') !== FALSE ||
-          strpos($user_message, 'Model file not found') !== FALSE ||
-          strpos($user_message, 'Data file not found') !== FALSE ||
-          strpos($user_message, 'Failed to create audio directory') !== FALSE) {
-        $user_message = 'TTS service is not properly configured. Please contact the administrator.';
-      }
-
-      return new JsonResponse([
-        'error' => 'Service Unavailable',
-        'message' => $user_message,
-      ], 503);
+      return new JsonResponse($response, 503);
     }
     catch (\RuntimeException $e) {
       // Check if this is an access denied error.
@@ -380,6 +370,54 @@ class TtsController extends ControllerBase {
   }
 
   /**
+   * Build a structured 503 error response with role-appropriate messages.
+   *
+   * @param string $raw_message
+   *   The raw exception message from TtsService.
+   *
+   * @return array
+   *   Response array with error, error_code, message, and admin_message.
+   */
+  protected function buildServiceErrorResponse($raw_message) {
+    $is_admin = $this->currentUser->hasPermission('administer ai tts settings');
+
+    if (strpos($raw_message, 'Server is experiencing high load') !== FALSE) {
+      $config = $this->config('ai_tts.settings');
+      $threshold = $config->get('max_server_load') ?? 2;
+
+      return [
+        'error' => 'Service Unavailable',
+        'error_code' => 'server_load',
+        'message' => $is_admin
+          ? $raw_message . ' The current threshold is ' . $threshold . '. You can adjust this in the TTS settings. Set it to 0 to disable the load check.'
+          : 'Audio is temporarily unavailable due to high server demand. Please try again shortly.',
+      ];
+    }
+
+    if (strpos($raw_message, 'TTS binary not found') !== FALSE ||
+        strpos($raw_message, 'not executable') !== FALSE ||
+        strpos($raw_message, 'Model file not found') !== FALSE ||
+        strpos($raw_message, 'Data file not found') !== FALSE ||
+        strpos($raw_message, 'Failed to create audio directory') !== FALSE) {
+      return [
+        'error' => 'Service Unavailable',
+        'error_code' => 'not_configured',
+        'message' => $is_admin
+          ? 'TTS configuration error: ' . $raw_message . ' Check the TTS settings page.'
+          : 'The audio service is currently unavailable. The site administrator has been notified.',
+      ];
+    }
+
+    return [
+      'error' => 'Service Unavailable',
+      'error_code' => 'unknown',
+      'message' => $is_admin
+        ? 'TTS error: ' . $raw_message
+        : 'Audio generation failed. Please try again later.',
+    ];
+  }
+
+  /**
    * Extract text content from entity fields (server-side only).
    *
    * SECURITY: This method validates and sanitizes all text extraction.
@@ -460,7 +498,7 @@ class TtsController extends ControllerBase {
             }
 
             // SECURITY: Strip all HTML tags and decode entities.
-            $text = html_entity_decode(strip_tags($text ?? ''), ENT_QUOTES | ENT_HTML5);
+            $text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5);
             if (!empty(trim($text))) {
               $content .= (strlen($content) > 0 ? ' ' : '') . $text;
             }

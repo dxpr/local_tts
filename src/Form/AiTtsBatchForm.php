@@ -13,7 +13,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 /**
  * Form for batch TTS generation.
  */
-class AiTtsBatchForm extends FormBase {
+final class AiTtsBatchForm extends FormBase {
 
   /**
    * The TTS batch service.
