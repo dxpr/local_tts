@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\ai_tts\Plugin\Field\FieldType;
+namespace Drupal\local_tts\Plugin\Field\FieldType;
 
 use Drupal\Core\Field\Attribute\FieldType;
 use Drupal\Core\Field\FieldDefinitionInterface;
@@ -10,20 +10,20 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\Core\TypedData\DataDefinition;
 
 /**
- * Defines the 'ai_tts_player' field type.
+ * Defines the 'local_tts_player' field type.
  *
  * A simple boolean field that controls the text-to-speech player display.
  * Stores a single boolean value (1 = enabled, 0 = disabled).
  */
 #[FieldType(
-  id: "ai_tts_player",
+  id: "local_tts_player",
   label: new TranslatableMarkup("AI text-to-speech player"),
   description: new TranslatableMarkup("Add an audio player that reads your content aloud using AI-generated speech"),
-  default_widget: "ai_tts_player_widget",
-  default_formatter: "ai_tts_player_formatter",
+  default_widget: "local_tts_player_widget",
+  default_formatter: "local_tts_player_formatter",
   cardinality: 1,
 )]
-class AiTtsPlayerItem extends FieldItemBase {
+class LocalTtsPlayerItem extends FieldItemBase {
 
   /**
    * {@inheritdoc}

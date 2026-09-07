@@ -1,13 +1,13 @@
-ai_tts.settings:
-  title: 'AI TTS'
-  route_name: ai_tts.settings
+local_tts.settings:
+  title: 'Local TTS'
+  route_name: local_tts.settings
   description: 'Configure and test AI text-to-speech settings.'
   parent: system.admin_config_media
   weight: 10
 
-ai_tts.batch:
+local_tts.batch:
   title: 'Batch generation'
-  route_name: ai_tts.batch
+  route_name: local_tts.batch
   description: 'Generate TTS audio for multiple entities at once'
-  parent: ai_tts.settings
+  parent: local_tts.settings
   weight: 20

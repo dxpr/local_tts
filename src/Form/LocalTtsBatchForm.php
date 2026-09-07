@@ -1,31 +1,31 @@
 <?php
 
-namespace Drupal\ai_tts\Form;
+namespace Drupal\local_tts\Form;
 
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Language\LanguageInterface;
 use Drupal\Core\Language\LanguageManagerInterface;
-use Drupal\ai_tts\Service\TtsBatchService;
-use Drupal\ai_tts\TtsService;
+use Drupal\local_tts\Service\TtsBatchService;
+use Drupal\local_tts\TtsService;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Form for batch TTS generation.
  */
-final class AiTtsBatchForm extends FormBase {
+final class LocalTtsBatchForm extends FormBase {
 
   /**
    * The TTS batch service.
    *
-   * @var \Drupal\ai_tts\Service\TtsBatchService
+   * @var \Drupal\local_tts\Service\TtsBatchService
    */
   protected $batchService;
 
   /**
    * The TTS service.
    *
-   * @var \Drupal\ai_tts\TtsService
+   * @var \Drupal\local_tts\TtsService
    */
   protected $ttsService;
 
@@ -41,18 +41,18 @@ final class AiTtsBatchForm extends FormBase {
    */
   public static function create(ContainerInterface $container) {
     return new static(
-      $container->get('ai_tts.batch_service'),
-      $container->get('ai_tts.tts_service'),
+      $container->get('local_tts.batch_service'),
+      $container->get('local_tts.tts_service'),
       $container->get('language_manager')
     );
   }
 
   /**
-   * Constructs an AiTtsBatchForm object.
+   * Constructs an LocalTtsBatchForm object.
    *
-   * @param \Drupal\ai_tts\Service\TtsBatchService $batch_service
+   * @param \Drupal\local_tts\Service\TtsBatchService $batch_service
    *   The batch service.
-   * @param \Drupal\ai_tts\TtsService $tts_service
+   * @param \Drupal\local_tts\TtsService $tts_service
    *   The TTS service.
    * @param \Drupal\Core\Language\LanguageManagerInterface $language_manager
    *   The language manager.
@@ -67,22 +67,22 @@ final class AiTtsBatchForm extends FormBase {
    * {@inheritdoc}
    */
   public function getFormId() {
-    return 'ai_tts_batch_form';
+    return 'local_tts_batch_form';
   }
 
   /**
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
-    $config = $this->config('ai_tts.settings');
+    $config = $this->config('local_tts.settings');
 
-    $form['#attributes']['class'][] = 'ai-tts-batch-form';
+    $form['#attributes']['class'][] = 'local-tts-batch-form';
 
     // Drush command info.
     $form['drush_info'] = [
       '#type' => 'details',
       '#title' => $this->t('Alternative: Drush Command'),
-      '#description' => $this->t('<p><strong>For automation or CLI preference, use the Drush command:</strong></p><pre>drush ai-tts:batch --entity-type=node --bundle=article --language=en --limit=10</pre><p>Options: <code>--force</code> (regenerate), <code>--updated-after=2025-01-01</code> (date filter)</p>'),
+      '#description' => $this->t('<p><strong>For automation or CLI preference, use the Drush command:</strong></p><pre>drush local-tts:batch --entity-type=node --bundle=article --language=en --limit=10</pre><p>Options: <code>--force</code> (regenerate), <code>--updated-after=2025-01-01</code> (date filter)</p>'),
       '#open' => FALSE,
     ];
 
@@ -93,7 +93,7 @@ final class AiTtsBatchForm extends FormBase {
       '#open' => TRUE,
     ];
 
-    // Get all entity bundles with ai_tts_player field attached.
+    // Get all entity bundles with local_tts_player field attached.
     $available_bundles = $this->batchService->getAvailableEntityBundles();
 
     $bundle_options = [];
@@ -442,7 +442,7 @@ final class AiTtsBatchForm extends FormBase {
     array &$context,
   ): void {
     // Get the batch service without serializing it.
-    $batch_service = \Drupal::service('ai_tts.batch_service');
+    $batch_service = \Drupal::service('local_tts.batch_service');
 
     // Call the actual processing method.
     $batch_service->processBatch($entities, $options, $total_entities, $context);

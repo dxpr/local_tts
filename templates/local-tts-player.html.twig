@@ -1,7 +1,7 @@
 {#
 /**
  * @file
- * Template for AI TTS player.
+ * Template for Local TTS player.
  *
  * Available variables:
  * - button_text: The text for the play button.
@@ -12,22 +12,22 @@
  * - default_speed: The default speech speed.
  */
 #}
-<div class="ai-tts-player">
-  <div class="ai-tts-controls">
-    <button id="ai-tts-play-button" class="ai-tts-button" type="button">
+<div class="local-tts-player">
+  <div class="local-tts-controls">
+    <button id="local-tts-play-button" class="local-tts-button" type="button">
       {{ button_text }}
     </button>
-    <button id="ai-tts-stop-button" class="ai-tts-button ai-tts-stop" type="button" disabled>
+    <button id="local-tts-stop-button" class="local-tts-button local-tts-stop" type="button" disabled>
       {{ 'Stop'|t }}
     </button>
   </div>
 
   {% if show_voice_selector or show_speed_control %}
-    <div class="ai-tts-settings">
+    <div class="local-tts-settings">
       {% if show_voice_selector %}
-        <div class="ai-tts-voice-selector">
-          <label for="ai-tts-voice-select">{{ 'Voice'|t }}:</label>
-          <select id="ai-tts-voice-select">
+        <div class="local-tts-voice-selector">
+          <label for="local-tts-voice-select">{{ 'Voice'|t }}:</label>
+          <select id="local-tts-voice-select">
             {% for voice in voices %}
               <option value="{{ voice }}" {% if voice == default_voice %}selected{% endif %}>
                 {{ voice }}
@@ -38,11 +38,11 @@
       {% endif %}
 
       {% if show_speed_control %}
-        <div class="ai-tts-speed-control">
-          <label for="ai-tts-speed-input">{{ 'Speed'|t }}:</label>
+        <div class="local-tts-speed-control">
+          <label for="local-tts-speed-input">{{ 'Speed'|t }}:</label>
           <input
             type="number"
-            id="ai-tts-speed-input"
+            id="local-tts-speed-input"
             min="0.5"
             max="2.0"
             step="0.1"
@@ -53,6 +53,6 @@
     </div>
   {% endif %}
 
-  <div class="ai-tts-status" id="ai-tts-status"></div>
-  <audio id="ai-tts-audio" style="display: none;"></audio>
+  <div class="local-tts-status" id="local-tts-status"></div>
+  <audio id="local-tts-audio" style="display: none;"></audio>
 </div>

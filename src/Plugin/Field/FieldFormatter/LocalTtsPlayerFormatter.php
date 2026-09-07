@@ -1,8 +1,8 @@
 <?php
 
-namespace Drupal\ai_tts\Plugin\Field\FieldFormatter;
+namespace Drupal\local_tts\Plugin\Field\FieldFormatter;
 
-use Drupal\ai_tts\TtsPlayerBuilder;
+use Drupal\local_tts\TtsPlayerBuilder;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Field\Attribute\FieldFormatter;
 use Drupal\Core\Field\FieldDefinitionInterface;
@@ -14,17 +14,17 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
- * Plugin implementation of the 'ai_tts_player_formatter' formatter.
+ * Plugin implementation of the 'local_tts_player_formatter' formatter.
  */
 #[FieldFormatter(
-  id: 'ai_tts_player_formatter',
+  id: 'local_tts_player_formatter',
   label: new TranslatableMarkup('Text-to-speech audio player'),
   description: new TranslatableMarkup('Shows an audio player that reads content aloud'),
   field_types: [
-    'ai_tts_player',
+    'local_tts_player',
   ],
 )]
-final class AiTtsPlayerFormatter extends FormatterBase implements ContainerFactoryPluginInterface {
+final class LocalTtsPlayerFormatter extends FormatterBase implements ContainerFactoryPluginInterface {
 
   /**
    * Allowed field types for TTS processing.
@@ -54,7 +54,7 @@ final class AiTtsPlayerFormatter extends FormatterBase implements ContainerFacto
   /**
    * The TTS player builder service.
    *
-   * @var \Drupal\ai_tts\TtsPlayerBuilder
+   * @var \Drupal\local_tts\TtsPlayerBuilder
    */
   protected $playerBuilder;
 
@@ -66,7 +66,7 @@ final class AiTtsPlayerFormatter extends FormatterBase implements ContainerFacto
   protected $entityFieldManager;
 
   /**
-   * Constructs an AiTtsPlayerFormatter object.
+   * Constructs an LocalTtsPlayerFormatter object.
    *
    * @param string $plugin_id
    *   The plugin_id for the formatter.
@@ -82,7 +82,7 @@ final class AiTtsPlayerFormatter extends FormatterBase implements ContainerFacto
    *   The view mode.
    * @param array $third_party_settings
    *   Any third party settings.
-   * @param \Drupal\ai_tts\TtsPlayerBuilder $player_builder
+   * @param \Drupal\local_tts\TtsPlayerBuilder $player_builder
    *   The TTS player builder service.
    * @param \Drupal\Core\Entity\EntityFieldManagerInterface $entity_field_manager
    *   The entity field manager.
@@ -105,7 +105,7 @@ final class AiTtsPlayerFormatter extends FormatterBase implements ContainerFacto
       $configuration['label'] ?? 'hidden',
       $configuration['view_mode'] ?? 'default',
       $configuration['third_party_settings'] ?? [],
-      $container->get('ai_tts.player_builder'),
+      $container->get('local_tts.player_builder'),
       $container->get('entity_field.manager')
     );
   }

@@ -1,6 +1,6 @@
 /**
  * @file
- * AI TTS player functionality.
+ * Local TTS player functionality.
  */
 
 (function (Drupal, drupalSettings, once) {
@@ -8,24 +8,24 @@
 
   Drupal.behaviors.aiTtsPlayer = {
     attach: function (context, settings) {
-      const players = once('ai-tts-player', '.ai-tts-container', context);
+      const players = once('local-tts-player', '.local-tts-container', context);
 
       if (players.length === 0) {
         return;
       }
 
       players.forEach(function (player) {
-        const playButton = player.querySelector('.ai-tts-play-button');
-        const labelContainer = player.querySelector('.ai-tts-label');
-        const labelText = player.querySelector('.ai-tts-label-text');
-        const labelDuration = player.querySelector('.ai-tts-label-duration');
-        const playbackControls = player.querySelector('.ai-tts-playback-controls');
-        const currentTimeDisplay = player.querySelector('.ai-tts-current-time');
-        const scrubberInput = player.querySelector('.ai-tts-scrubber');
-        const remainingTimeDisplay = player.querySelector('.ai-tts-remaining-time');
-        const voiceSelect = player.querySelector('.ai-tts-voice-select');
-        const speedInput = player.querySelector('.ai-tts-speed-input');
-        const statusDiv = player.querySelector('.ai-tts-status');
+        const playButton = player.querySelector('.local-tts-play-button');
+        const labelContainer = player.querySelector('.local-tts-label');
+        const labelText = player.querySelector('.local-tts-label-text');
+        const labelDuration = player.querySelector('.local-tts-label-duration');
+        const playbackControls = player.querySelector('.local-tts-playback-controls');
+        const currentTimeDisplay = player.querySelector('.local-tts-current-time');
+        const scrubberInput = player.querySelector('.local-tts-scrubber');
+        const remainingTimeDisplay = player.querySelector('.local-tts-remaining-time');
+        const voiceSelect = player.querySelector('.local-tts-voice-select');
+        const speedInput = player.querySelector('.local-tts-speed-input');
+        const statusDiv = player.querySelector('.local-tts-status');
         const audioElement = player.querySelector('audio');
 
         if (!playButton || !audioElement) {
@@ -145,7 +145,7 @@
           const speed = speedInput ? parseFloat(speedInput.value) : config.defaultSpeed;
 
           if (labelText) {
-            labelText.innerHTML = '<span class="ai-tts-loading"></span> ' + Drupal.t('Generating speech...');
+            labelText.innerHTML = '<span class="local-tts-loading"></span> ' + Drupal.t('Generating speech...');
           }
           playButton.disabled = true;
           playButton.classList.add('loading');
@@ -197,7 +197,7 @@
                 }
 
                 if (labelText) {
-                  labelText.innerHTML = '<span class="ai-tts-error">⚠</span> ' + errorMessage;
+                  labelText.innerHTML = '<span class="local-tts-error">⚠</span> ' + errorMessage;
                 }
                 updateStatus(errorMessage, 'error');
                 playButton.disabled = false;
@@ -209,7 +209,7 @@
             .catch(error => {
               const errorMsg = Drupal.t('Unable to reach the server. Please check your internet connection and try again.');
               if (labelText) {
-                labelText.innerHTML = '<span class="ai-tts-error">⚠</span> ' + errorMsg;
+                labelText.innerHTML = '<span class="local-tts-error">⚠</span> ' + errorMsg;
               }
               updateStatus(errorMsg, 'error');
               playButton.disabled = false;
@@ -235,7 +235,7 @@
             }).catch(function(error) {
               const errorMsg = Drupal.t('Error playing audio.');
               if (labelText) {
-                labelText.innerHTML = '<span class="ai-tts-error">⚠</span> ' + errorMsg;
+                labelText.innerHTML = '<span class="local-tts-error">⚠</span> ' + errorMsg;
               }
               updateStatus(errorMsg, 'error');
               playButton.disabled = false;
@@ -330,7 +330,7 @@
         audioElement.addEventListener('error', function() {
           const errorMsg = Drupal.t('Error playing audio.');
           if (labelText) {
-            labelText.innerHTML = '<span class="ai-tts-error">⚠</span> ' + errorMsg;
+            labelText.innerHTML = '<span class="local-tts-error">⚠</span> ' + errorMsg;
           }
           updateStatus(errorMsg, 'error');
           playButton.disabled = false;

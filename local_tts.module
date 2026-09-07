@@ -2,7 +2,7 @@
 
 /**
  * @file
- * AI Text-to-Speech module.
+ * Local Text-to-Speech module.
  */
 
 use Drupal\Core\Entity\EntityFormInterface;
@@ -15,18 +15,18 @@ use Drupal\Core\StringTranslation\ByteSizeMarkup;
 /**
  * Implements hook_help().
  */
-function ai_tts_help($route_name, RouteMatchInterface $route_match) {
+function local_tts_help($route_name, RouteMatchInterface $route_match) {
   switch ($route_name) {
-    case 'help.page.ai_tts':
+    case 'help.page.local_tts':
       $output = '';
       $output .= '<h3>' . t('About') . '</h3>';
-      $output .= '<p>' . t('The AI Text-to-Speech module adds audio players to your content that read text aloud using AI-generated voices. It uses the Kokoro text-to-speech engine to create high-quality, natural-sounding speech in multiple languages.') . '</p>';
+      $output .= '<p>' . t('The Local Text-to-Speech module adds audio players to your content that read text aloud using AI-generated voices. It uses the Kokoro text-to-speech engine to create high-quality, natural-sounding speech in multiple languages.') . '</p>';
       $output .= '<h3>' . t('Requirements') . '</h3>';
       $output .= '<p>' . t('You need to install the Kokoro binary (koko) on your server. <a href="@url">Download and installation instructions</a>', [
         '@url' => 'https://github.com/lucasjinreal/Kokoros',
       ]) . '</p>';
       $output .= '<h3>' . t('Configuration') . '</h3>';
-      $output .= '<p>' . t('Configure the module at Administration &gt; Configuration &gt; Media &gt; AI Text-to-Speech.') . '</p>';
+      $output .= '<p>' . t('Configure the module at Administration &gt; Configuration &gt; Media &gt; Local Text-to-Speech.') . '</p>';
       return $output;
   }
 }
@@ -34,13 +34,13 @@ function ai_tts_help($route_name, RouteMatchInterface $route_match) {
 /**
  * Implements hook_cron().
  */
-function ai_tts_cron() {
-  $config = \Drupal::config('ai_tts.settings');
+function local_tts_cron() {
+  $config = \Drupal::config('local_tts.settings');
 
-  _ai_tts_cleanup_stale_content();
+  _local_tts_cleanup_stale_content();
 
   if ($config->get('cache_size_limit_enabled')) {
-    _ai_tts_enforce_size_limit();
+    _local_tts_enforce_size_limit();
   }
 }
 
@@ -50,15 +50,15 @@ function ai_tts_cron() {
  * Smart invalidation: Only delete audio if text content actually changed.
  * Compares text hash to avoid unnecessary regeneration.
  */
-function ai_tts_entity_update(EntityInterface $entity) {
+function local_tts_entity_update(EntityInterface $entity) {
   // Check if any text fields changed by comparing to original.
-  if (!empty($entity->original) && !_ai_tts_text_content_changed($entity, $entity->original)) {
+  if (!empty($entity->original) && !_local_tts_text_content_changed($entity, $entity->original)) {
     // Content unchanged - keep cached audio files.
     return;
   }
 
   // Content changed - invalidate all cached audio for this entity.
-  \Drupal::service('ai_tts.tts_service')->deleteAudioForEntity(
+  \Drupal::service('local_tts.tts_service')->deleteAudioForEntity(
     $entity->getEntityTypeId(),
     $entity->id()
   );
@@ -67,8 +67,8 @@ function ai_tts_entity_update(EntityInterface $entity) {
 /**
  * Implements hook_entity_delete().
  */
-function ai_tts_entity_delete(EntityInterface $entity) {
-  \Drupal::service('ai_tts.tts_service')->deleteAudioForEntity(
+function local_tts_entity_delete(EntityInterface $entity) {
+  \Drupal::service('local_tts.tts_service')->deleteAudioForEntity(
     $entity->getEntityTypeId(),
     $entity->id()
   );
@@ -85,7 +85,7 @@ function ai_tts_entity_delete(EntityInterface $entity) {
  * @return bool
  *   TRUE if text content changed, FALSE otherwise.
  */
-function _ai_tts_text_content_changed($entity, $original) {
+function _local_tts_text_content_changed($entity, $original) {
   if (!($entity instanceof FieldableEntityInterface) || !($original instanceof FieldableEntityInterface)) {
     return TRUE;
   }
@@ -121,15 +121,15 @@ function _ai_tts_text_content_changed($entity, $original) {
 /**
  * Clean up audio files where source content has changed or been deleted.
  */
-function _ai_tts_cleanup_stale_content() {
-  $directory = _ai_tts_get_audio_directory();
+function _local_tts_cleanup_stale_content() {
+  $directory = _local_tts_get_audio_directory();
 
   if (!$directory) {
     return;
   }
 
   $deleted = 0;
-  $records = \Drupal::database()->select('ai_tts_cache', 'a')
+  $records = \Drupal::database()->select('local_tts_cache', 'a')
     ->fields('a', ['id', 'cache_key', 'entity_type', 'entity_id'])
     ->isNotNull('entity_type')
     ->isNotNull('entity_id')
@@ -157,7 +157,7 @@ function _ai_tts_cleanup_stale_content() {
       if (file_exists($file_path)) {
         @unlink($file_path);
       }
-      \Drupal::database()->delete('ai_tts_cache')
+      \Drupal::database()->delete('local_tts_cache')
         ->condition('id', $record->id)
         ->execute();
       $deleted++;
@@ -165,7 +165,7 @@ function _ai_tts_cleanup_stale_content() {
   }
 
   if ($deleted > 0) {
-    \Drupal::logger('ai_tts')->info('Deleted @count stale audio files', [
+    \Drupal::logger('local_tts')->info('Deleted @count stale audio files', [
       '@count' => $deleted,
     ]);
   }
@@ -174,22 +174,22 @@ function _ai_tts_cleanup_stale_content() {
 /**
  * Enforce size limit by deleting least recently accessed files.
  */
-function _ai_tts_enforce_size_limit() {
-  $config = \Drupal::config('ai_tts.settings');
+function _local_tts_enforce_size_limit() {
+  $config = \Drupal::config('local_tts.settings');
   $max_size = $config->get('cache_max_size') ?: 1073741824;
-  $directory = _ai_tts_get_audio_directory();
+  $directory = _local_tts_get_audio_directory();
 
   if (!$directory) {
     return;
   }
 
-  $current_size = (int) \Drupal::database()->query('SELECT SUM(file_size) FROM {ai_tts_cache}')->fetchField();
+  $current_size = (int) \Drupal::database()->query('SELECT SUM(file_size) FROM {local_tts_cache}')->fetchField();
 
   if ($current_size <= $max_size) {
     return;
   }
 
-  $records = \Drupal::database()->select('ai_tts_cache', 'a')
+  $records = \Drupal::database()->select('local_tts_cache', 'a')
     ->fields('a', ['id', 'cache_key', 'file_size'])
     ->orderBy('accessed', 'ASC')
     ->execute()
@@ -208,7 +208,7 @@ function _ai_tts_enforce_size_limit() {
       @unlink($file_path);
     }
 
-    \Drupal::database()->delete('ai_tts_cache')
+    \Drupal::database()->delete('local_tts_cache')
       ->condition('id', $record->id)
       ->execute();
 
@@ -217,7 +217,7 @@ function _ai_tts_enforce_size_limit() {
   }
 
   if ($deleted > 0) {
-    \Drupal::logger('ai_tts')->info('Deleted @count files (@size freed)', [
+    \Drupal::logger('local_tts')->info('Deleted @count files (@size freed)', [
       '@count' => $deleted,
       '@size' => ByteSizeMarkup::create($bytes_freed),
     ]);
@@ -230,9 +230,9 @@ function _ai_tts_enforce_size_limit() {
  * @return string|null
  *   Real filesystem path to the audio directory, or NULL if not accessible.
  */
-function _ai_tts_get_audio_directory() {
-  $config = \Drupal::config('ai_tts.settings');
-  $audio_dir = $config->get('audio_directory') ?: 'public://ai-tts';
+function _local_tts_get_audio_directory() {
+  $config = \Drupal::config('local_tts.settings');
+  $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
   $file_system = \Drupal::service('file_system');
   $directory = $file_system->realpath($audio_dir);
 
@@ -246,8 +246,8 @@ function _ai_tts_get_audio_directory() {
 /**
  * Implements hook_form_BASE_FORM_ID_alter() for node_form.
  */
-function ai_tts_form_node_form_alter(&$form, FormStateInterface $form_state, $form_id) {
-  // Find AI TTS fields on this form.
+function local_tts_form_node_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  // Find Local TTS fields on this form.
   $has_tts_field = FALSE;
   $tts_field_key = NULL;
 
@@ -267,7 +267,7 @@ function ai_tts_form_node_form_alter(&$form, FormStateInterface $form_state, $fo
         $field_definitions = \Drupal::service('entity_field.manager')
           ->getFieldDefinitions('node', $form_object->getEntity()->bundle());
 
-        if (isset($field_definitions[$field_name]) && $field_definitions[$field_name]->getType() === 'ai_tts_player') {
+        if (isset($field_definitions[$field_name]) && $field_definitions[$field_name]->getType() === 'local_tts_player') {
           $has_tts_field = TRUE;
           $tts_field_key = $key;
           break;
@@ -280,13 +280,13 @@ function ai_tts_form_node_form_alter(&$form, FormStateInterface $form_state, $fo
     return;
   }
 
-  // Create AI TTS options group in sidebar.
-  $form['ai_tts_options'] = [
+  // Create Local TTS options group in sidebar.
+  $form['local_tts_options'] = [
     '#type' => 'details',
-    '#title' => t('AI Text-to-Speech'),
+    '#title' => t('Local Text-to-Speech'),
     '#group' => 'advanced',
     '#attributes' => [
-      'class' => ['ai-tts-form-options'],
+      'class' => ['local-tts-form-options'],
     ],
     '#weight' => 96,
     '#optional' => TRUE,
@@ -294,6 +294,6 @@ function ai_tts_form_node_form_alter(&$form, FormStateInterface $form_state, $fo
 
   // Move the TTS field into the sidebar group.
   if (isset($tts_field_key)) {
-    $form[$tts_field_key]['#group'] = 'ai_tts_options';
+    $form[$tts_field_key]['#group'] = 'local_tts_options';
   }
 }

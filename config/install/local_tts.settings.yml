@@ -2,7 +2,7 @@ espeak_data_path: '/usr/share/espeak-ng-data'
 default_voice: 'af_sky'
 default_speed: '1'
 cache_audio: true
-audio_directory: 'public://ai-tts'
+audio_directory: 'public://local-tts'
 cache_size_limit_enabled: true
 cache_max_size: 1073741824
 max_text_length: 1000000

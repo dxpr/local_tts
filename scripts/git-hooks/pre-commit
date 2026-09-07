@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Pre-commit hook for AI TTS module
+# Pre-commit hook for Local TTS module
 # Runs PHPCS, PHPStan, ESLint, and Stylelint on staged files
 
 set -e

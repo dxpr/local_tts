@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\ai_tts\Exception;
+namespace Drupal\local_tts\Exception;
 
 /**
  * Exception thrown when TTS service is unavailable.

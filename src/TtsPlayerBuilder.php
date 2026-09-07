@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\ai_tts;
+namespace Drupal\local_tts;
 
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Config\ConfigFactoryInterface;
@@ -13,7 +13,7 @@ use Drupal\Core\Url;
 /**
  * Service to build TTS player render arrays.
  *
- * Shared logic between AiTtsBlock and AiTtsPlayerFormatter.
+ * Shared logic between LocalTtsBlock and LocalTtsPlayerFormatter.
  */
 class TtsPlayerBuilder {
 
@@ -48,7 +48,7 @@ class TtsPlayerBuilder {
   /**
    * TTS service.
    *
-   * @var \Drupal\ai_tts\TtsService
+   * @var \Drupal\local_tts\TtsService
    */
   protected $ttsService;
 
@@ -64,7 +64,7 @@ class TtsPlayerBuilder {
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   Config factory.
-   * @param \Drupal\ai_tts\TtsService $tts_service
+   * @param \Drupal\local_tts\TtsService $tts_service
    *   TTS service.
    * @param \Drupal\Core\Session\AccountProxyInterface $current_user
    *   The current user.
@@ -103,7 +103,7 @@ class TtsPlayerBuilder {
     ];
 
     $id_suffix = substr(md5(microtime() . random_bytes(8)), 0, 8);
-    $global_config = $this->configFactory->get('ai_tts.settings');
+    $global_config = $this->configFactory->get('local_tts.settings');
 
     $langcode = NULL;
     if ($entity) {
@@ -124,7 +124,7 @@ class TtsPlayerBuilder {
       return [];
     }
 
-    $container_classes = ['ai-tts-container'];
+    $container_classes = ['local-tts-container'];
     $custom_classes = trim($settings['wrapper_classes']);
     if (!empty($custom_classes)) {
       $additional_classes = array_filter(explode(' ', $custom_classes));
@@ -140,31 +140,31 @@ class TtsPlayerBuilder {
 
     $build['play_wrapper'] = [
       '#type' => 'container',
-      '#attributes' => ['class' => ['ai-tts-play-wrapper']],
+      '#attributes' => ['class' => ['local-tts-play-wrapper']],
     ];
 
     $build['play_wrapper']['play_button'] = [
       '#type' => 'button',
       '#value' => '',
       '#attributes' => [
-        'id' => 'ai-tts-play-button-' . $id_suffix,
-        'class' => ['ai-tts-button', 'ai-tts-play-button'],
+        'id' => 'local-tts-play-button-' . $id_suffix,
+        'class' => ['local-tts-button', 'local-tts-play-button'],
         'aria-label' => $this->t('Listen to this article'),
         'aria-pressed' => 'false',
-        'aria-controls' => 'ai-tts-audio-' . $id_suffix,
+        'aria-controls' => 'local-tts-audio-' . $id_suffix,
       ],
     ];
 
     $build['play_wrapper']['content'] = [
       '#type' => 'container',
-      '#attributes' => ['class' => ['ai-tts-content']],
+      '#attributes' => ['class' => ['local-tts-content']],
     ];
 
     $build['play_wrapper']['content']['label'] = [
       '#type' => 'container',
       '#attributes' => [
-        'id' => 'ai-tts-label-' . $id_suffix,
-        'class' => ['ai-tts-label'],
+        'id' => 'local-tts-label-' . $id_suffix,
+        'class' => ['local-tts-label'],
       ],
     ];
 
@@ -172,8 +172,8 @@ class TtsPlayerBuilder {
       '#type' => 'html_tag',
       '#tag' => 'span',
       '#attributes' => [
-        'id' => 'ai-tts-label-text-' . $id_suffix,
-        'class' => ['ai-tts-label-text'],
+        'id' => 'local-tts-label-text-' . $id_suffix,
+        'class' => ['local-tts-label-text'],
       ],
       '#value' => $this->t('Listen to this article'),
     ];
@@ -182,8 +182,8 @@ class TtsPlayerBuilder {
       '#type' => 'html_tag',
       '#tag' => 'span',
       '#attributes' => [
-        'id' => 'ai-tts-label-duration-' . $id_suffix,
-        'class' => ['ai-tts-label-duration'],
+        'id' => 'local-tts-label-duration-' . $id_suffix,
+        'class' => ['local-tts-label-duration'],
       ],
       '#value' => '',
     ];
@@ -191,8 +191,8 @@ class TtsPlayerBuilder {
     $build['play_wrapper']['content']['playback_controls'] = [
       '#type' => 'container',
       '#attributes' => [
-        'id' => 'ai-tts-playback-controls-' . $id_suffix,
-        'class' => ['ai-tts-playback-controls'],
+        'id' => 'local-tts-playback-controls-' . $id_suffix,
+        'class' => ['local-tts-playback-controls'],
         'style' => 'display: none;',
       ],
     ];
@@ -201,8 +201,8 @@ class TtsPlayerBuilder {
       '#type' => 'html_tag',
       '#tag' => 'span',
       '#attributes' => [
-        'id' => 'ai-tts-current-time-' . $id_suffix,
-        'class' => ['ai-tts-current-time'],
+        'id' => 'local-tts-current-time-' . $id_suffix,
+        'class' => ['local-tts-current-time'],
         'aria-live' => 'off',
       ],
       '#value' => '0:00',
@@ -213,8 +213,8 @@ class TtsPlayerBuilder {
       '#tag' => 'input',
       '#attributes' => [
         'type' => 'range',
-        'id' => 'ai-tts-scrubber-' . $id_suffix,
-        'class' => ['ai-tts-scrubber'],
+        'id' => 'local-tts-scrubber-' . $id_suffix,
+        'class' => ['local-tts-scrubber'],
         'min' => '0',
         'max' => '100',
         'value' => '0',
@@ -233,8 +233,8 @@ class TtsPlayerBuilder {
       '#type' => 'html_tag',
       '#tag' => 'span',
       '#attributes' => [
-        'id' => 'ai-tts-remaining-time-' . $id_suffix,
-        'class' => ['ai-tts-remaining-time'],
+        'id' => 'local-tts-remaining-time-' . $id_suffix,
+        'class' => ['local-tts-remaining-time'],
       ],
       '#value' => '',
     ];
@@ -242,8 +242,8 @@ class TtsPlayerBuilder {
     $build['play_wrapper']['settings'] = [
       '#type' => 'container',
       '#attributes' => [
-        'id' => 'ai-tts-settings-' . $id_suffix,
-        'class' => ['ai-tts-settings'],
+        'id' => 'local-tts-settings-' . $id_suffix,
+        'class' => ['local-tts-settings'],
       ],
     ];
 
@@ -259,8 +259,8 @@ class TtsPlayerBuilder {
         '#options' => $available_voices,
         '#value' => $default_voice,
         '#attributes' => [
-          'id' => 'ai-tts-voice-select-' . $id_suffix,
-          'class' => ['ai-tts-voice-select'],
+          'id' => 'local-tts-voice-select-' . $id_suffix,
+          'class' => ['local-tts-voice-select'],
           'aria-label' => $this->t('Select voice'),
         ],
       ];
@@ -283,8 +283,8 @@ class TtsPlayerBuilder {
         ],
         '#value' => $default_speed,
         '#attributes' => [
-          'id' => 'ai-tts-speed-input-' . $id_suffix,
-          'class' => ['ai-tts-speed-input'],
+          'id' => 'local-tts-speed-input-' . $id_suffix,
+          'class' => ['local-tts-speed-input'],
           'aria-label' => $this->t('Adjust speech speed'),
         ],
       ];
@@ -293,8 +293,8 @@ class TtsPlayerBuilder {
     $build['status'] = [
       '#type' => 'container',
       '#attributes' => [
-        'id' => 'ai-tts-status-' . $id_suffix,
-        'class' => ['ai-tts-status'],
+        'id' => 'local-tts-status-' . $id_suffix,
+        'class' => ['local-tts-status'],
         'role' => 'status',
         'aria-live' => 'polite',
         'aria-atomic' => 'true',
@@ -305,7 +305,7 @@ class TtsPlayerBuilder {
       '#type' => 'html_tag',
       '#tag' => 'audio',
       '#attributes' => [
-        'id' => 'ai-tts-audio-' . $id_suffix,
+        'id' => 'local-tts-audio-' . $id_suffix,
         'preload' => 'none',
       ],
     ];
@@ -314,18 +314,18 @@ class TtsPlayerBuilder {
 
     // SECURITY: Pass only entity reference to JavaScript, NOT the content.
     $build['#attached'] = [
-      'library' => ['ai_tts/player'],
+      'library' => ['local_tts/player'],
       'drupalSettings' => [
         'aiTts' => [
           'defaultVoice' => $js_default_voice,
           'defaultSpeed' => $global_config->get('default_speed'),
-          'generateUrl' => Url::fromRoute('ai_tts.generate')->toString(),
+          'generateUrl' => Url::fromRoute('local_tts.generate')->toString(),
           'language' => $langcode,
           'entityType' => $entity->getEntityTypeId(),
           'entityId' => $entity->id(),
           'fields' => array_values(array_filter($settings['fields'] ?? [])),
           'isAdmin' => (bool) $this->currentUser->hasPermission('administer ai tts settings'),
-          'settingsUrl' => Url::fromRoute('ai_tts.settings')->toString(),
+          'settingsUrl' => Url::fromRoute('local_tts.settings')->toString(),
         ],
       ],
     ];
@@ -337,7 +337,7 @@ class TtsPlayerBuilder {
     $entity_type = $entity->getEntityTypeId();
     $entity_id = $entity->id();
     $build['#cache']['tags'][] = "{$entity_type}:{$entity_id}";
-    $build['#cache']['tags'][] = 'config:ai_tts.settings';
+    $build['#cache']['tags'][] = 'config:local_tts.settings';
 
     return $build;
   }
@@ -354,7 +354,7 @@ class TtsPlayerBuilder {
    *   Voice code.
    */
   protected function getValidDefaultVoice(array $available_voices, $langcode) {
-    $config = $this->configFactory->get('ai_tts.settings');
+    $config = $this->configFactory->get('local_tts.settings');
     $default_voices = $config->get('default_voices') ?? [];
 
     if (isset($default_voices[$langcode]) && isset($available_voices[$default_voices[$langcode]])) {

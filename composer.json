@@ -1,5 +1,5 @@
 {
-  "name": "custom/ai_tts",
+  "name": "custom/local_tts",
   "description": "AI-powered text-to-speech using Kokoro TTS (Rust implementation)",
   "type": "drupal-module",
   "license": "GPL-2.0-or-later",
@@ -31,7 +31,7 @@
       "@check-espeak"
     ],
     "setup-directories": [
-      "echo 'Setting up AI TTS directories...'",
+      "echo 'Setting up Local TTS directories...'",
       "mkdir -p bin data",
       "chmod 755 bin data"
     ],
@@ -57,7 +57,7 @@
     "display-instructions": [
       "echo ''",
       "echo '╔════════════════════════════════════════════════════════════╗'",
-      "echo '║         AI Text-to-Speech Module Installation             ║'",
+      "echo '║         Local Text-to-Speech Module Installation             ║'",
       "echo '╚════════════════════════════════════════════════════════════╝'",
       "echo ''",
       "echo 'Bundled files (binary + models) should download automatically.'",
@@ -72,16 +72,16 @@
       "echo '   Fedora/RHEL: sudo dnf install espeak-ng'",
       "echo ''",
       "echo '2. Enable the module:'",
-      "echo '   drush en ai_tts -y'",
+      "echo '   drush en local_tts -y'",
       "echo ''",
-      "echo '3. Configure eSpeak path at: /admin/config/media/ai-tts'",
+      "echo '3. Configure eSpeak path at: /admin/config/media/local-tts'",
       "echo ''",
       "echo '4. Test the installation:'",
-      "echo '   drush ai-tts:test'",
+      "echo '   drush local-tts:test'",
       "echo ''"
     ],
     "test": [
-      "drush ai-tts:test 'Composer installation successful!'"
+      "drush local-tts:test 'Composer installation successful!'"
     ],
     "lint": [
       "@lint:phpcs",

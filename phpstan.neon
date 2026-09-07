@@ -2,8 +2,8 @@ parameters:
   level: 5
   paths:
     - src
-    - ai_tts.module
-    - ai_tts.install
+    - local_tts.module
+    - local_tts.install
   excludePaths:
     - src/Drush/Commands/*
   bootstrapFiles:

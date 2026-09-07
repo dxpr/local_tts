@@ -23,15 +23,15 @@ composer config --no-plugins allow-plugins.tbachert/spi true --no-interaction
 cat <<EOF > phpstan.neon
 parameters:
     paths:
-        - web/modules/contrib/ai_tts
+        - web/modules/contrib/local_tts
     # Set the analysis level (0-9)
     level: 5
 EOF
 
 mkdir -p web/modules/contrib/
 
-if [ ! -L "web/modules/contrib/ai_tts" ]; then
-  ln -s /src web/modules/contrib/ai_tts
+if [ ! -L "web/modules/contrib/local_tts" ]; then
+  ln -s /src web/modules/contrib/local_tts
 fi
 
 # Install PHPStan extensions for Drupal 11 and Drush for command analysis

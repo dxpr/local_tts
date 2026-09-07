@@ -1,8 +1,8 @@
 administer ai tts settings:
-  title: 'Administer AI TTS settings'
+  title: 'Administer Local TTS settings'
   description: 'Configure AI text-to-speech module settings.'
   restrict access: true
 
 generate ai tts:
   title: 'Generate AI text-to-speech audio'
-  description: 'Generate audio files using the AI TTS service. Required for using the TTS functionality.'
+  description: 'Generate audio files using the Local TTS service. Required for using the TTS functionality.'

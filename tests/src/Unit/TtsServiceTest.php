@@ -1,8 +1,8 @@
 <?php
 
-namespace Drupal\Tests\ai_tts\Unit;
+namespace Drupal\Tests\local_tts\Unit;
 
-use Drupal\ai_tts\TtsService;
+use Drupal\local_tts\TtsService;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\ImmutableConfig;
 use Drupal\Core\File\FileSystemInterface;
@@ -13,8 +13,8 @@ use Drupal\Tests\UnitTestCase;
 /**
  * Unit tests for TtsService.
  *
- * @coversDefaultClass \Drupal\ai_tts\TtsService
- * @group ai_tts
+ * @coversDefaultClass \Drupal\local_tts\TtsService
+ * @group local_tts
  */
 class TtsServiceTest extends UnitTestCase {
 
@@ -56,7 +56,7 @@ class TtsServiceTest extends UnitTestCase {
   /**
    * The TTS service under test.
    *
-   * @var \Drupal\ai_tts\TtsService
+   * @var \Drupal\local_tts\TtsService
    */
   protected $ttsService;
 
@@ -70,7 +70,7 @@ class TtsServiceTest extends UnitTestCase {
     $this->config = $this->createMock(ImmutableConfig::class);
     $this->configFactory = $this->createMock(ConfigFactoryInterface::class);
     $this->configFactory->method('get')
-      ->with('ai_tts.settings')
+      ->with('local_tts.settings')
       ->willReturn($this->config);
 
     // Mock file system.
@@ -80,7 +80,7 @@ class TtsServiceTest extends UnitTestCase {
     $this->logger = $this->createMock(LoggerChannelInterface::class);
     $this->loggerFactory = $this->createMock(LoggerChannelFactoryInterface::class);
     $this->loggerFactory->method('get')
-      ->with('ai_tts')
+      ->with('local_tts')
       ->willReturn($this->logger);
 
     // Create service instance.
@@ -227,7 +227,7 @@ class TtsServiceTest extends UnitTestCase {
       ['default_voice', 'af_sky'],
       ['default_speed', 1.0],
       ['cache_audio', TRUE],
-      ['audio_directory', 'public://ai-tts'],
+      ['audio_directory', 'public://local-tts'],
       ['koko_binary_path', '/fake/path'],
     ]);
 

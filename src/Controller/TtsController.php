@@ -1,13 +1,13 @@
 <?php
 
-namespace Drupal\ai_tts\Controller;
+namespace Drupal\local_tts\Controller;
 
 use Drupal\Core\TypedData\TranslatableInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\ai_tts\Exception\TtsServiceUnavailableException;
-use Drupal\ai_tts\Exception\TtsTimeoutException;
-use Drupal\ai_tts\TtsService;
+use Drupal\local_tts\Exception\TtsServiceUnavailableException;
+use Drupal\local_tts\Exception\TtsTimeoutException;
+use Drupal\local_tts\TtsService;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\Core\Session\AccountProxyInterface;
@@ -30,7 +30,7 @@ final class TtsController extends ControllerBase {
   /**
    * The TTS service.
    *
-   * @var \Drupal\ai_tts\TtsService
+   * @var \Drupal\local_tts\TtsService
    */
   protected $ttsService;
 
@@ -72,7 +72,7 @@ final class TtsController extends ControllerBase {
   /**
    * Constructs a TtsController object.
    *
-   * @param \Drupal\ai_tts\TtsService $tts_service
+   * @param \Drupal\local_tts\TtsService $tts_service
    *   The TTS service.
    * @param \Drupal\Core\File\FileUrlGeneratorInterface $file_url_generator
    *   The file URL generator.
@@ -106,7 +106,7 @@ final class TtsController extends ControllerBase {
    */
   public static function create(ContainerInterface $container) {
     return new static(
-      $container->get('ai_tts.tts_service'),
+      $container->get('local_tts.tts_service'),
       $container->get('file_url_generator'),
       $container->get('current_user'),
       $container->get('state'),
@@ -189,7 +189,7 @@ final class TtsController extends ControllerBase {
       $language = $entity->language()->getId();
     }
     catch (\Exception $e) {
-      $this->getLogger('ai_tts')->error('Error loading entity: @message', ['@message' => $e->getMessage()]);
+      $this->getLogger('local_tts')->error('Error loading entity: @message', ['@message' => $e->getMessage()]);
       return new JsonResponse([
         'error' => 'Internal Server Error',
         'message' => 'Failed to load entity',
@@ -233,7 +233,7 @@ final class TtsController extends ControllerBase {
       ], 400);
     }
     catch (TtsTimeoutException $e) {
-      $this->getLogger('ai_tts')->warning('TTS generation timeout: @message', [
+      $this->getLogger('local_tts')->warning('TTS generation timeout: @message', [
         '@message' => $e->getMessage(),
       ]);
       return new JsonResponse([
@@ -242,7 +242,7 @@ final class TtsController extends ControllerBase {
       ], 408);
     }
     catch (TtsServiceUnavailableException $e) {
-      $this->getLogger('ai_tts')->error('TTS service unavailable: @message', [
+      $this->getLogger('local_tts')->error('TTS service unavailable: @message', [
         '@message' => $e->getMessage(),
       ]);
 
@@ -260,7 +260,7 @@ final class TtsController extends ControllerBase {
         ], 403);
       }
 
-      $this->getLogger('ai_tts')->error('TTS generation runtime error: @message', [
+      $this->getLogger('local_tts')->error('TTS generation runtime error: @message', [
         '@message' => $e->getMessage(),
       ]);
       return new JsonResponse([
@@ -269,7 +269,7 @@ final class TtsController extends ControllerBase {
       ], 500);
     }
     catch (\Exception $e) {
-      $this->getLogger('ai_tts')->error('TTS generation unexpected error: @message', [
+      $this->getLogger('local_tts')->error('TTS generation unexpected error: @message', [
         '@message' => $e->getMessage(),
       ]);
       return new JsonResponse([
@@ -280,7 +280,7 @@ final class TtsController extends ControllerBase {
 
     // HTTP 503: Service Unavailable - Failed to generate (NULL returned).
     if (!$audio_uri) {
-      $this->getLogger('ai_tts')->error('TTS generation returned NULL without exception');
+      $this->getLogger('local_tts')->error('TTS generation returned NULL without exception');
       return new JsonResponse([
         'error' => 'Service Unavailable',
         'message' => 'Failed to generate speech. Please try again later.',
@@ -304,7 +304,7 @@ final class TtsController extends ControllerBase {
    *   The state key for tracking rate limits.
    */
   protected function getRateLimitStateKey() {
-    return 'ai_tts.rate_limit.' . $this->currentUser->id();
+    return 'local_tts.rate_limit.' . $this->currentUser->id();
   }
 
   /**
@@ -314,7 +314,7 @@ final class TtsController extends ControllerBase {
    *   TRUE if within limits, FALSE if exceeded.
    */
   protected function checkRateLimit() {
-    $config = $this->config('ai_tts.settings');
+    $config = $this->config('local_tts.settings');
 
     if (!$config->get('rate_limit_enabled')) {
       return TRUE;
@@ -382,7 +382,7 @@ final class TtsController extends ControllerBase {
     $is_admin = $this->currentUser->hasPermission('administer ai tts settings');
 
     if (strpos($raw_message, 'Server is experiencing high load') !== FALSE) {
-      $config = $this->config('ai_tts.settings');
+      $config = $this->config('local_tts.settings');
       $threshold = $config->get('max_server_load') ?? 2;
 
       return [

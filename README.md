@@ -1,4 +1,4 @@
-# AI Text-to-Speech
+# Local Text-to-Speech
 
 AI-powered text-to-speech for Drupal using the Kokoro TTS engine with 64 voices
 across 9 languages.
@@ -49,7 +49,7 @@ After installation, note the `espeak-ng-data` directory location:
 
 ```bash
 # Step 1: Install module dependencies
-cd web/modules/custom/ai_tts
+cd web/modules/custom/local_tts
 composer install
 ```
 
@@ -59,7 +59,8 @@ This automatically downloads:
 
 ### Step 2: Build Kokoro Binary
 
-The Kokoro binary must be built from source as no pre-built binaries are available:
+The Kokoro binary must be built from source as no
+pre-built binaries are available:
 
 **Requirements:** Rust/Cargo ([install from https://rustup.rs](https://rustup.rs))
 
@@ -78,20 +79,20 @@ This will:
 
 ```bash
 # Enable the module
-drush en ai_tts -y
+drush en local_tts -y
 
 # Configure eSpeak path
-# Go to: /admin/config/media/ai-tts
+# Go to: /admin/config/media/local-tts
 # Set the eSpeak NG data path from the Requirements section above
 
 # Test installation
-drush ai-tts:test "Hello World"
+drush local-tts:test "Hello World"
 ```
 
 ### Bundled Files Structure
 
 ```
-ai_tts/
+local_tts/
 ├── bin/
 │   ├── .htaccess          # Blocks web access
 │   ├── LICENSE            # Apache 2.0
@@ -103,7 +104,9 @@ ai_tts/
 │   └── voices-v1.0.bin    # Voice data (auto-downloaded)
 ```
 
-**Security:** All files protected by `.htaccess`. For Nginx, add location blocks to deny access to `ai_tts/(bin|data)/`.
+**Security:** All files protected by `.htaccess`. For Nginx,
+add location blocks to deny access to
+`local_tts/(bin|data)/`.
 
 ### Manual Commands
 
@@ -120,7 +123,8 @@ composer run check-files
 
 ## Configuration
 
-Go to: Configuration > Media > AI TTS Settings (`/admin/config/media/ai-tts`)
+Go to: Configuration > Media > Local TTS Settings
+(`/admin/config/media/local-tts`)
 
 **Key Settings:**
 - **eSpeak NG data path** - Path to espeak-ng-data directory (required)
@@ -136,7 +140,7 @@ Go to: Configuration > Media > AI TTS Settings (`/admin/config/media/ai-tts`)
 Quick setup for site-wide TTS:
 
 1. Go to: Structure > Block layout
-2. Place "AI Text-to-Speech" block
+2. Place "Local Text-to-Speech" block
 3. Configure voice/speed controls and fields to include
 
 ### Field Integration
@@ -144,7 +148,7 @@ Quick setup for site-wide TTS:
 Per-content-type control with Layout Builder support:
 
 1. Go to: Structure > Content types > [Type] > Manage fields
-2. Add field: "AI TTS Player"
+2. Add field: "Local TTS Player"
 3. Configure display: Manage display > position field
 4. Set voice/speed controls and field selection
 
@@ -164,8 +168,8 @@ Spanish (3), Italian (2), Portuguese (3)
 
 View all voices:
 ```bash
-drush ai-tts:voices
-drush ai-tts:voices --language=es
+drush local-tts:voices
+drush local-tts:voices --language=es
 ```
 
 ## Drush Commands
@@ -174,50 +178,51 @@ drush ai-tts:voices --language=es
 
 ```bash
 # Basic test with instant playback (streaming mode)
-drush ai-tts:test "Hello World"
+drush local-tts:test "Hello World"
 
 # Custom voice and speed
-drush ai-tts:test "Your text" --voice=am_adam --speed=1.2
+drush local-tts:test "Your text" --voice=am_adam --speed=1.2
 
 # Multi-language support
-drush ai-tts:test "Hola mundo" --voice=ef_dora --language=es
-drush ai-tts:test "こんにちは" --voice=jf_alpha --language=ja
+drush local-tts:test "Hola mundo" --voice=ef_dora --language=es
+drush local-tts:test "こんにちは" --voice=jf_alpha --language=ja
 ```
 
 ### Read Entity Content
 
 ```bash
 # Read node content (generates cached files)
-drush ai-tts:read node 123
+drush local-tts:read node 123
 
 # With specific voice
-drush ai-tts:read node 123 --voice=bf_emma
+drush local-tts:read node 123 --voice=bf_emma
 
 # Streaming mode (instant playback, no cache)
-drush ai-tts:read node 123 --stream
+drush local-tts:read node 123 --stream
 
 # Read specific field
-drush ai-tts:read node 123 --field=field_summary
+drush local-tts:read node 123 --field=field_summary
 ```
 
 ### Batch Generation
 
 ```bash
 # Generate audio for multiple entities
-drush ai-tts:batch --entity-type=node --bundle=article --language=en --limit=10
+drush local-tts:batch --entity-type=node \
+  --bundle=article --language=en --limit=10
 
 # Multiple languages
-drush ai-tts:batch --entity-type=node --bundle=page --language=en,es,fr
+drush local-tts:batch --entity-type=node --bundle=page --language=en,es,fr
 
 # Force regeneration
-drush ai-tts:batch --entity-type=node --bundle=article --force
+drush local-tts:batch --entity-type=node --bundle=article --force
 ```
 
 ### Cache Management
 
 ```bash
 # Clear all cached audio files
-drush ai-tts:cache-clear
+drush local-tts:cache-clear
 ```
 
 ## Architecture
@@ -230,12 +235,12 @@ drush ai-tts:cache-clear
 - `TtsController` - AJAX endpoint for audio generation
 
 **Plugins:**
-- `AiTtsBlock` - Block plugin for site-wide TTS
-- `AiTtsPlayerItem` - Field type for per-content TTS
-- `AiTtsPlayerFormatter` - Field formatter with settings
+- `LocalTtsBlock` - Block plugin for site-wide TTS
+- `LocalTtsPlayerItem` - Field type for per-content TTS
+- `LocalTtsPlayerFormatter` - Field formatter with settings
 
 **Frontend:**
-- `ai-tts-player.js` - Audio playback controls
+- `local-tts-player.js` - Audio playback controls
 
 ### How It Works
 
@@ -243,17 +248,18 @@ drush ai-tts:cache-clear
 2. JavaScript sends AJAX with entity reference (not content)
 3. Server validates anonymous access
 4. TTS generates audio with language-specific phoneme processing
-5. Audio cached in `public://ai-tts/` (if enabled)
+5. Audio cached in `public://local-tts/` (if enabled)
 6. HTML5 `<audio>` element plays speech
 
-**Caching:** Cache key based on text content (MD5), voice, speed, and language code.
+**Caching:** Cache key based on text content (MD5),
+voice, speed, and language code.
 
 ## Troubleshooting
 
 ### Binary not executable
 
 ```bash
-cd web/modules/custom/ai_tts
+cd web/modules/custom/local_tts
 composer run download-files
 chmod +x bin/koko
 ```
@@ -276,7 +282,7 @@ sudo a2enmod rewrite
 
 Add to Nginx config:
 ```nginx
-location ~ ^/modules/custom/ai_tts/(bin|data)/ {
+location ~ ^/modules/custom/local_tts/(bin|data)/ {
     deny all;
     return 403;
 }
@@ -285,7 +291,8 @@ location ~ ^/modules/custom/ai_tts/(bin|data)/ {
 ### Player not showing
 
 - Check content is publicly viewable (anonymous access)
-- Verify voices available for content language: `drush ai-tts:voices --language=en`
+- Verify voices available for content language:
+  `drush local-tts:voices --language=en`
 - Grant "Generate AI text-to-speech audio" permission
 
 ## Development

@@ -1,9 +1,9 @@
 <?php
 
-namespace Drupal\ai_tts\Drush\Commands;
+namespace Drupal\local_tts\Drush\Commands;
 
-use Drupal\ai_tts\Service\TtsBatchService;
-use Drupal\ai_tts\TtsService;
+use Drupal\local_tts\Service\TtsBatchService;
+use Drupal\local_tts\TtsService;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Extension\ModuleExtensionList;
@@ -12,14 +12,14 @@ use Drush\Attributes as CLI;
 use Drush\Commands\DrushCommands;
 
 /**
- * Drush commands for AI TTS module.
+ * Drush commands for Local TTS module.
  */
-final class AiTtsCommands extends DrushCommands {
+final class LocalTtsCommands extends DrushCommands {
 
   /**
-   * Constructs an AiTtsCommands object.
+   * Constructs an LocalTtsCommands object.
    *
-   * @param \Drupal\ai_tts\TtsService $ttsService
+   * @param \Drupal\local_tts\TtsService $ttsService
    *   The TTS service.
    * @param \Drupal\Core\Config\ConfigFactoryInterface $configFactory
    *   The config factory.
@@ -27,7 +27,7 @@ final class AiTtsCommands extends DrushCommands {
    *   The entity type manager.
    * @param \Drupal\Core\File\FileSystemInterface $fileSystem
    *   The file system service.
-   * @param \Drupal\ai_tts\Service\TtsBatchService $batchService
+   * @param \Drupal\local_tts\Service\TtsBatchService $batchService
    *   The TTS batch service.
    * @param \Drupal\Core\Extension\ModuleExtensionList $moduleExtensionList
    *   The module extension list service.
@@ -51,31 +51,31 @@ final class AiTtsCommands extends DrushCommands {
    * @param array $options
    *   The command options.
    *
-   * @command ai-tts:test
+   * @command local-tts:test
    * @aliases tts-test
    * @option voice The voice to use (e.g., af_sky, am_adam).
    * @option speed The speech speed (0.5 to 2.0).
    * @option language The language code for proper pronunciation (e.g., en, es, ja).
    * @option no-play Skip automatic audio playback.
-   * @usage ai-tts:test
+   * @usage local-tts:test
    *   Generate and play "Hello World" using default settings.
-   * @usage ai-tts:test "Welcome to Drupal" --voice=am_adam --speed=1.2
+   * @usage local-tts:test "Welcome to Drupal" --voice=am_adam --speed=1.2
    *   Generate and play speech with custom text, voice, and speed.
-   * @usage ai-tts:test "Hola mundo" --voice=ef_dora --language=es
+   * @usage local-tts:test "Hola mundo" --voice=ef_dora --language=es
    *   Generate Spanish speech with proper Spanish pronunciation.
-   * @usage ai-tts:test "Hello World" --no-play
+   * @usage local-tts:test "Hello World" --no-play
    *   Generate speech without automatic playback.
    */
-  #[CLI\Command(name: 'ai-tts:test', aliases: ['tts-test'])]
+  #[CLI\Command(name: 'local-tts:test', aliases: ['tts-test'])]
   #[CLI\Argument(name: 'text', description: 'The text to speak')]
   #[CLI\Option(name: 'voice', description: 'The voice to use')]
   #[CLI\Option(name: 'speed', description: 'The speech speed (0.5 to 2.0)')]
   #[CLI\Option(name: 'language', description: 'The language code for proper pronunciation (e.g., en, es, ja)')]
   #[CLI\Option(name: 'no-play', description: 'Skip automatic audio playback')]
-  #[CLI\Usage(name: 'ai-tts:test', description: 'Generate and play "Hello World" using default settings')]
-  #[CLI\Usage(name: 'ai-tts:test "Welcome to Drupal" --voice=am_adam --speed=1.2', description: 'Generate and play speech with custom text, voice, and speed')]
-  #[CLI\Usage(name: 'ai-tts:test "Hola mundo" --voice=ef_dora --language=es', description: 'Generate Spanish speech with proper Spanish pronunciation')]
-  #[CLI\Usage(name: 'ai-tts:test "Hello World" --no-play', description: 'Generate speech without automatic playback')]
+  #[CLI\Usage(name: 'local-tts:test', description: 'Generate and play "Hello World" using default settings')]
+  #[CLI\Usage(name: 'local-tts:test "Welcome to Drupal" --voice=am_adam --speed=1.2', description: 'Generate and play speech with custom text, voice, and speed')]
+  #[CLI\Usage(name: 'local-tts:test "Hola mundo" --voice=ef_dora --language=es', description: 'Generate Spanish speech with proper Spanish pronunciation')]
+  #[CLI\Usage(name: 'local-tts:test "Hello World" --no-play', description: 'Generate speech without automatic playback')]
   public function test(
     string $text = 'Hello World',
     array $options = [
@@ -85,9 +85,9 @@ final class AiTtsCommands extends DrushCommands {
       'no-play' => FALSE,
     ],
   ): void {
-    $this->output()->writeln('🔊 Testing AI TTS (streaming mode)...');
+    $this->output()->writeln('🔊 Testing Local TTS (streaming mode)...');
 
-    $config = $this->configFactory->get('ai_tts.settings');
+    $config = $this->configFactory->get('local_tts.settings');
 
     // Get configuration.
     $language = $options['language'] ?? 'en';
@@ -124,10 +124,10 @@ final class AiTtsCommands extends DrushCommands {
    *   The language code.
    */
   protected function playStreamingAudio(string $text, string $voice, float $speed, string $language): void {
-    $config = $this->configFactory->get('ai_tts.settings');
+    $config = $this->configFactory->get('local_tts.settings');
 
     // Use bundled files from module directory.
-    $module_path = $this->moduleExtensionList->getPath('ai_tts');
+    $module_path = $this->moduleExtensionList->getPath('local_tts');
     $binary_path = DRUPAL_ROOT . '/' . $module_path . '/bin/koko';
     $model_path = DRUPAL_ROOT . '/' . $module_path . '/data/kokoro-v1.0.onnx';
     $data_path = DRUPAL_ROOT . '/' . $module_path . '/data/voices-v1.0.bin';
@@ -384,21 +384,21 @@ final class AiTtsCommands extends DrushCommands {
    * @param array $options
    *   The command options.
    *
-   * @command ai-tts:voices
+   * @command local-tts:voices
    * @aliases tts-voices
    * @option language Filter voices by language code (e.g., en, es, ja).
-   * @usage ai-tts:voices
+   * @usage local-tts:voices
    *   Display all available voices.
-   * @usage ai-tts:voices --language=es
+   * @usage local-tts:voices --language=es
    *   Display only Spanish voices.
-   * @usage ai-tts:voices --language=ja
+   * @usage local-tts:voices --language=ja
    *   Display only Japanese voices.
    */
-  #[CLI\Command(name: 'ai-tts:voices', aliases: ['tts-voices'])]
+  #[CLI\Command(name: 'local-tts:voices', aliases: ['tts-voices'])]
   #[CLI\Option(name: 'language', description: 'Filter voices by language code (e.g., en, es, ja)')]
-  #[CLI\Usage(name: 'ai-tts:voices', description: 'Display all available voices')]
-  #[CLI\Usage(name: 'ai-tts:voices --language=es', description: 'Display only Spanish voices')]
-  #[CLI\Usage(name: 'ai-tts:voices --language=ja', description: 'Display only Japanese voices')]
+  #[CLI\Usage(name: 'local-tts:voices', description: 'Display all available voices')]
+  #[CLI\Usage(name: 'local-tts:voices --language=es', description: 'Display only Spanish voices')]
+  #[CLI\Usage(name: 'local-tts:voices --language=ja', description: 'Display only Japanese voices')]
   public function listVoices(array $options = ['language' => NULL]): void {
     $langcode = $options['language'] ?? NULL;
 
@@ -426,7 +426,7 @@ final class AiTtsCommands extends DrushCommands {
 
     $this->output()->writeln('');
     $this->output()->writeln(sprintf('Total: %d voices', count($voices)));
-    $this->output()->writeln('Use these voices with: drush ai-tts:test "Your text" --voice=VOICE_CODE');
+    $this->output()->writeln('Use these voices with: drush local-tts:test "Your text" --voice=VOICE_CODE');
   }
 
   /**
@@ -439,23 +439,23 @@ final class AiTtsCommands extends DrushCommands {
    * @param array $options
    *   The command options.
    *
-   * @command ai-tts:read
+   * @command local-tts:read
    * @aliases tts-read
    * @option voice The voice to use (e.g., af_sky, am_adam).
    * @option speed The speech speed (0.5 to 2.0).
    * @option language The language code for proper pronunciation (e.g., en, es, ja).
    * @option field The field to read (default: auto-detect body field).
    * @option stream Use streaming mode instead of cached files.
-   * @usage ai-tts:read node 123
+   * @usage local-tts:read node 123
    *   Generate and play TTS for node 123 (caches the audio file).
-   * @usage ai-tts:read node 123 --voice=am_adam
+   * @usage local-tts:read node 123 --voice=am_adam
    *   Use a specific voice for the content.
-   * @usage ai-tts:read node 123 --field=field_summary
+   * @usage local-tts:read node 123 --field=field_summary
    *   Read a specific field instead of the body.
-   * @usage ai-tts:read node 123 --stream
+   * @usage local-tts:read node 123 --stream
    *   Use streaming mode for instant playback (no caching).
    */
-  #[CLI\Command(name: 'ai-tts:read', aliases: ['tts-read'])]
+  #[CLI\Command(name: 'local-tts:read', aliases: ['tts-read'])]
   #[CLI\Argument(name: 'entity_type', description: 'The entity type (e.g., node)')]
   #[CLI\Argument(name: 'entity_id', description: 'The entity ID')]
   #[CLI\Option(name: 'voice', description: 'The voice to use')]
@@ -463,10 +463,10 @@ final class AiTtsCommands extends DrushCommands {
   #[CLI\Option(name: 'language', description: 'The language code')]
   #[CLI\Option(name: 'field', description: 'The field to read (default: auto-detect)')]
   #[CLI\Option(name: 'stream', description: 'Use streaming mode instead of cached files')]
-  #[CLI\Usage(name: 'ai-tts:read node 123', description: 'Generate and play TTS for node 123')]
-  #[CLI\Usage(name: 'ai-tts:read node 123 --voice=am_adam', description: 'Use a specific voice')]
-  #[CLI\Usage(name: 'ai-tts:read node 123 --field=field_summary', description: 'Read a specific field')]
-  #[CLI\Usage(name: 'ai-tts:read node 123 --stream', description: 'Use streaming mode')]
+  #[CLI\Usage(name: 'local-tts:read node 123', description: 'Generate and play TTS for node 123')]
+  #[CLI\Usage(name: 'local-tts:read node 123 --voice=am_adam', description: 'Use a specific voice')]
+  #[CLI\Usage(name: 'local-tts:read node 123 --field=field_summary', description: 'Read a specific field')]
+  #[CLI\Usage(name: 'local-tts:read node 123 --stream', description: 'Use streaming mode')]
   public function readEntity(
     string $entity_type,
     string $entity_id,
@@ -522,7 +522,7 @@ final class AiTtsCommands extends DrushCommands {
       $entity_language = $entity->language()->getId();
     }
 
-    $config = $this->configFactory->get('ai_tts.settings');
+    $config = $this->configFactory->get('local_tts.settings');
     $language = $options['language'] ?? $entity_language ?? 'en';
     $voice = $options['voice'] ?? $this->getDefaultVoiceForLanguage($language);
     $speed = $options['speed'] ?? $config->get('default_speed') ?? 1.0;
@@ -668,13 +668,13 @@ final class AiTtsCommands extends DrushCommands {
   /**
    * Clear the TTS audio cache.
    *
-   * @command ai-tts:cache-clear
+   * @command local-tts:cache-clear
    * @aliases tts-cc
-   * @usage ai-tts:cache-clear
+   * @usage local-tts:cache-clear
    *   Clear all cached audio files.
    */
-  #[CLI\Command(name: 'ai-tts:cache-clear', aliases: ['tts-cc'])]
-  #[CLI\Usage(name: 'ai-tts:cache-clear', description: 'Clear all cached audio files')]
+  #[CLI\Command(name: 'local-tts:cache-clear', aliases: ['tts-cc'])]
+  #[CLI\Usage(name: 'local-tts:cache-clear', description: 'Clear all cached audio files')]
   public function cacheClear(): void {
     $this->output()->writeln('Clearing TTS audio cache...');
 
@@ -692,7 +692,7 @@ final class AiTtsCommands extends DrushCommands {
    * @param array $options
    *   The command options.
    *
-   * @command ai-tts:batch
+   * @command local-tts:batch
    * @aliases tts-batch
    * @option entity-type Entity type to process (e.g., node, taxonomy_term).
    * @option bundle Bundle to process (e.g., article, page).
@@ -700,12 +700,12 @@ final class AiTtsCommands extends DrushCommands {
    * @option limit Maximum number of entities to process (0 for no limit).
    * @option force Force regeneration even if cached.
    * @option updated-after Only process entities updated after this date (Y-m-d format).
-   * @usage ai-tts:batch --entity-type=node --bundle=article --language=en --limit=10
+   * @usage local-tts:batch --entity-type=node --bundle=article --language=en --limit=10
    *   Generate TTS for 10 English articles.
-   * @usage ai-tts:batch --entity-type=node --bundle=page --language=en,es --force
+   * @usage local-tts:batch --entity-type=node --bundle=page --language=en,es --force
    *   Regenerate TTS for all pages in English and Spanish.
    */
-  #[CLI\Command(name: 'ai-tts:batch', aliases: ['tts-batch'])]
+  #[CLI\Command(name: 'local-tts:batch', aliases: ['tts-batch'])]
   #[CLI\Option(name: 'entity-type', description: 'Entity type to process')]
   #[CLI\Option(name: 'bundle', description: 'Bundle to process')]
   #[CLI\Option(name: 'language', description: 'Language code(s), comma-separated')]
@@ -713,8 +713,8 @@ final class AiTtsCommands extends DrushCommands {
   #[CLI\Option(name: 'force', description: 'Force regeneration even if cached')]
   #[CLI\Option(name: 'updated-after', description: 'Only process entities updated after this date (format: 2025-01-01)')]
   #[CLI\Option(name: 'dry-run', description: 'Show count of entities to process without generating audio')]
-  #[CLI\Usage(name: 'ai-tts:batch --entity-type=node --bundle=article --language=en --limit=10', description: 'Generate TTS for 10 English articles')]
-  #[CLI\Usage(name: 'ai-tts:batch --entity-type=node --bundle=page --language=en,es --force', description: 'Regenerate TTS for all pages in English and Spanish')]
+  #[CLI\Usage(name: 'local-tts:batch --entity-type=node --bundle=article --language=en --limit=10', description: 'Generate TTS for 10 English articles')]
+  #[CLI\Usage(name: 'local-tts:batch --entity-type=node --bundle=page --language=en,es --force', description: 'Regenerate TTS for all pages in English and Spanish')]
   public function batchGenerate(
     array $options = [
       'entity-type' => NULL,
@@ -812,7 +812,7 @@ final class AiTtsCommands extends DrushCommands {
         // Generate TTS.
         $this->output()->write("[$processed/$total] Processing {$entity_data['entity_type']}:{$entity_data['entity_id']} ($langcode)... ");
 
-        $config = $this->configFactory->get('ai_tts.settings');
+        $config = $this->configFactory->get('local_tts.settings');
         $default_voice = $this->getDefaultVoiceForLanguage($langcode);
 
         $tts_options = [
@@ -869,7 +869,7 @@ final class AiTtsCommands extends DrushCommands {
    *   The default voice code for the language.
    */
   protected function getDefaultVoiceForLanguage(string $langcode): string {
-    $config = $this->configFactory->get('ai_tts.settings');
+    $config = $this->configFactory->get('local_tts.settings');
     $default_voices = $config->get('default_voices') ?? [];
 
     // Check language-specific default first.

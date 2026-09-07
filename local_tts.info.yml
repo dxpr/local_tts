@@ -1,9 +1,9 @@
-name: AI Text-to-Speech
+name: Local Text-to-Speech
 type: module
 description: 'Provides AI-powered text-to-speech using Kokoro TTS (Rust implementation).'
 package: Media
 core_version_requirement: ^9 || ^10 || ^11
-configure: ai_tts.settings
+configure: local_tts.settings
 
 dependencies:
   - drupal:node

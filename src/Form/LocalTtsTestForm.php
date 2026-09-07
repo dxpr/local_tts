@@ -1,8 +1,8 @@
 <?php
 
-namespace Drupal\ai_tts\Form;
+namespace Drupal\local_tts\Form;
 
-use Drupal\ai_tts\TtsService;
+use Drupal\local_tts\TtsService;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\Core\Form\FormBase;
@@ -12,14 +12,14 @@ use Drupal\Core\Url;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
- * Test form for AI TTS.
+ * Test form for Local TTS.
  */
-final class AiTtsTestForm extends FormBase {
+final class LocalTtsTestForm extends FormBase {
 
   /**
    * The TTS service.
    *
-   * @var \Drupal\ai_tts\TtsService
+   * @var \Drupal\local_tts\TtsService
    */
   protected $ttsService;
 
@@ -38,9 +38,9 @@ final class AiTtsTestForm extends FormBase {
   protected $fileSystem;
 
   /**
-   * Constructs a new AiTtsTestForm.
+   * Constructs a new LocalTtsTestForm.
    *
-   * @param \Drupal\ai_tts\TtsService $tts_service
+   * @param \Drupal\local_tts\TtsService $tts_service
    *   The TTS service.
    * @param \Drupal\Core\File\FileUrlGeneratorInterface $file_url_generator
    *   The file URL generator.
@@ -62,7 +62,7 @@ final class AiTtsTestForm extends FormBase {
    */
   public static function create(ContainerInterface $container) {
     return new static(
-      $container->get('ai_tts.tts_service'),
+      $container->get('local_tts.tts_service'),
       $container->get('file_url_generator'),
       $container->get('file_system')
     );
@@ -72,18 +72,18 @@ final class AiTtsTestForm extends FormBase {
    * {@inheritdoc}
    */
   public function getFormId() {
-    return 'ai_tts_test_form';
+    return 'local_tts_test_form';
   }
 
   /**
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
-    $form['#prefix'] = '<div id="ai-tts-test-wrapper">';
+    $form['#prefix'] = '<div id="local-tts-test-wrapper">';
     $form['#suffix'] = '</div>';
 
     $form['description'] = [
-      '#markup' => '<p>' . $this->t('Test the AI TTS service by entering text below. The audio will be generated and played in your browser.') . '</p>',
+      '#markup' => '<p>' . $this->t('Test the Local TTS service by entering text below. The audio will be generated and played in your browser.') . '</p>',
     ];
 
     $form['test_input'] = [
@@ -96,9 +96,9 @@ final class AiTtsTestForm extends FormBase {
       '#type' => 'textarea',
       '#title' => $this->t('Text to convert'),
       '#description' => $this->t('Enter the text you want to convert to speech. Maximum @max characters.', [
-        '@max' => number_format($this->config('ai_tts.settings')->get('max_text_length') ?: 1000000),
+        '@max' => number_format($this->config('local_tts.settings')->get('max_text_length') ?: 1000000),
       ]),
-      '#default_value' => 'Hello! This is a test of the AI Text-to-Speech system. How does it sound?',
+      '#default_value' => 'Hello! This is a test of the Local Text-to-Speech system. How does it sound?',
       '#required' => TRUE,
       '#rows' => 5,
     ];
@@ -108,7 +108,7 @@ final class AiTtsTestForm extends FormBase {
       '#type' => 'select',
       '#title' => $this->t('Voice'),
       '#options' => $voices,
-      '#default_value' => $this->config('ai_tts.settings')->get('default_voice') ?: 'af_sky',
+      '#default_value' => $this->config('local_tts.settings')->get('default_voice') ?: 'af_sky',
     ];
 
     $form['test_input']['speed'] = [
@@ -117,7 +117,7 @@ final class AiTtsTestForm extends FormBase {
       '#min' => 0.5,
       '#max' => 2.0,
       '#step' => 0.1,
-      '#default_value' => $this->config('ai_tts.settings')->get('default_speed') ?: 1.0,
+      '#default_value' => $this->config('local_tts.settings')->get('default_speed') ?: 1.0,
       '#description' => $this->t('Speech speed (0.5 = slow, 1.0 = normal, 2.0 = fast)'),
     ];
 
@@ -130,7 +130,7 @@ final class AiTtsTestForm extends FormBase {
       '#value' => $this->t('Generate Speech'),
       '#ajax' => [
         'callback' => '::generateCallback',
-        'wrapper' => 'ai-tts-test-wrapper',
+        'wrapper' => 'local-tts-test-wrapper',
         'progress' => [
           'type' => 'throbber',
           'message' => $this->t('Generating audio...'),

@@ -1,22 +1,22 @@
 <?php
 
-namespace Drupal\ai_tts\Form;
+namespace Drupal\local_tts\Form;
 
-use Drupal\ai_tts\TtsService;
+use Drupal\local_tts\TtsService;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Language\LanguageManagerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
- * Configure AI TTS settings.
+ * Configure Local TTS settings.
  */
-final class AiTtsSettingsForm extends ConfigFormBase {
+final class LocalTtsSettingsForm extends ConfigFormBase {
 
   /**
    * The TTS service.
    *
-   * @var \Drupal\ai_tts\TtsService
+   * @var \Drupal\local_tts\TtsService
    */
   protected $ttsService;
 
@@ -28,9 +28,9 @@ final class AiTtsSettingsForm extends ConfigFormBase {
   protected $languageManager;
 
   /**
-   * Constructs an AiTtsSettingsForm object.
+   * Constructs an LocalTtsSettingsForm object.
    *
-   * @param \Drupal\ai_tts\TtsService $tts_service
+   * @param \Drupal\local_tts\TtsService $tts_service
    *   The TTS service.
    * @param \Drupal\Core\Language\LanguageManagerInterface $language_manager
    *   The language manager.
@@ -48,7 +48,7 @@ final class AiTtsSettingsForm extends ConfigFormBase {
    */
   public static function create(ContainerInterface $container) {
     return new static(
-      $container->get('ai_tts.tts_service'),
+      $container->get('local_tts.tts_service'),
       $container->get('language_manager')
     );
   }
@@ -57,21 +57,21 @@ final class AiTtsSettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   protected function getEditableConfigNames() {
-    return ['ai_tts.settings'];
+    return ['local_tts.settings'];
   }
 
   /**
    * {@inheritdoc}
    */
   public function getFormId() {
-    return 'ai_tts_settings_form';
+    return 'local_tts_settings_form';
   }
 
   /**
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
-    $config = $this->config('ai_tts.settings');
+    $config = $this->config('local_tts.settings');
 
     // eSpeak NG Configuration.
     $form['espeak'] = [
@@ -158,7 +158,7 @@ final class AiTtsSettingsForm extends ConfigFormBase {
     $form['caching']['audio_directory'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Audio cache directory'),
-      '#description' => $this->t('Directory for storing cached audio files (e.g., public://ai-tts).'),
+      '#description' => $this->t('Directory for storing cached audio files (e.g., public://local-tts).'),
       '#default_value' => $config->get('audio_directory'),
       '#states' => [
         'visible' => [
@@ -280,7 +280,7 @@ final class AiTtsSettingsForm extends ConfigFormBase {
     unset($voice_settings['default_speed']);
     unset($voice_settings['description']);
 
-    $this->config('ai_tts.settings')
+    $this->config('local_tts.settings')
       ->set('espeak_data_path', $form_state->getValue('espeak_data_path'))
       ->set('default_voices', $voice_settings)
       ->set('default_speed', $default_speed)

@@ -2,9 +2,9 @@ player:
   version: 2.0
   css:
     theme:
-      css/ai-tts-player.css: {}
+      css/local-tts-player.css: {}
   js:
-    js/ai-tts-player.js: {}
+    js/local-tts-player.js: {}
   dependencies:
     - core/drupal
     - core/drupalSettings

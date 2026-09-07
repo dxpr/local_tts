@@ -1,10 +1,10 @@
 <?php
 
-namespace Drupal\ai_tts;
+namespace Drupal\local_tts;
 
 use Drupal\Core\Session\AnonymousUserSession;
-use Drupal\ai_tts\Exception\TtsServiceUnavailableException;
-use Drupal\ai_tts\Exception\TtsTimeoutException;
+use Drupal\local_tts\Exception\TtsServiceUnavailableException;
+use Drupal\local_tts\Exception\TtsTimeoutException;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Database\Database;
@@ -76,8 +76,8 @@ class TtsService {
   public function __construct(ConfigFactoryInterface $config_factory, FileSystemInterface $file_system, LoggerChannelFactoryInterface $logger_factory) {
     $this->configFactory = $config_factory;
     $this->fileSystem = $file_system;
-    $this->logger = $logger_factory->get('ai_tts');
-    $this->modulePath = \Drupal::service('extension.list.module')->getPath('ai_tts');
+    $this->logger = $logger_factory->get('local_tts');
+    $this->modulePath = \Drupal::service('extension.list.module')->getPath('local_tts');
   }
 
   /**
@@ -99,13 +99,13 @@ class TtsService {
    *
    * @throws \InvalidArgumentException
    *   When validation fails for text length, voice, or speed.
-   * @throws \Drupal\ai_tts\Exception\TtsTimeoutException
-   * @throws \Drupal\ai_tts\Exception\TtsServiceUnavailableException
+   * @throws \Drupal\local_tts\Exception\TtsTimeoutException
+   * @throws \Drupal\local_tts\Exception\TtsServiceUnavailableException
    * @throws \RuntimeException
    * @throws \Exception
    */
   public function generateSpeech($text, array $options = []) {
-    $config = $this->configFactory->get('ai_tts.settings');
+    $config = $this->configFactory->get('local_tts.settings');
 
     // CRITICAL: Entity context is REQUIRED for persistent cached files.
     // This prevents orphaned files with NULL entity_type/entity_id.
@@ -185,7 +185,7 @@ class TtsService {
     // EntityViewBuilder handles translatable entities.
     // When entity updates, ALL language versions are deleted.
     $cache_key = md5($text . $voice . $speed . $espeak_lang);
-    $audio_dir = $config->get('audio_directory') ?: 'public://ai-tts';
+    $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
 
     if ($use_cache) {
       $cached_file = $audio_dir . '/' . $cache_key . '.wav';
@@ -547,8 +547,8 @@ class TtsService {
    *   TRUE on success, FALSE on failure.
    */
   public function clearCache() {
-    $config = $this->configFactory->get('ai_tts.settings');
-    $audio_dir = $config->get('audio_directory') ?: 'public://ai-tts';
+    $config = $this->configFactory->get('local_tts.settings');
+    $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
 
     try {
       $this->fileSystem->deleteRecursive($audio_dir);
@@ -575,8 +575,8 @@ class TtsService {
    *   Additional options including entity tracking info.
    */
   protected function saveMetadata($cache_key, $text, $voice, $speed, array $options = []) {
-    $config = $this->configFactory->get('ai_tts.settings');
-    $audio_dir = $config->get('audio_directory') ?: 'public://ai-tts';
+    $config = $this->configFactory->get('local_tts.settings');
+    $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
     $directory = $this->fileSystem->realpath($audio_dir);
 
     if (!$directory) {
@@ -632,7 +632,7 @@ class TtsService {
       $merge_keys = ['cache_key' => $cache_key];
     }
 
-    $database->merge('ai_tts_cache')
+    $database->merge('local_tts_cache')
       ->keys($merge_keys)
       ->fields($record)
       ->execute();
@@ -648,14 +648,14 @@ class TtsService {
    *   The metadata array, or NULL if not found.
    */
   public function loadMetadata($cache_key) {
-    $result = \Drupal::database()->select('ai_tts_cache', 'a')
+    $result = \Drupal::database()->select('local_tts_cache', 'a')
       ->fields('a')
       ->condition('cache_key', $cache_key)
       ->execute()
       ->fetchAssoc();
 
     if ($result) {
-      \Drupal::database()->update('ai_tts_cache')
+      \Drupal::database()->update('local_tts_cache')
         ->fields(['accessed' => \Drupal::time()->getRequestTime()])
         ->condition('cache_key', $cache_key)
         ->execute();
@@ -680,15 +680,15 @@ class TtsService {
    *   The number of files deleted.
    */
   public function deleteAudioForEntity($entity_type, $entity_id) {
-    $config = $this->configFactory->get('ai_tts.settings');
-    $audio_dir = $config->get('audio_directory') ?: 'public://ai-tts';
+    $config = $this->configFactory->get('local_tts.settings');
+    $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
     $directory = $this->fileSystem->realpath($audio_dir);
 
     if (!$directory || !is_dir($directory)) {
       return 0;
     }
 
-    $cache_keys = \Drupal::database()->select('ai_tts_cache', 'a')
+    $cache_keys = \Drupal::database()->select('local_tts_cache', 'a')
       ->fields('a', ['cache_key'])
       ->condition('entity_type', $entity_type)
       ->condition('entity_id', $entity_id)
@@ -708,7 +708,7 @@ class TtsService {
       }
     }
 
-    \Drupal::database()->delete('ai_tts_cache')
+    \Drupal::database()->delete('local_tts_cache')
       ->condition('entity_type', $entity_type)
       ->condition('entity_id', $entity_id)
       ->execute();
@@ -766,7 +766,7 @@ class TtsService {
 
     // Set up environment variables.
     $env = NULL;
-    $config = $this->configFactory->get('ai_tts.settings');
+    $config = $this->configFactory->get('local_tts.settings');
     $espeak_data_path = $config->get('espeak_data_path');
 
     if ($espeak_data_path) {

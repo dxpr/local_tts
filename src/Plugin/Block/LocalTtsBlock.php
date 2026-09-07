@@ -1,8 +1,8 @@
 <?php
 
-namespace Drupal\ai_tts\Plugin\Block;
+namespace Drupal\local_tts\Plugin\Block;
 
-use Drupal\ai_tts\TtsPlayerBuilder;
+use Drupal\local_tts\TtsPlayerBuilder;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Block\BlockBase;
 use Drupal\Core\Form\FormStateInterface;
@@ -15,15 +15,15 @@ use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Session\AccountInterface;
 
 /**
- * Provides an AI TTS block.
+ * Provides an Local TTS block.
  *
  * @Block(
- *   id = "ai_tts_block",
- *   admin_label = @Translation("AI Text-to-Speech"),
+ *   id = "local_tts_block",
+ *   admin_label = @Translation("Local Text-to-Speech"),
  *   category = @Translation("Media")
  * )
  */
-final class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
+final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
 
   /**
    * Allowed field types for TTS processing.
@@ -60,7 +60,7 @@ final class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterf
   /**
    * The TTS player builder service.
    *
-   * @var \Drupal\ai_tts\TtsPlayerBuilder
+   * @var \Drupal\local_tts\TtsPlayerBuilder
    */
   protected $playerBuilder;
 
@@ -93,7 +93,7 @@ final class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterf
   protected $currentUser;
 
   /**
-   * Constructs a new AiTtsBlock instance.
+   * Constructs a new LocalTtsBlock instance.
    *
    * @param array $configuration
    *   The plugin configuration.
@@ -103,7 +103,7 @@ final class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterf
    *   The plugin implementation definition.
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The config factory.
-   * @param \Drupal\ai_tts\TtsPlayerBuilder $player_builder
+   * @param \Drupal\local_tts\TtsPlayerBuilder $player_builder
    *   The TTS player builder service.
    * @param \Drupal\Core\Entity\EntityFieldManagerInterface $entity_field_manager
    *   The entity field manager.
@@ -133,7 +133,7 @@ final class AiTtsBlock extends BlockBase implements ContainerFactoryPluginInterf
       $plugin_id,
       $plugin_definition,
       $container->get('config.factory'),
-      $container->get('ai_tts.player_builder'),
+      $container->get('local_tts.player_builder'),
       $container->get('entity_field.manager'),
       $container->get('entity_type.bundle.info'),
       $container->get('current_route_match'),

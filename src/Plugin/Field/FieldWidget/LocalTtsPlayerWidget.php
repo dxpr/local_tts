@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\ai_tts\Plugin\Field\FieldWidget;
+namespace Drupal\local_tts\Plugin\Field\FieldWidget;
 
 use Drupal\Core\Field\Attribute\FieldWidget;
 use Drupal\Core\Field\FieldItemListInterface;
@@ -9,17 +9,17 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 
 /**
- * Plugin implementation of the 'ai_tts_player_widget' widget.
+ * Plugin implementation of the 'local_tts_player_widget' widget.
  *
  * Provides a checkbox to enable/disable the text-to-speech player per entity.
  */
 #[FieldWidget(
-  id: 'ai_tts_player_widget',
+  id: 'local_tts_player_widget',
   label: new TranslatableMarkup('Text-to-speech player toggle'),
-  field_types: ['ai_tts_player'],
+  field_types: ['local_tts_player'],
   multiple_values: TRUE,
 )]
-class AiTtsPlayerWidget extends WidgetBase {
+class LocalTtsPlayerWidget extends WidgetBase {
 
   /**
    * {@inheritdoc}

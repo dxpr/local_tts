@@ -1,0 +1,32 @@
+local_tts.settings:
+  path: '/admin/config/media/local-tts'
+  defaults:
+    _form: '\Drupal\local_tts\Form\LocalTtsSettingsForm'
+    _title: 'Local TTS Settings'
+  requirements:
+    _permission: 'administer ai tts settings'
+
+local_tts.test:
+  path: '/admin/config/media/local-tts/test'
+  defaults:
+    _form: '\Drupal\local_tts\Form\LocalTtsTestForm'
+    _title: 'Test Local TTS'
+  requirements:
+    _permission: 'administer ai tts settings'
+
+local_tts.batch:
+  path: '/admin/config/media/local-tts/batch'
+  defaults:
+    _form: '\Drupal\local_tts\Form\LocalTtsBatchForm'
+    _title: 'Batch TTS Generation'
+  requirements:
+    _permission: 'administer ai tts settings'
+
+local_tts.generate:
+  path: '/local-tts/generate'
+  defaults:
+    _controller: '\Drupal\local_tts\Controller\TtsController::generate'
+  requirements:
+    _permission: 'generate ai tts'
+  options:
+    no_cache: TRUE

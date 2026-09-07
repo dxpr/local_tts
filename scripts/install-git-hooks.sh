@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Install git hooks for the AI TTS module
+# Install git hooks for the Local TTS module
 # This script copies hook scripts to .git/hooks/ and makes them executable
 
 set -e
@@ -18,7 +18,7 @@ cd "$MODULE_ROOT"
 
 echo ""
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║  Installing Git Hooks for AI TTS Module                   ║${NC}"
+echo -e "${BLUE}║  Installing Git Hooks for Local TTS Module                   ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 

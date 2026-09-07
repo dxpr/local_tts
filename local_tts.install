@@ -2,7 +2,7 @@
 
 /**
  * @file
- * Install, update and uninstall functions for the AI TTS module.
+ * Install, update and uninstall functions for the Local TTS module.
  */
 
 use Drupal\Core\StringTranslation\ByteSizeMarkup;
@@ -12,8 +12,8 @@ use Drupal\Core\File\FileSystemInterface;
 /**
  * Implements hook_schema().
  */
-function ai_tts_schema() {
-  $schema['ai_tts_cache'] = [
+function local_tts_schema() {
+  $schema['local_tts_cache'] = [
     'description' => 'Tracks cached TTS audio files',
     'fields' => [
       'id' => [
@@ -90,15 +90,15 @@ function ai_tts_schema() {
 /**
  * Implements hook_requirements().
  */
-function ai_tts_requirements($phase) {
+function local_tts_requirements($phase) {
   $requirements = [];
 
   if ($phase === 'runtime') {
-    $config = \Drupal::config('ai_tts.settings');
+    $config = \Drupal::config('local_tts.settings');
     $file_system = \Drupal::service('file_system');
 
     // Check 1: Bundled Files (Binary + Model Files).
-    $module_path = \Drupal::service('extension.list.module')->getPath('ai_tts');
+    $module_path = \Drupal::service('extension.list.module')->getPath('local_tts');
     $binary_path = DRUPAL_ROOT . '/' . $module_path . '/bin/koko';
     $model_path = DRUPAL_ROOT . '/' . $module_path . '/data/kokoro-v1.0.onnx';
     $data_path = DRUPAL_ROOT . '/' . $module_path . '/data/voices-v1.0.bin';
@@ -138,8 +138,8 @@ function ai_tts_requirements($phase) {
 
     // Create single requirement entry.
     if (!empty($issues)) {
-      $requirements['ai_tts_files'] = [
-        'title' => t('AI TTS bundled files'),
+      $requirements['local_tts_files'] = [
+        'title' => t('Local TTS bundled files'),
         'value' => t('Missing'),
         'description' => implode(', ', $issues) . '. ' .
         t('Run: <code>cd @module && composer run download-files</code>', [
@@ -149,8 +149,8 @@ function ai_tts_requirements($phase) {
       ];
     }
     else {
-      $requirements['ai_tts_files'] = [
-        'title' => t('AI TTS bundled files'),
+      $requirements['local_tts_files'] = [
+        'title' => t('Local TTS bundled files'),
         'value' => t('Installed (@details)', [
           '@details' => implode(', ', $details),
         ]),
@@ -173,7 +173,7 @@ function ai_tts_requirements($phase) {
 
     foreach ($test_paths as $path => $label) {
       $url = $base_url . '/' . $module_path . '/' . $path;
-      $status_code = _ai_tts_check_url_access($url);
+      $status_code = _local_tts_check_url_access($url);
 
       // Only flag if file is accessible (HTTP 200).
       // NULL (403, 404, connection refused, etc.) is expected and safe.
@@ -202,8 +202,8 @@ function ai_tts_requirements($phase) {
         }
       }
 
-      $requirements['ai_tts_security_htaccess'] = [
-        'title' => t('AI TTS file protection'),
+      $requirements['local_tts_security_htaccess'] = [
+        'title' => t('Local TTS file protection'),
         'value' => t('Files exposed'),
         'description' => [
           'warning' => [
@@ -223,8 +223,8 @@ function ai_tts_requirements($phase) {
     else {
       $htaccess_ok = t('Binary and data files are properly protected by .htaccess (not accessible via HTTP).');
 
-      $requirements['ai_tts_security_htaccess'] = [
-        'title' => t('AI TTS file protection'),
+      $requirements['local_tts_security_htaccess'] = [
+        'title' => t('Local TTS file protection'),
         'value' => t('Protected'),
         'description' => $htaccess_ok,
         'severity' => REQUIREMENT_OK,
@@ -232,20 +232,20 @@ function ai_tts_requirements($phase) {
     }
 
     // Check 3: Audio Cache Directory Status.
-    $audio_directory = $config->get('audio_directory') ?: 'public://ai-tts';
+    $audio_directory = $config->get('audio_directory') ?: 'public://local-tts';
     $real_path = $file_system->realpath($audio_directory);
 
     if (!$real_path) {
       // Directory doesn't exist - try to create it.
       if ($file_system->prepareDirectory($audio_directory, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS)) {
-        $requirements['ai_tts_cache_dir'] = [
-          'title' => t('AI TTS cache directory'),
+        $requirements['local_tts_cache_dir'] = [
+          'title' => t('Local TTS cache directory'),
           'value' => t('Writable'),
         ];
       }
       else {
-        $requirements['ai_tts_cache_dir'] = [
-          'title' => t('AI TTS cache directory'),
+        $requirements['local_tts_cache_dir'] = [
+          'title' => t('Local TTS cache directory'),
           'value' => t('Not writable'),
           'description' => t('Failed to create directory. Check web server permissions.'),
           'severity' => REQUIREMENT_ERROR,
@@ -253,8 +253,8 @@ function ai_tts_requirements($phase) {
       }
     }
     elseif (!is_writable($real_path)) {
-      $requirements['ai_tts_cache_dir'] = [
-        'title' => t('AI TTS cache directory'),
+      $requirements['local_tts_cache_dir'] = [
+        'title' => t('Local TTS cache directory'),
         'value' => t('Not writable'),
         'description' => t('Directory exists but is not writable. Run: <code>chmod 755 @path</code>', [
           '@path' => $real_path,
@@ -263,20 +263,20 @@ function ai_tts_requirements($phase) {
       ];
     }
     else {
-      $requirements['ai_tts_cache_dir'] = [
-        'title' => t('AI TTS cache directory'),
+      $requirements['local_tts_cache_dir'] = [
+        'title' => t('Local TTS cache directory'),
         'value' => t('Writable'),
       ];
     }
 
     // Check 3: Audio Cache Size.
     if ($real_path && is_dir($real_path)) {
-      $cache_size = _ai_tts_get_directory_size($real_path);
-      $file_count = _ai_tts_count_files($real_path);
+      $cache_size = _local_tts_get_directory_size($real_path);
+      $file_count = _local_tts_count_files($real_path);
 
       if ($file_count === 0) {
-        $requirements['ai_tts_cache_size'] = [
-          'title' => t('AI TTS cache size'),
+        $requirements['local_tts_cache_size'] = [
+          'title' => t('Local TTS cache size'),
           'value' => t('Empty'),
         ];
       }
@@ -285,8 +285,8 @@ function ai_tts_requirements($phase) {
         $max_size = $config->get('cache_max_size') ?: 1073741824;
         $percent_used = ($cache_size / $max_size) * 100;
 
-        $requirements['ai_tts_cache_size'] = [
-          'title' => t('AI TTS cache size'),
+        $requirements['local_tts_cache_size'] = [
+          'title' => t('Local TTS cache size'),
           'value' => t('@size (@percent% of @limit)', [
             '@size' => $size_formatted,
             '@percent' => round($percent_used),
@@ -296,14 +296,14 @@ function ai_tts_requirements($phase) {
 
         // Warn if over 80% of limit.
         if ($percent_used > 80) {
-          $requirements['ai_tts_cache_size']['severity'] = REQUIREMENT_WARNING;
-          $requirements['ai_tts_cache_size']['description'] = t('Cache is nearly full. Consider running <code>drush ai-tts:cache-clear</code>');
+          $requirements['local_tts_cache_size']['severity'] = REQUIREMENT_WARNING;
+          $requirements['local_tts_cache_size']['description'] = t('Cache is nearly full. Consider running <code>drush local-tts:cache-clear</code>');
         }
       }
     }
     else {
-      $requirements['ai_tts_cache_size'] = [
-        'title' => t('AI TTS cache size'),
+      $requirements['local_tts_cache_size'] = [
+        'title' => t('Local TTS cache size'),
         'value' => t('Unknown'),
         'description' => t('Cache directory not accessible.'),
         'severity' => REQUIREMENT_WARNING,
@@ -342,14 +342,14 @@ function ai_tts_requirements($phase) {
     }
 
     if (empty($security_warnings)) {
-      $requirements['ai_tts_security'] = [
-        'title' => t('AI TTS security'),
+      $requirements['local_tts_security'] = [
+        'title' => t('Local TTS security'),
         'value' => t('Configured'),
       ];
     }
     else {
-      $requirements['ai_tts_security'] = [
-        'title' => t('AI TTS security'),
+      $requirements['local_tts_security'] = [
+        'title' => t('Local TTS security'),
         'value' => t('Review recommended'),
         'description' => implode(' ', $security_warnings),
         'severity' => REQUIREMENT_WARNING,
@@ -362,11 +362,11 @@ function ai_tts_requirements($phase) {
       $load = sys_getloadavg();
       if ($load !== FALSE) {
         $current_load = (float) $load[0];
-        $settings_url = Url::fromRoute('ai_tts.settings')->toString();
+        $settings_url = Url::fromRoute('local_tts.settings')->toString();
 
         if ($current_load > $max_server_load) {
-          $requirements['ai_tts_server_load'] = [
-            'title' => t('AI TTS server load'),
+          $requirements['local_tts_server_load'] = [
+            'title' => t('Local TTS server load'),
             'value' => t('@current (threshold: @max)', [
               '@current' => number_format($current_load, 2),
               '@max' => number_format($max_server_load, 2),
@@ -380,8 +380,8 @@ function ai_tts_requirements($phase) {
           ];
         }
         else {
-          $requirements['ai_tts_server_load'] = [
-            'title' => t('AI TTS server load'),
+          $requirements['local_tts_server_load'] = [
+            'title' => t('Local TTS server load'),
             'value' => t('@current (threshold: @max)', [
               '@current' => number_format($current_load, 2),
               '@max' => number_format($max_server_load, 2),
@@ -406,7 +406,7 @@ function ai_tts_requirements($phase) {
  * @return int|null
  *   The HTTP status code, or NULL if request failed.
  */
-function _ai_tts_check_url_access($url) {
+function _local_tts_check_url_access($url) {
   try {
     $client = \Drupal::httpClient();
 
@@ -435,7 +435,7 @@ function _ai_tts_check_url_access($url) {
  * @return int
  *   The total size in bytes.
  */
-function _ai_tts_get_directory_size($path) {
+function _local_tts_get_directory_size($path) {
   $size = 0;
 
   if (is_dir($path)) {
@@ -463,7 +463,7 @@ function _ai_tts_get_directory_size($path) {
  * @return int
  *   The number of files.
  */
-function _ai_tts_count_files($path) {
+function _local_tts_count_files($path) {
   $count = 0;
 
   if (is_dir($path)) {
@@ -485,16 +485,16 @@ function _ai_tts_count_files($path) {
 /**
  * Implements hook_uninstall().
  */
-function ai_tts_uninstall() {
-  $config = \Drupal::config('ai_tts.settings');
-  $audio_directory = $config->get('audio_directory') ?: 'public://ai-tts';
+function local_tts_uninstall() {
+  $config = \Drupal::config('local_tts.settings');
+  $audio_directory = $config->get('audio_directory') ?: 'public://local-tts';
 
   try {
     \Drupal::service('file_system')->deleteRecursive($audio_directory);
-    \Drupal::messenger()->addStatus(t('AI TTS audio cache has been deleted.'));
+    \Drupal::messenger()->addStatus(t('Local TTS audio cache has been deleted.'));
   }
   catch (\Exception $e) {
-    \Drupal::logger('ai_tts')->error('Failed to delete audio cache during uninstall: @message', [
+    \Drupal::logger('local_tts')->error('Failed to delete audio cache during uninstall: @message', [
       '@message' => $e->getMessage(),
     ]);
   }

@@ -1,0 +1,19 @@
+# Local task definitions for Local TTS module.
+
+local_tts.settings:
+  route_name: local_tts.settings
+  title: 'Settings'
+  base_route: local_tts.settings
+  weight: 0
+
+local_tts.test:
+  route_name: local_tts.test
+  title: 'Test'
+  base_route: local_tts.settings
+  weight: 10
+
+local_tts.batch:
+  route_name: local_tts.batch
+  title: 'Batch'
+  base_route: local_tts.settings
+  weight: 20

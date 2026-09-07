@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\ai_tts\Service;
+namespace Drupal\local_tts\Service;
 
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Database\Database;
@@ -11,9 +11,9 @@ use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\TypedData\TranslatableInterface;
-use Drupal\ai_tts\TtsService;
-use Drupal\ai_tts\Exception\TtsServiceUnavailableException;
-use Drupal\ai_tts\Exception\TtsTimeoutException;
+use Drupal\local_tts\TtsService;
+use Drupal\local_tts\Exception\TtsServiceUnavailableException;
+use Drupal\local_tts\Exception\TtsTimeoutException;
 
 /**
  * Service for batch TTS generation operations.
@@ -32,7 +32,7 @@ class TtsBatchService {
   /**
    * The TTS service.
    *
-   * @var \Drupal\ai_tts\TtsService
+   * @var \Drupal\local_tts\TtsService
    */
   protected $ttsService;
 
@@ -62,7 +62,7 @@ class TtsBatchService {
    *
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
    *   The entity type manager.
-   * @param \Drupal\ai_tts\TtsService $tts_service
+   * @param \Drupal\local_tts\TtsService $tts_service
    *   The TTS service.
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The config factory.
@@ -86,7 +86,7 @@ class TtsBatchService {
   }
 
   /**
-   * Get all entity bundles with ai_tts_player field attached.
+   * Get all entity bundles with local_tts_player field attached.
    *
    * @return array
    *   Array of entity bundles keyed by entity type ID and bundle.
@@ -94,7 +94,7 @@ class TtsBatchService {
   public function getAvailableEntityBundles(): array {
     $bundles = [];
 
-    $field_map = \Drupal::service('entity_field.manager')->getFieldMapByFieldType('ai_tts_player');
+    $field_map = \Drupal::service('entity_field.manager')->getFieldMapByFieldType('local_tts_player');
 
     foreach ($field_map as $entity_type_id => $fields) {
       $bundle_info = $this->bundleInfo->getBundleInfo($entity_type_id);
@@ -224,7 +224,7 @@ class TtsBatchService {
   protected function getCachedEntityIds(string $entity_type_id, string $bundle, string $langcode): array {
     $connection = \Drupal::database();
 
-    return $connection->select('ai_tts_cache', 'c')
+    return $connection->select('local_tts_cache', 'c')
       ->fields('c', ['entity_id'])
       ->condition('entity_type', $entity_type_id)
       ->condition('language', $langcode)
@@ -283,7 +283,7 @@ class TtsBatchService {
       $context['results']['retry_counts'] = [];
     }
 
-    $logger = $this->loggerFactory->get('ai_tts');
+    $logger = $this->loggerFactory->get('local_tts');
 
     // Server load check (disabled by setting max_load_threshold to NULL).
     if ($options['max_load_threshold'] !== NULL) {
@@ -636,7 +636,7 @@ class TtsBatchService {
    *   The default voice ID.
    */
   protected function getDefaultVoiceForLanguage(string $langcode): string {
-    $config = $this->configFactory->get('ai_tts.settings');
+    $config = $this->configFactory->get('local_tts.settings');
     $default_voices = $config->get('default_voices') ?? [];
 
     // Check language-specific default first.
