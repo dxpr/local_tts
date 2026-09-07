@@ -1,20 +1,31 @@
 # Local Text-to-Speech
 
-AI-powered text-to-speech for Drupal using the Kokoro TTS engine with 64 voices
+AI-powered text-to-speech for Drupal using the Kokoro TTS engine with 54 voices
 across 9 languages.
 
 ## Features
 
 - **54 voices across 9 languages** (English, Japanese, Mandarin Chinese, French,
   Hindi, Spanish, Italian, Portuguese)
-- **Language-aware voice filtering** - automatically shows only voices matching
-  content language
+- **OGG Opus output** for small file sizes and broad browser support
+- **Queue-based generation** via Drupal's Queue API; visitors see a progress
+  indicator while audio is generated in the background
+- **Chunked processing** for long content: text is split at sentence boundaries
+  and generated in parallel, then concatenated into a single file
+- **Content change detection** via text hash; audio is only regenerated when
+  content actually changes
+- **Render-based text extraction** captures computed fields, Views output, and
+  block field content
+- **Playback progress persistence** via localStorage; visitors can resume where
+  they left off
+- **Voice preview** on the settings page; hear any voice before selecting it
+- **Language-aware voice filtering** automatically shows only matching voices
 - Adjustable speech speed (0.5x to 2.0x)
-- Audio caching to reduce server load
+- Audio caching with automatic orphan cleanup during cron
 - Block and field-based integration options
 - Drush commands for testing, batch generation, and cache management
 - Accessibility-optimized with ARIA labels and keyboard shortcuts
-- **Privacy-first**: Only publicly viewable content converted to audio
+- **Privacy-first**: only publicly viewable content converted to audio
 
 ## Requirements
 
@@ -24,6 +35,16 @@ across 9 languages.
 - Node module (core)
 
 ### System Dependencies
+
+**ffmpeg** (required for WAV to OGG Opus transcoding):
+
+```bash
+# macOS
+brew install ffmpeg
+
+# Ubuntu/Debian
+sudo apt-get install ffmpeg
+```
 
 **eSpeak NG** (required for text-to-phoneme conversion):
 
@@ -233,7 +254,12 @@ drush local-tts:cache-clear
 - `TtsPlayerBuilder` - Shared service for building player UI
 
 **Controllers:**
-- `TtsController` - AJAX endpoint for audio generation
+- `TtsController` - AJAX endpoint for audio generation with queue-based
+  processing and status polling
+- `VoicePreviewController` - Voice preview endpoint for settings page
+
+**Queue Workers:**
+- `TtsGenerationWorker` - Background audio generation via Drupal Queue API
 
 **Plugins:**
 - `LocalTtsBlock` - Block plugin for site-wide TTS
@@ -241,19 +267,23 @@ drush local-tts:cache-clear
 - `LocalTtsPlayerFormatter` - Field formatter with settings
 
 **Frontend:**
-- `local-tts-player.js` - Audio playback controls
+- `local-tts-player.js` - Audio playback, queue polling, progress persistence
+- `local-tts-voice-preview.js` - Voice preview on settings page
 
 ### How It Works
 
 1. User clicks "Listen to this page"
 2. JavaScript sends AJAX with entity reference (not content)
-3. Server validates anonymous access
-4. TTS generates audio with language-specific phoneme processing
-5. Audio cached in `public://local-tts/` (if enabled)
-6. HTML5 `<audio>` element plays speech
+3. Server renders the entity to extract text and checks for cached audio
+4. If the content hash matches, the cached OGG is returned immediately
+5. Otherwise the generation job is queued; the player polls every 3 seconds
+6. The queue worker runs koko to generate WAV, then transcodes to OGG Opus
+7. For content over 2000 characters, text is chunked at sentence boundaries
+8. The player starts playback and saves progress to localStorage
 
 **Caching:** Cache key based on text content (MD5),
-voice, speed, and language code.
+voice, speed, and language code. Content change detection
+uses a stored text hash to avoid unnecessary regeneration.
 
 ## Troubleshooting
 

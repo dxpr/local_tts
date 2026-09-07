@@ -189,6 +189,27 @@ function local_tts_requirements($phase) {
       ];
     }
 
+    // Check 1b: ffmpeg (required for OGG Opus transcoding).
+    $ffmpeg_output = [];
+    $ffmpeg_code = -1;
+    @exec('ffmpeg -version 2>&1', $ffmpeg_output, $ffmpeg_code);
+    if ($ffmpeg_code !== 0) {
+      $requirements['local_tts_ffmpeg'] = [
+        'title' => t('Local TTS: ffmpeg'),
+        'value' => t('Not found'),
+        'description' => t('ffmpeg is required for transcoding audio to OGG Opus. Install it with your system package manager (e.g. <code>apt install ffmpeg</code>).'),
+        'severity' => REQUIREMENT_ERROR,
+      ];
+    }
+    else {
+      $version_line = !empty($ffmpeg_output[0]) ? $ffmpeg_output[0] : 'unknown';
+      $requirements['local_tts_ffmpeg'] = [
+        'title' => t('Local TTS: ffmpeg'),
+        'value' => $version_line,
+        'severity' => REQUIREMENT_OK,
+      ];
+    }
+
     // Check 2: .htaccess Protection (E2E Security Test).
     // This performs actual HTTP HEAD requests to verify files are not
     // accessible.
@@ -504,7 +525,7 @@ function _local_tts_count_files($path) {
     );
 
     foreach ($files as $file) {
-      if ($file->isFile() && $file->getExtension() === 'wav') {
+      if ($file->isFile() && $file->getExtension() === 'ogg') {
         $count++;
       }
     }

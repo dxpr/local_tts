@@ -6,6 +6,7 @@ use Drupal\local_tts\TtsService;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Language\LanguageManagerInterface;
+use Drupal\Core\Url;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -261,6 +262,10 @@ final class LocalTtsSettingsForm extends ConfigFormBase {
       '#step' => 0.1,
       '#field_suffix' => $this->t('load average'),
     ];
+
+    // Attach voice preview JS and pass the preview endpoint URL.
+    $form['#attached']['library'][] = 'local_tts/voice-preview';
+    $form['#attached']['drupalSettings']['localTts']['voicePreviewUrl'] = Url::fromRoute('local_tts.voice_preview')->toString();
 
     return parent::buildForm($form, $form_state);
   }

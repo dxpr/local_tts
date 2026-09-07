@@ -12,8 +12,17 @@ use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 
 /**
  * Service for interfacing with Kokoro TTS binary.
+ *
+ * NOTE for local_tts.module maintainer: the audio format changed from .wav
+ * to .ogg (Opus). Update .wav references in _local_tts_cleanup_stale_content()
+ * and _local_tts_enforce_size_limit() to use .ogg instead.
  */
 class TtsService {
+
+  /**
+   * Maximum characters per chunk for long text generation.
+   */
+  const CHUNK_SIZE = 2000;
 
   /**
    * Language to voice prefix mapping.
@@ -107,9 +116,7 @@ class TtsService {
   public function generateSpeech($text, array $options = []) {
     $config = $this->configFactory->get('local_tts.settings');
 
-    // CRITICAL: Entity context is REQUIRED for persistent cached files.
-    // This prevents orphaned files with NULL entity_type/entity_id.
-    // Exception: use_cache=FALSE bypasses this for admin/test forms.
+    // Entity context is REQUIRED for persistent cached files.
     $use_cache = $options['use_cache'] ?? $config->get('cache_audio');
 
     if ($use_cache && (empty($options['entity_type']) || empty($options['entity_id']))) {
@@ -121,8 +128,6 @@ class TtsService {
     $skip_access_check = $options['skip_access_check'] ?? FALSE;
 
     // Security: Only generate audio for publicly accessible content.
-    // Skip access check only when explicitly requested (e.g., batch operations
-    // where access was already verified).
     if (!$skip_access_check) {
       try {
         $entity = \Drupal::entityTypeManager()
@@ -179,18 +184,13 @@ class TtsService {
 
     $espeak_lang = $this->mapLanguageToEspeak($language);
 
-    // Cache key strategy (following Drupal core pattern):
-    // Language is part of the cache KEY (creates separate files per language),
-    // not a cache TAG (would trigger invalidation). This matches how
-    // EntityViewBuilder handles translatable entities.
-    // When entity updates, ALL language versions are deleted.
+    // Language is part of the cache KEY (separate files per language).
     $cache_key = md5($text . $voice . $speed . $espeak_lang);
     $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
 
     if ($use_cache) {
-      $cached_file = $audio_dir . '/' . $cache_key . '.wav';
+      $cached_file = $audio_dir . '/' . $cache_key . '.ogg';
       if (file_exists($cached_file)) {
-        // File exists, but we still need to save metadata for this entity.
         $this->saveMetadata($cache_key, $text, $voice, $speed, $options);
         return $cached_file;
       }
@@ -205,7 +205,7 @@ class TtsService {
       throw new TtsServiceUnavailableException(sprintf('Audio directory path could not be resolved: %s', $audio_dir));
     }
 
-    $output_file = $directory . '/' . $cache_key . '.wav';
+    $ogg_output = $directory . '/' . $cache_key . '.ogg';
 
     // Use bundled binary and data files from module directory.
     $binary_path = DRUPAL_ROOT . '/' . $this->modulePath . '/bin/koko';
@@ -234,20 +234,6 @@ class TtsService {
       throw new TtsServiceUnavailableException(sprintf('Data file not found at: %s. Please run: composer install', $data_path));
     }
 
-    $command = sprintf(
-      '%s --lan %s --model %s --data %s --style %s --speed %s text %s --output %s 2>&1',
-      escapeshellarg($binary_path),
-      escapeshellarg($espeak_lang),
-      escapeshellarg($model_path),
-      escapeshellarg($data_path),
-      escapeshellarg($voice),
-      escapeshellarg((string) $speed),
-      escapeshellarg($text),
-      escapeshellarg($output_file)
-    );
-
-    $this->logger->info('Executing command: @command', ['@command' => $command]);
-
     // Security: Check server load before executing binary.
     $max_load = $config->get('max_server_load') ?? 2;
     if ($max_load > 0 && function_exists('sys_getloadavg')) {
@@ -264,10 +250,161 @@ class TtsService {
       }
     }
 
-    // Security: Execute with timeout to prevent hanging.
     $timeout = $config->get('generation_timeout') ?? 900;
-    $result = $this->execWithTimeout($command, $timeout);
 
+    // Split long text into chunks for reliable generation.
+    if (mb_strlen($text) > self::CHUNK_SIZE) {
+      $this->generateChunked($text, $ogg_output, $binary_path, $model_path, $data_path, $voice, $speed, $espeak_lang, $cache_key, $directory, $timeout);
+    }
+    else {
+      $this->generateSingle($text, $ogg_output, $binary_path, $model_path, $data_path, $voice, $speed, $espeak_lang, $directory, $timeout);
+    }
+
+    $uri = $audio_dir . '/' . $cache_key . '.ogg';
+
+    // Only save metadata for cached files (requires entity context).
+    if ($use_cache) {
+      $this->saveMetadata($cache_key, $text, $voice, $speed, $options);
+    }
+
+    return $uri;
+  }
+
+  /**
+   * Generate audio for a single (short) text and transcode to OGG Opus.
+   *
+   * @param string $text
+   *   The text to synthesise.
+   * @param string $ogg_output
+   *   Absolute path for the final .ogg file.
+   * @param string $binary_path
+   *   Path to the koko binary.
+   * @param string $model_path
+   *   Path to the ONNX model.
+   * @param string $data_path
+   *   Path to the voice data file.
+   * @param string $voice
+   *   Voice identifier.
+   * @param float $speed
+   *   Speech speed.
+   * @param string $espeak_lang
+   *   Espeak-ng language identifier.
+   * @param string $directory
+   *   Real path to the audio output directory.
+   * @param int $timeout
+   *   Generation timeout in seconds.
+   */
+  protected function generateSingle($text, $ogg_output, $binary_path, $model_path, $data_path, $voice, $speed, $espeak_lang, $directory, $timeout) {
+    $wav_file = $directory . '/' . md5($ogg_output) . '_single.wav';
+
+    $command = sprintf(
+      '%s --lan %s --model %s --data %s --style %s --speed %s text %s --output %s 2>&1',
+      escapeshellarg($binary_path),
+      escapeshellarg($espeak_lang),
+      escapeshellarg($model_path),
+      escapeshellarg($data_path),
+      escapeshellarg($voice),
+      escapeshellarg((string) $speed),
+      escapeshellarg($text),
+      escapeshellarg($wav_file)
+    );
+
+    $this->logger->info('Executing TTS command for single text');
+
+    $result = $this->execWithTimeout($command, $timeout);
+    $this->handleExecResult($result, $wav_file, $timeout);
+
+    $this->transcodeToOpus($wav_file, $ogg_output);
+  }
+
+  /**
+   * Generate audio for long text by splitting into chunks.
+   *
+   * Each chunk is generated as a separate WAV, then all chunks are
+   * concatenated and transcoded to a single OGG Opus file.
+   *
+   * @param string $text
+   *   The full text to synthesise.
+   * @param string $ogg_output
+   *   Absolute path for the final .ogg file.
+   * @param string $binary_path
+   *   Path to the koko binary.
+   * @param string $model_path
+   *   Path to the ONNX model.
+   * @param string $data_path
+   *   Path to the voice data file.
+   * @param string $voice
+   *   Voice identifier.
+   * @param float $speed
+   *   Speech speed.
+   * @param string $espeak_lang
+   *   Espeak-ng language identifier.
+   * @param string $cache_key
+   *   Cache key used for naming temporary chunk files.
+   * @param string $directory
+   *   Real path to the audio output directory.
+   * @param int $timeout
+   *   Generation timeout in seconds per chunk.
+   */
+  protected function generateChunked($text, $ogg_output, $binary_path, $model_path, $data_path, $voice, $speed, $espeak_lang, $cache_key, $directory, $timeout) {
+    $chunks = $this->splitIntoChunks($text);
+    $chunk_files = [];
+
+    try {
+      foreach ($chunks as $index => $chunk_text) {
+        $chunk_wav = $directory . '/' . $cache_key . '_chunk' . $index . '.wav';
+        $chunk_files[] = $chunk_wav;
+
+        $command = sprintf(
+          '%s --lan %s --model %s --data %s --style %s --speed %s text %s --output %s 2>&1',
+          escapeshellarg($binary_path),
+          escapeshellarg($espeak_lang),
+          escapeshellarg($model_path),
+          escapeshellarg($data_path),
+          escapeshellarg($voice),
+          escapeshellarg((string) $speed),
+          escapeshellarg($chunk_text),
+          escapeshellarg($chunk_wav)
+        );
+
+        $this->logger->info('Generating chunk @i of @total', [
+          '@i' => $index + 1,
+          '@total' => count($chunks),
+        ]);
+
+        $result = $this->execWithTimeout($command, $timeout);
+        $this->handleExecResult($result, $chunk_wav, $timeout);
+      }
+
+      // Concatenate and transcode all chunks in one ffmpeg call.
+      $this->concatAndTranscode($chunk_files, $ogg_output, $directory, $cache_key);
+    }
+    finally {
+      // Clean up temporary chunk WAV files.
+      foreach ($chunk_files as $file) {
+        if (file_exists($file)) {
+          @unlink($file);
+        }
+      }
+      // Clean up the concat list file if it exists.
+      $list_file = $directory . '/' . $cache_key . '_concat.txt';
+      if (file_exists($list_file)) {
+        @unlink($list_file);
+      }
+    }
+  }
+
+  /**
+   * Handle the result of a koko TTS execution.
+   *
+   * @param array $result
+   *   Result array from execWithTimeout.
+   * @param string $output_file
+   *   Expected WAV output file path.
+   * @param int $timeout
+   *   Timeout value used, for error messages.
+   */
+  protected function handleExecResult(array $result, $output_file, $timeout) {
     if ($result['return_code'] !== 0) {
       if ($result['timeout']) {
         $this->logger->error('Koko TTS timed out after @timeout seconds', ['@timeout' => $timeout]);
@@ -284,15 +421,124 @@ class TtsService {
       $this->logger->error('Audio file was not created at: @path', ['@path' => $output_file]);
       throw new TtsServiceUnavailableException(sprintf('TTS audio file was not created at: %s', $output_file));
     }
+  }
 
-    $uri = $audio_dir . '/' . $cache_key . '.wav';
+  /**
+   * Concatenate multiple WAV files and transcode to OGG Opus.
+   *
+   * Uses ffmpeg's concat demuxer to join WAV chunks, then encodes
+   * the result as OGG Opus in a single pass.
+   *
+   * @param array $wav_files
+   *   Array of WAV file paths to concatenate.
+   * @param string $ogg_output
+   *   Destination path for the OGG Opus file.
+   * @param string $directory
+   *   Working directory for the concat list file.
+   * @param string $cache_key
+   *   Cache key for naming the temporary list file.
+   */
+  protected function concatAndTranscode(array $wav_files, $ogg_output, $directory, $cache_key) {
+    $list_file = $directory . '/' . $cache_key . '_concat.txt';
+    $lines = [];
+    foreach ($wav_files as $path) {
+      $escaped = str_replace("'", "'\\''", $path);
+      $lines[] = "file '" . $escaped . "'";
+    }
+    file_put_contents($list_file, implode("\n", $lines));
 
-    // Only save metadata for cached files (requires entity context).
-    if ($use_cache) {
-      $this->saveMetadata($cache_key, $text, $voice, $speed, $options);
+    $command = sprintf(
+      'ffmpeg -y -f concat -safe 0 -i %s -c:a libopus -b:a 48k %s 2>&1',
+      escapeshellarg($list_file),
+      escapeshellarg($ogg_output)
+    );
+
+    $result = $this->execWithTimeout($command, 60);
+
+    if ($result['return_code'] !== 0) {
+      $this->logger->error('ffmpeg concat+transcode failed: @output', [
+        '@output' => implode("\n", $result['output']),
+      ]);
+      throw new \RuntimeException(sprintf('ffmpeg concat and transcode failed: %s', implode(' ', array_slice($result['output'], -3))));
     }
 
-    return $uri;
+    if (!file_exists($ogg_output)) {
+      throw new \RuntimeException(sprintf('ffmpeg did not produce output file: %s', $ogg_output));
+    }
+  }
+
+  /**
+   * Transcode a WAV file to OGG Opus and remove the source WAV.
+   *
+   * @param string $wav_path
+   *   Path to the source WAV file.
+   * @param string $ogg_path
+   *   Path for the output OGG Opus file.
+   *
+   * @throws \RuntimeException
+   *   When ffmpeg fails or the output file is not created.
+   */
+  protected function transcodeToOpus($wav_path, $ogg_path) {
+    $command = sprintf(
+      'ffmpeg -y -i %s -c:a libopus -b:a 48k %s 2>&1',
+      escapeshellarg($wav_path),
+      escapeshellarg($ogg_path)
+    );
+
+    $result = $this->execWithTimeout($command, 60);
+
+    if ($result['return_code'] !== 0) {
+      $this->logger->error('ffmpeg transcode failed: @output', [
+        '@output' => implode("\n", $result['output']),
+      ]);
+      throw new \RuntimeException(sprintf('ffmpeg transcode to OGG Opus failed: %s', implode(' ', array_slice($result['output'], -3))));
+    }
+
+    if (!file_exists($ogg_path)) {
+      throw new \RuntimeException(sprintf('ffmpeg did not produce output file: %s', $ogg_path));
+    }
+
+    // Remove the intermediate WAV file.
+    @unlink($wav_path);
+  }
+
+  /**
+   * Split text into chunks at sentence boundaries.
+   *
+   * @param string $text
+   *   The text to split.
+   * @param int $max_length
+   *   Maximum characters per chunk.
+   *
+   * @return array
+   *   Array of text chunks, each at most $max_length characters
+   *   (unless a single sentence exceeds the limit).
+   */
+  public function splitIntoChunks($text, $max_length = self::CHUNK_SIZE) {
+    // Split at sentence boundaries: . ! ? followed by whitespace.
+    $sentences = preg_split('/(?<=[.!?])\s+/', $text, -1, PREG_SPLIT_NO_EMPTY);
+    $chunks = [];
+    $current_chunk = '';
+
+    foreach ($sentences as $sentence) {
+      $candidate = $current_chunk === '' ? $sentence : $current_chunk . ' ' . $sentence;
+      if (mb_strlen($candidate) <= $max_length) {
+        $current_chunk = $candidate;
+      }
+      else {
+        if ($current_chunk !== '') {
+          $chunks[] = $current_chunk;
+        }
+        // Sentence itself exceeds limit; include it as its own chunk.
+        $current_chunk = $sentence;
+      }
+    }
+
+    if ($current_chunk !== '') {
+      $chunks[] = $current_chunk;
+    }
+
+    return $chunks;
   }
 
   /**
@@ -330,7 +576,7 @@ class TtsService {
    *   Drupal language code (e.g., 'en', 'es', 'ja').
    *
    * @return string
-   *   espeak-ng language identifier.
+   *   Espeak-ng language identifier.
    *
    * @see https://github.com/espeak-ng/espeak-ng/blob/master/docs/languages.md
    */
@@ -571,7 +817,7 @@ class TtsService {
       throw new \RuntimeException(sprintf('Audio directory could not be resolved: %s', $audio_dir));
     }
 
-    $file_path = $directory . '/' . $cache_key . '.wav';
+    $file_path = $directory . '/' . $cache_key . '.ogg';
     $file_size = file_exists($file_path) ? filesize($file_path) : 0;
     $now = \Drupal::time()->getRequestTime();
 
@@ -591,11 +837,9 @@ class TtsService {
       $record['entity_id'] = $options['entity_id'];
     }
 
-    // Database connection may have timed out during long TTS generation.
-    // Close and reconnect the database connection.
+    // Reconnect if the database timed out during long TTS generation.
     $database = \Drupal::database();
 
-    // Check if connection is still alive.
     try {
       $database->query('SELECT 1')->fetchField();
     }
@@ -605,9 +849,7 @@ class TtsService {
       $this->logger->info('Database connection refreshed before saving metadata.');
     }
 
-    // Use entity_type + entity_id + language as the merge key to allow multiple
-    // entities to share the same audio file (same cache_key) when they have
-    // identical content.
+    // Merge on entity_type + entity_id + language when entity context exists.
     $merge_keys = [];
     if (isset($record['entity_type'], $record['entity_id'])) {
       $merge_keys = [
@@ -689,7 +931,7 @@ class TtsService {
 
     $deleted = 0;
     foreach ($cache_keys as $cache_key) {
-      $file_path = $directory . '/' . $cache_key . '.wav';
+      $file_path = $directory . '/' . $cache_key . '.ogg';
       if (file_exists($file_path)) {
         @unlink($file_path);
         $deleted++;
@@ -818,7 +1060,7 @@ class TtsService {
       usleep(100000);
     }
 
-    // Timeout occurred - terminate the process.
+    // Timeout: terminate the process.
     proc_terminate($process, 9);
     fclose($pipes[1]);
     fclose($pipes[2]);

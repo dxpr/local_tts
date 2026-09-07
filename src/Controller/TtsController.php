@@ -2,23 +2,24 @@
 
 namespace Drupal\local_tts\Controller;
 
-use Drupal\Core\TypedData\TranslatableInterface;
-use Drupal\Core\Entity\FieldableEntityInterface;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\local_tts\Exception\TtsServiceUnavailableException;
-use Drupal\local_tts\Exception\TtsTimeoutException;
-use Drupal\local_tts\TtsService;
+use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Controller\ControllerBase;
+use Drupal\Core\Database\Connection;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\File\FileUrlGeneratorInterface;
+use Drupal\Core\Queue\QueueFactory;
+use Drupal\Core\Render\RendererInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\Core\State\StateInterface;
-use Drupal\Component\Datetime\TimeInterface;
+use Drupal\Core\TypedData\TranslatableInterface;
+use Drupal\Core\Url;
+use Drupal\local_tts\TtsService;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
- * Controller for TTS generation endpoints.
+ * Controller for TTS generation and status endpoints.
  */
 final class TtsController extends ControllerBase {
 
@@ -70,6 +71,27 @@ final class TtsController extends ControllerBase {
   protected $entityTypeManager;
 
   /**
+   * The database connection.
+   *
+   * @var \Drupal\Core\Database\Connection
+   */
+  protected $database;
+
+  /**
+   * The queue factory.
+   *
+   * @var \Drupal\Core\Queue\QueueFactory
+   */
+  protected $queueFactory;
+
+  /**
+   * The renderer service.
+   *
+   * @var \Drupal\Core\Render\RendererInterface
+   */
+  protected $renderer;
+
+  /**
    * Constructs a TtsController object.
    *
    * @param \Drupal\local_tts\TtsService $tts_service
@@ -84,6 +106,12 @@ final class TtsController extends ControllerBase {
    *   The time service.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
    *   The entity type manager.
+   * @param \Drupal\Core\Database\Connection $database
+   *   The database connection.
+   * @param \Drupal\Core\Queue\QueueFactory $queue_factory
+   *   The queue factory.
+   * @param \Drupal\Core\Render\RendererInterface $renderer
+   *   The renderer service.
    */
   public function __construct(
     TtsService $tts_service,
@@ -92,6 +120,9 @@ final class TtsController extends ControllerBase {
     StateInterface $state,
     TimeInterface $time,
     EntityTypeManagerInterface $entity_type_manager,
+    Connection $database,
+    QueueFactory $queue_factory,
+    RendererInterface $renderer,
   ) {
     $this->ttsService = $tts_service;
     $this->fileUrlGenerator = $file_url_generator;
@@ -99,6 +130,9 @@ final class TtsController extends ControllerBase {
     $this->state = $state;
     $this->time = $time;
     $this->entityTypeManager = $entity_type_manager;
+    $this->database = $database;
+    $this->queueFactory = $queue_factory;
+    $this->renderer = $renderer;
   }
 
   /**
@@ -111,18 +145,25 @@ final class TtsController extends ControllerBase {
       $container->get('current_user'),
       $container->get('state'),
       $container->get('datetime.time'),
-      $container->get('entity_type.manager')
+      $container->get('entity_type.manager'),
+      $container->get('database'),
+      $container->get('queue'),
+      $container->get('renderer')
     );
   }
 
   /**
-   * Generate speech from text.
+   * Generate speech from an entity's rendered text content.
+   *
+   * Returns cached audio immediately when the content hash or file cache
+   * matches. Otherwise queues the generation job and returns a poll URL
+   * so the client can check back for completion.
    *
    * @param \Symfony\Component\HttpFoundation\Request $request
    *   The request object.
    *
    * @return \Symfony\Component\HttpFoundation\JsonResponse
-   *   JSON response with file URL or error details.
+   *   JSON response with file URL, processing status, or error details.
    */
   public function generate(Request $request) {
     $voice = $request->request->get('voice') ?: $request->query->get('voice');
@@ -130,9 +171,7 @@ final class TtsController extends ControllerBase {
     $entity_type = $request->request->get('entity_type') ?: $request->query->get('entity_type');
     $entity_id = $request->request->get('entity_id') ?: $request->query->get('entity_id');
     $language_from_request = $request->request->get('language') ?: $request->query->get('language');
-    $fields_json = $request->request->get('fields') ?: $request->query->get('fields');
 
-    // HTTP 400: Bad Request - Entity reference required.
     // SECURITY: Never accept text from client.
     if (empty($entity_type) || empty($entity_id)) {
       return new JsonResponse([
@@ -146,8 +185,7 @@ final class TtsController extends ControllerBase {
       $storage = $this->entityTypeManager->getStorage($entity_type);
       $entity = $storage->load($entity_id);
 
-      // Load specific translation if language provided.
-      // Follow Drupal core pattern: try exact match, then base language.
+      // Try exact translation match, then fall back to base language.
       if ($entity && $language_from_request && $entity instanceof TranslatableInterface) {
         if ($entity->hasTranslation($language_from_request)) {
           $entity = $entity->getTranslation($language_from_request);
@@ -167,7 +205,6 @@ final class TtsController extends ControllerBase {
         ], 404);
       }
 
-      // Check access control.
       if (!$entity->access('view', $this->currentUser())) {
         return new JsonResponse([
           'error' => 'Forbidden',
@@ -175,8 +212,8 @@ final class TtsController extends ControllerBase {
         ], 403);
       }
 
-      // Extract text from entity fields.
-      $text = $this->extractTextFromEntity($entity, $fields_json);
+      // Render-based text extraction captures computed fields.
+      $text = $this->extractTextFromEntity($entity);
 
       if (empty(trim($text))) {
         return new JsonResponse([
@@ -185,18 +222,44 @@ final class TtsController extends ControllerBase {
         ], 400);
       }
 
-      // Detect language from entity.
       $language = $entity->language()->getId();
     }
     catch (\Exception $e) {
-      $this->getLogger('local_tts')->error('Error loading entity: @message', ['@message' => $e->getMessage()]);
+      $this->getLogger('local_tts')->error('Error loading entity: @message', [
+        '@message' => $e->getMessage(),
+      ]);
       return new JsonResponse([
         'error' => 'Internal Server Error',
         'message' => 'Failed to load entity',
       ], 500);
     }
 
-    // HTTP 429: Too Many Requests - Rate limiting.
+    // Content change detection: serve cached audio when text is unchanged.
+    $config = $this->config('local_tts.settings');
+    $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
+    $text_hash = md5($text);
+
+    $existing = $this->database->select('local_tts_cache', 'c')
+      ->fields('c', ['cache_key', 'text_hash'])
+      ->condition('entity_type', $entity_type)
+      ->condition('entity_id', $entity_id)
+      ->condition('language', $language)
+      ->execute()
+      ->fetchAssoc();
+
+    if ($existing && $existing['text_hash'] === $text_hash) {
+      $cached_uri = $this->findAudioFile($audio_dir, $existing['cache_key']);
+      if ($cached_uri) {
+        $audio_url = $this->fileUrlGenerator->generateAbsoluteString($cached_uri);
+        return new JsonResponse([
+          'success' => TRUE,
+          'audio_url' => $audio_url,
+          'text' => mb_substr($text, 0, 100) . (mb_strlen($text) > 100 ? '...' : ''),
+        ]);
+      }
+    }
+
+    // HTTP 429: Rate limiting.
     if (!$this->checkRateLimit()) {
       $retry_after = $this->getRetryAfter();
       $minutes = max(1, (int) ceil($retry_after / 60));
@@ -208,93 +271,145 @@ final class TtsController extends ControllerBase {
       ], 429, ['Retry-After' => $retry_after]);
     }
 
-    $options = [
+    // Compute cache key using the same formula as TtsService.
+    $resolved_voice = $voice ?: $config->get('default_voice');
+    $resolved_speed = $speed ? (float) $speed : (float) ($config->get('default_speed') ?: 1);
+    $cache_key = $this->computeCacheKey($text, $resolved_voice, $resolved_speed, $language);
+
+    // Return immediately when the file already exists on disk.
+    $cached_uri = $this->findAudioFile($audio_dir, $cache_key);
+    if ($cached_uri) {
+      $audio_url = $this->fileUrlGenerator->generateAbsoluteString($cached_uri);
+      return new JsonResponse([
+        'success' => TRUE,
+        'audio_url' => $audio_url,
+        'text' => mb_substr($text, 0, 100) . (mb_strlen($text) > 100 ? '...' : ''),
+      ]);
+    }
+
+    // Queue for background generation and return a poll URL.
+    $queue = $this->queueFactory->get('local_tts_generate');
+    $queue->createItem([
+      'text' => $text,
       'entity_type' => $entity_type,
       'entity_id' => $entity_id,
-    ];
-    if ($voice) {
-      $options['voice'] = $voice;
-    }
-    if ($speed) {
-      $options['speed'] = (float) $speed;
-    }
-    if ($language) {
-      $options['language'] = $language;
-    }
+      'voice' => $resolved_voice,
+      'speed' => $resolved_speed,
+      'language' => $language,
+      'cache_key' => $cache_key,
+    ]);
 
-    // Generate speech with proper error handling.
-    try {
-      $audio_uri = $this->ttsService->generateSpeech($text, $options);
-    }
-    catch (\InvalidArgumentException $e) {
-      return new JsonResponse([
-        'error' => 'Bad Request',
-        'message' => $e->getMessage(),
-      ], 400);
-    }
-    catch (TtsTimeoutException $e) {
-      $this->getLogger('local_tts')->warning('TTS generation timeout: @message', [
-        '@message' => $e->getMessage(),
-      ]);
-      return new JsonResponse([
-        'error' => 'Request Timeout',
-        'message' => 'Audio generation timed out. Try with shorter text.',
-      ], 408);
-    }
-    catch (TtsServiceUnavailableException $e) {
-      $this->getLogger('local_tts')->error('TTS service unavailable: @message', [
-        '@message' => $e->getMessage(),
-      ]);
-
-      $raw = $e->getMessage();
-      $response = $this->buildServiceErrorResponse($raw);
-
-      return new JsonResponse($response, 503);
-    }
-    catch (\RuntimeException $e) {
-      // Check if this is an access denied error.
-      if (strpos($e->getMessage(), 'private content') !== FALSE) {
-        return new JsonResponse([
-          'error' => 'Access denied',
-          'message' => $e->getMessage(),
-        ], 403);
-      }
-
-      $this->getLogger('local_tts')->error('TTS generation runtime error: @message', [
-        '@message' => $e->getMessage(),
-      ]);
-      return new JsonResponse([
-        'error' => 'Internal Server Error',
-        'message' => 'An error occurred while generating speech',
-      ], 500);
-    }
-    catch (\Exception $e) {
-      $this->getLogger('local_tts')->error('TTS generation unexpected error: @message', [
-        '@message' => $e->getMessage(),
-      ]);
-      return new JsonResponse([
-        'error' => 'Internal Server Error',
-        'message' => 'An unexpected error occurred',
-      ], 500);
-    }
-
-    // HTTP 503: Service Unavailable - Failed to generate (NULL returned).
-    if (!$audio_uri) {
-      $this->getLogger('local_tts')->error('TTS generation returned NULL without exception');
-      return new JsonResponse([
-        'error' => 'Service Unavailable',
-        'message' => 'Failed to generate speech. Please try again later.',
-      ], 503);
-    }
-
-    // HTTP 200: Success.
-    $audio_url = $this->fileUrlGenerator->generateAbsoluteString($audio_uri);
+    $status_url = Url::fromRoute('local_tts.status', [
+      'cache_key' => $cache_key,
+    ])->toString();
 
     return new JsonResponse([
-      'success' => TRUE,
-      'audio_url' => $audio_url,
-      'text' => mb_substr($text, 0, 100) . (mb_strlen($text) > 100 ? '...' : ''),
-    ], 200);
+      'status' => 'processing',
+      'poll_url' => $status_url,
+      'cache_key' => $cache_key,
+    ]);
+  }
+
+  /**
+   * Check whether a queued audio file is ready.
+   *
+   * @param string $cache_key
+   *   The MD5 cache key identifying the audio file.
+   *
+   * @return \Symfony\Component\HttpFoundation\JsonResponse
+   *   JSON with status "ready" and audio_url, or status "processing".
+   */
+  public function status(string $cache_key): JsonResponse {
+    $config = $this->config('local_tts.settings');
+    $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
+
+    $audio_uri = $this->findAudioFile($audio_dir, $cache_key);
+    if ($audio_uri) {
+      $audio_url = $this->fileUrlGenerator->generateAbsoluteString($audio_uri);
+      return new JsonResponse([
+        'status' => 'ready',
+        'audio_url' => $audio_url,
+      ]);
+    }
+
+    return new JsonResponse([
+      'status' => 'processing',
+    ]);
+  }
+
+  /**
+   * Find an audio file on disk, checking both .ogg and .wav extensions.
+   *
+   * @param string $audio_dir
+   *   The audio directory URI (e.g. public://local-tts).
+   * @param string $cache_key
+   *   The MD5 cache key (filename without extension).
+   *
+   * @return string|null
+   *   The file URI if found, or NULL.
+   */
+  protected function findAudioFile(string $audio_dir, string $cache_key): ?string {
+    foreach (['.ogg', '.wav'] as $ext) {
+      $uri = $audio_dir . '/' . $cache_key . $ext;
+      if (file_exists($uri)) {
+        return $uri;
+      }
+    }
+    return NULL;
+  }
+
+  /**
+   * Compute a TTS cache key using the same formula as TtsService.
+   *
+   * @param string $text
+   *   The source text.
+   * @param string $voice
+   *   The resolved voice code.
+   * @param float $speed
+   *   The resolved speech speed.
+   * @param string $language
+   *   The Drupal language code.
+   *
+   * @return string
+   *   The MD5 cache key.
+   */
+  protected function computeCacheKey(string $text, string $voice, float $speed, string $language): string {
+    $espeak_lang = $this->mapLanguageToEspeak($language);
+    return md5($text . $voice . $speed . $espeak_lang);
+  }
+
+  /**
+   * Map a Drupal language code to an espeak-ng identifier.
+   *
+   * Replicates the protected TtsService::mapLanguageToEspeak() so the
+   * controller can compute matching cache keys.
+   *
+   * @param string $langcode
+   *   Drupal language code (e.g. 'en', 'es', 'ja').
+   *
+   * @return string
+   *   The espeak-ng language identifier.
+   */
+  protected function mapLanguageToEspeak(string $langcode): string {
+    $langcode = strtolower($langcode);
+    $map = [
+      'en' => 'en-us',
+      'en-us' => 'en-us',
+      'en-gb' => 'en-gb',
+      'es' => 'es',
+      'fr' => 'fr-fr',
+      'hi' => 'hi',
+      'it' => 'it',
+      'ja' => 'ja',
+      'pt' => 'pt-pt',
+      'pt-br' => 'pt-br',
+      'pt-pt' => 'pt-pt',
+      'zh' => 'cmn',
+      'zh-hans' => 'cmn',
+      'zh-hant' => 'cmn',
+      'ko' => 'ko',
+    ];
+    return $map[$langcode] ?? 'en-us';
   }
 
   /**
@@ -332,7 +447,6 @@ final class TtsController extends ControllerBase {
       return ($current_time - $timestamp) < self::RATE_LIMIT_WINDOW;
     });
 
-    // Check if threshold exceeded.
     if (count($attempts) >= $threshold) {
       return FALSE;
     }
@@ -359,169 +473,60 @@ final class TtsController extends ControllerBase {
       return 0;
     }
 
-    // Get oldest attempt timestamp.
     $oldest_attempt = min($attempts);
     $current_time = $this->time->getRequestTime();
 
-    // Calculate when the oldest attempt will expire.
     $retry_after = ($oldest_attempt + self::RATE_LIMIT_WINDOW) - $current_time;
 
     return max(0, $retry_after);
   }
 
   /**
-   * Build a structured 503 error response with role-appropriate messages.
+   * Extract text from an entity using Drupal's render system.
    *
-   * @param string $raw_message
-   *   The raw exception message from TtsService.
-   *
-   * @return array
-   *   Response array with error, error_code, message, and admin_message.
-   */
-  protected function buildServiceErrorResponse($raw_message) {
-    $is_admin = $this->currentUser->hasPermission('administer local tts settings');
-
-    if (strpos($raw_message, 'Server is experiencing high load') !== FALSE) {
-      $config = $this->config('local_tts.settings');
-      $threshold = $config->get('max_server_load') ?? 2;
-
-      return [
-        'error' => 'Service Unavailable',
-        'error_code' => 'server_load',
-        'message' => $is_admin
-          ? $raw_message . ' The current threshold is ' . $threshold . '. You can adjust this in the TTS settings. Set it to 0 to disable the load check.'
-          : 'Audio is temporarily unavailable due to high server demand. Please try again shortly.',
-      ];
-    }
-
-    if (strpos($raw_message, 'TTS binary not found') !== FALSE ||
-        strpos($raw_message, 'not executable') !== FALSE ||
-        strpos($raw_message, 'Model file not found') !== FALSE ||
-        strpos($raw_message, 'Data file not found') !== FALSE ||
-        strpos($raw_message, 'Failed to create audio directory') !== FALSE) {
-      return [
-        'error' => 'Service Unavailable',
-        'error_code' => 'not_configured',
-        'message' => $is_admin
-          ? 'TTS configuration error: ' . $raw_message . ' Check the TTS settings page.'
-          : 'The audio service is currently unavailable. The site administrator has been notified.',
-      ];
-    }
-
-    return [
-      'error' => 'Service Unavailable',
-      'error_code' => 'unknown',
-      'message' => $is_admin
-        ? 'TTS error: ' . $raw_message
-        : 'Audio generation failed. Please try again later.',
-    ];
-  }
-
-  /**
-   * Extract text content from entity fields (server-side only).
-   *
-   * SECURITY: This method validates and sanitizes all text extraction.
-   * Never trust client-provided text.
+   * Renders the entity in default view mode and strips HTML, capturing
+   * computed fields, Views fields, and block field content that the
+   * previous field-by-field approach missed.
    *
    * @param \Drupal\Core\Entity\EntityInterface $entity
    *   The entity to extract text from.
-   * @param string|null $fields_json
-   *   JSON-encoded array of field names to extract (optional).
    *
    * @return string
-   *   The extracted and sanitized text content.
+   *   The extracted and sanitized plain text content.
    */
-  protected function extractTextFromEntity($entity, $fields_json = NULL) {
-    $allowed_field_types = [
-      'string',
-      'string_long',
-      'text',
-      'text_long',
-      'text_with_summary',
-      'text_plain',
-      'email',
-      'telephone',
-    ];
-
-    $excluded_base_fields = [
-      'nid', 'uuid', 'vid', 'langcode', 'type', 'revision_timestamp',
-      'revision_uid', 'revision_log', 'status', 'uid', 'created', 'changed',
-      'promote', 'sticky', 'default_langcode', 'revision_default',
-      'revision_translation_affected', 'metatag', 'path', 'menu_link',
-      'tid', 'weight', 'parent', 'description__format',
-    ];
-
-    $selected_fields = [];
-    if ($fields_json) {
-      $decoded = json_decode($fields_json, TRUE);
-      if (is_array($decoded)) {
-        $selected_fields = $decoded;
-      }
+  protected function extractTextFromEntity($entity) {
+    try {
+      $langcode = $entity->language()->getId();
+      $entity_type_id = $entity->getEntityTypeId();
+      $view_builder = $this->entityTypeManager->getViewBuilder($entity_type_id);
+      $view = $view_builder->view($entity, 'default', $langcode);
+      $rendered = $this->renderer->renderPlain($view);
+      return $this->htmlToPlainText((string) $rendered);
     }
-
-    $content = '';
-
-    if (!($entity instanceof FieldableEntityInterface)) {
-      return $content;
+    catch (\Exception $e) {
+      $this->getLogger('local_tts')->warning('Render-based text extraction failed: @msg', [
+        '@msg' => $e->getMessage(),
+      ]);
+      return '';
     }
-
-    foreach ($entity->getFieldDefinitions() as $field_name => $field_definition) {
-      // Skip excluded base fields.
-      if (in_array($field_name, $excluded_base_fields, TRUE)) {
-        continue;
-      }
-
-      // If specific fields were requested, only process those.
-      if (!empty($selected_fields) && !in_array($field_name, $selected_fields, TRUE)) {
-        continue;
-      }
-
-      if ($entity->hasField($field_name)) {
-        $field = $entity->get($field_name);
-
-        // Check field-level access.
-        if (!$field->access('view', $this->currentUser())) {
-          continue;
-        }
-
-        if (!$field->isEmpty() && in_array($field_definition->getType(), $allowed_field_types)) {
-          foreach ($field as $item) {
-            // Get the actual value - handle different item types.
-            if (isset($item->value)) {
-              $text = $item->value;
-            }
-            elseif (is_string($item)) {
-              $text = $item;
-            }
-            else {
-              continue;
-            }
-
-            // Insert sentence breaks at block-level tag boundaries so the
-            // TTS engine pauses between headings, paragraphs, list items, etc.
-            $text = $this->htmlToPlainText($text);
-            if (!empty(trim($text))) {
-              $content .= (strlen($content) > 0 ? ' ' : '') . $text;
-            }
-          }
-        }
-      }
-    }
-
-    return $content;
   }
 
   /**
    * Convert HTML to plain text with sentence breaks at block boundaries.
+   *
+   * @param string $html
+   *   The HTML string to convert.
+   *
+   * @return string
+   *   Clean plain text with natural sentence breaks.
    */
   protected function htmlToPlainText(string $html): string {
     $block_tags = 'h[1-6]|p|div|section|article|header|footer|nav|aside|main|'
       . 'blockquote|pre|figure|figcaption|details|summary|'
       . 'li|dt|dd|tr|th|td|caption';
 
-    // Add a full stop + newline after closing block-level tags.
+    // Insert sentence breaks after closing block-level tags.
     $html = preg_replace('#</(' . $block_tags . ')>#i', '. ', $html);
-    // Also handle self-closing <br> and <hr>.
     $html = preg_replace('#<br\s*/?\s*>#i', '. ', $html);
     $html = preg_replace('#<hr\s*/?\s*>#i', '. ', $html);
 

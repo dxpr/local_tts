@@ -2,6 +2,31 @@
 
 ## System dependencies
 
+### ffmpeg
+
+ffmpeg is required for transcoding generated WAV audio to OGG Opus format.
+Install it before enabling the module.
+
+```bash
+# macOS
+brew install ffmpeg
+
+# Ubuntu/Debian
+sudo apt-get install ffmpeg
+
+# Fedora/RHEL
+sudo dnf install ffmpeg
+
+# Arch Linux
+sudo pacman -S ffmpeg
+```
+
+Verify that the `libopus` codec is available:
+
+```bash
+ffmpeg -codecs 2>/dev/null | grep opus
+```
+
 ### eSpeak NG
 
 eSpeak NG is required for text-to-phoneme conversion. Install it before

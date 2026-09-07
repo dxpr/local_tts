@@ -55,7 +55,7 @@ final class TtsCacheController extends ControllerBase {
     $directory = $this->fileSystem->realpath($audio_dir);
 
     if ($directory) {
-      $file_path = $directory . '/' . $cache_key . '.wav';
+      $file_path = $directory . '/' . $cache_key . '.ogg';
       if (file_exists($file_path)) {
         @unlink($file_path);
       }

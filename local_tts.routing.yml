@@ -46,3 +46,22 @@ local_tts.generate:
     _permission: 'generate local tts'
   options:
     no_cache: TRUE
+
+local_tts.status:
+  path: '/local-tts/status/{cache_key}'
+  defaults:
+    _controller: '\Drupal\local_tts\Controller\TtsController::status'
+  requirements:
+    _permission: 'generate local tts'
+    cache_key: '[a-f0-9]{32}'
+  options:
+    no_cache: TRUE
+
+local_tts.voice_preview:
+  path: '/admin/config/media/local-tts/preview'
+  defaults:
+    _controller: '\Drupal\local_tts\Controller\VoicePreviewController::preview'
+  requirements:
+    _permission: 'administer local tts settings'
+  options:
+    no_cache: TRUE

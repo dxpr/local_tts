@@ -9,3 +9,12 @@ player:
     - core/drupal
     - core/drupalSettings
     - core/once
+
+voice-preview:
+  version: 1.0
+  js:
+    js/local-tts-voice-preview.js: {}
+  dependencies:
+    - core/drupal
+    - core/drupalSettings
+    - core/once

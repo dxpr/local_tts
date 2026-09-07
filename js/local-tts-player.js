@@ -36,7 +36,10 @@
         let isPlaying = false;
         let currentAudioUrl = null;
         let lastAriaUpdate = 0;
+        let lastProgressSave = 0;
         const ARIA_THROTTLE_MS = 200;
+        const PROGRESS_SAVE_MS = 5000;
+        const storageKey = 'local_tts_progress_' + config.entityType + '_' + config.entityId;
 
         audioElement.loop = false;
         audioElement.preload = 'metadata';
@@ -140,6 +143,74 @@
           }, 8000);
         }
 
+        function saveProgress(time) {
+          try {
+            localStorage.setItem(storageKey, time.toString());
+          } catch (e) {
+            // Storage unavailable; silently ignore.
+          }
+        }
+
+        function getSavedProgress() {
+          try {
+            var saved = localStorage.getItem(storageKey);
+            if (saved) {
+              var value = parseFloat(saved);
+              if (isFinite(value)) {
+                return value;
+              }
+            }
+          } catch (e) {
+            // Storage unavailable; silently ignore.
+          }
+          return 0;
+        }
+
+        function clearSavedProgress() {
+          try {
+            localStorage.removeItem(storageKey);
+          } catch (e) {
+            // Storage unavailable; silently ignore.
+          }
+        }
+
+        function pollForAudio(pollUrl) {
+          var maxPollTime = 5 * 60 * 1000;
+          var pollInterval = 3000;
+          var startTime = Date.now();
+
+          function poll() {
+            if (Date.now() - startTime > maxPollTime) {
+              var timeoutMsg = Drupal.t('Audio generation timed out. Please try again later.');
+              if (labelText) {
+                labelText.innerHTML = '<span class="local-tts-error">⚠</span> ' + timeoutMsg;
+              }
+              updateStatus(timeoutMsg, 'error');
+              playButton.disabled = false;
+              playButton.classList.remove('loading');
+              updateButtonStates();
+              restoreLabelAfterDelay();
+              return;
+            }
+
+            fetch(pollUrl)
+              .then(function (response) { return response.json(); })
+              .then(function (data) {
+                if (data.status === 'ready' && data.audio_url) {
+                  currentAudioUrl = data.audio_url;
+                  playSpeech(data.audio_url);
+                } else {
+                  setTimeout(poll, pollInterval);
+                }
+              })
+              .catch(function () {
+                setTimeout(poll, pollInterval);
+              });
+          }
+
+          setTimeout(poll, pollInterval);
+        }
+
         function generateSpeech() {
           const voice = voiceSelect ? voiceSelect.value : config.defaultVoice;
           const speed = speedInput ? parseFloat(speedInput.value) : config.defaultSpeed;
@@ -188,6 +259,11 @@
               if (result.ok && result.data.success && result.data.audio_url) {
                 currentAudioUrl = result.data.audio_url;
                 playSpeech(result.data.audio_url);
+              } else if (result.ok && result.data.status === 'processing' && result.data.poll_url) {
+                if (labelText) {
+                  labelText.innerHTML = '<span class="local-tts-loading"></span> ' + Drupal.t('Generating speech... This may take a moment.');
+                }
+                pollForAudio(result.data.poll_url);
               } else {
                 var errorMessage = result.data.message || Drupal.t('Unable to generate audio. Please try again later.');
 
@@ -225,6 +301,9 @@
 
           audioElement.addEventListener('canplaythrough', function onCanPlay() {
             audioElement.removeEventListener('canplaythrough', onCanPlay);
+
+            var savedPosition = getSavedProgress();
+
             audioElement.play().then(function() {
               isPlaying = true;
               playButton.disabled = false;
@@ -232,6 +311,31 @@
               updateButtonStates();
               showPlaybackControls();
               updateStatus('', 'status');
+
+              // Offer to resume from saved position.
+              if (savedPosition > 5 && isFinite(savedPosition) && savedPosition < audioElement.duration - 5) {
+                var formatted = formatDuration(savedPosition);
+                var resumeHtml = '<a href="#" class="local-tts-resume">' +
+                  Drupal.t('Resume from @time?', {'@time': formatted}) + '</a>';
+                updateStatus(resumeHtml, 'status');
+
+                var resumeLink = statusDiv.querySelector('.local-tts-resume');
+                if (resumeLink) {
+                  resumeLink.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    audioElement.currentTime = savedPosition;
+                    updateStatus('', 'status');
+                  });
+                }
+
+                // Auto-dismiss after 10 seconds.
+                setTimeout(function () {
+                  if (statusDiv.querySelector('.local-tts-resume')) {
+                    updateStatus('', 'status');
+                    clearSavedProgress();
+                  }
+                }, 10000);
+              }
             }).catch(function(error) {
               const errorMsg = Drupal.t('Error playing audio.');
               if (labelText) {
@@ -310,6 +414,7 @@
 
         audioElement.addEventListener('ended', function() {
           isPlaying = false;
+          clearSavedProgress();
           updateButtonStates();
           stopPlayback();
         });
@@ -347,8 +452,7 @@
           }
         });
 
-        // A11Y: CRITICAL - Do NOT update aria-valuenow or aria-valuetext during playback.
-        // Only update visual displays. ARIA updates on user interaction only.
+        // Visual-only updates during playback; ARIA on user interaction only.
         audioElement.addEventListener('timeupdate', function() {
           if (!audioElement.duration) {
             return;
@@ -370,6 +474,13 @@
           if (remainingTimeDisplay) {
             const remaining = duration - currentTime;
             remainingTimeDisplay.textContent = '-' + formatDuration(remaining);
+          }
+
+          // Persist playback progress (throttled).
+          var now = Date.now();
+          if (now - lastProgressSave >= PROGRESS_SAVE_MS) {
+            lastProgressSave = now;
+            saveProgress(currentTime);
           }
         });
 

@@ -375,7 +375,7 @@ final class TtsCacheOverviewForm extends FormBase {
 
     foreach ($selected as $cache_key) {
       if ($directory) {
-        $file_path = $directory . '/' . $cache_key . '.wav';
+        $file_path = $directory . '/' . $cache_key . '.ogg';
         if (file_exists($file_path)) {
           @unlink($file_path);
         }

@@ -42,6 +42,8 @@ function local_tts_cron() {
   if ($config->get('cache_size_limit_enabled')) {
     _local_tts_enforce_size_limit();
   }
+
+  _local_tts_cleanup_orphan_files();
 }
 
 /**
@@ -153,7 +155,7 @@ function _local_tts_cleanup_stale_content() {
     }
 
     if ($should_delete) {
-      $file_path = $directory . '/' . $record->cache_key . '.wav';
+      $file_path = $directory . '/' . $record->cache_key . '.ogg';
       if (file_exists($file_path)) {
         @unlink($file_path);
       }
@@ -203,7 +205,7 @@ function _local_tts_enforce_size_limit() {
       break;
     }
 
-    $file_path = $directory . '/' . $record->cache_key . '.wav';
+    $file_path = $directory . '/' . $record->cache_key . '.ogg';
     if (file_exists($file_path)) {
       @unlink($file_path);
     }
@@ -220,6 +222,62 @@ function _local_tts_enforce_size_limit() {
     \Drupal::logger('local_tts')->info('Deleted @count files (@size freed)', [
       '@count' => $deleted,
       '@size' => ByteSizeMarkup::create($bytes_freed),
+    ]);
+  }
+}
+
+/**
+ * Remove disk files that have no corresponding database record.
+ *
+ * Catches orphans left by voice previews, failed generation, manual
+ * database truncation, or race conditions during concurrent generation.
+ * Rate-limited to run at most once every 6 hours.
+ */
+function _local_tts_cleanup_orphan_files() {
+  $state = \Drupal::state();
+  $last_run = $state->get('local_tts.orphan_cleanup_last_run', 0);
+  if (\Drupal::time()->getRequestTime() - $last_run < 21600) {
+    return;
+  }
+  $state->set('local_tts.orphan_cleanup_last_run', \Drupal::time()->getRequestTime());
+
+  $directory = _local_tts_get_audio_directory();
+  if (!$directory) {
+    return;
+  }
+
+  // Scan for both .ogg and .wav files to handle the format transition.
+  $files = array_merge(
+    glob($directory . '/*.ogg') ?: [],
+    glob($directory . '/*.wav') ?: []
+  );
+
+  if (empty($files)) {
+    return;
+  }
+
+  // Limit to 500 files per run to avoid timeout.
+  $files = array_slice($files, 0, 500);
+
+  // Build a set of all known cache keys from the database.
+  $known_keys = \Drupal::database()->select('local_tts_cache', 'a')
+    ->fields('a', ['cache_key'])
+    ->execute()
+    ->fetchCol();
+  $known_keys = array_flip($known_keys);
+
+  $deleted = 0;
+  foreach ($files as $file_path) {
+    $cache_key = pathinfo($file_path, PATHINFO_FILENAME);
+    if (!isset($known_keys[$cache_key])) {
+      @unlink($file_path);
+      $deleted++;
+    }
+  }
+
+  if ($deleted > 0) {
+    \Drupal::logger('local_tts')->info('Deleted @count orphan audio files', [
+      '@count' => $deleted,
     ]);
   }
 }

@@ -312,6 +312,11 @@ class TtsPlayerBuilder {
 
     $js_default_voice = $this->getValidDefaultVoice($available_voices, $langcode);
 
+    // Build status polling base URL by stripping the placeholder key.
+    $dummy_key = str_repeat('0', 32);
+    $status_url = Url::fromRoute('local_tts.status', ['cache_key' => $dummy_key])->toString();
+    $status_base_url = str_replace($dummy_key, '', $status_url);
+
     // SECURITY: Pass only entity reference to JavaScript, NOT the content.
     $build['#attached'] = [
       'library' => ['local_tts/player'],
@@ -320,6 +325,7 @@ class TtsPlayerBuilder {
           'defaultVoice' => $js_default_voice,
           'defaultSpeed' => $global_config->get('default_speed'),
           'generateUrl' => Url::fromRoute('local_tts.generate')->toString(),
+          'statusBaseUrl' => $status_base_url,
           'language' => $langcode,
           'entityType' => $entity->getEntityTypeId(),
           'entityId' => $entity->id(),

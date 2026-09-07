@@ -20,13 +20,52 @@ The model (`kokoro-v1.0.onnx`) is approximately 310MB and the voice data
 (`voices-v1.0.bin`) is approximately 27MB. These files are downloaded
 automatically during `composer install`.
 
+## What audio format is used?
+
+Audio is generated as OGG Opus, which provides excellent compression at high
+quality. A typical article produces files in the 5 to 50KB range. The module
+first generates WAV via the Kokoro engine, then transcodes to OGG Opus using
+ffmpeg. ffmpeg must be installed on the server (see
+[Installation](../getting-started/installation.md)).
+
 ## How does caching work?
 
 Each generated audio file is cached on disk with a key derived from the text
 content hash, voice ID, speed, and language code. When a visitor requests
 audio for a page, the module checks for a cached file first and only generates
-new audio if the content has changed. The cache directory defaults to
-`public://local-tts/` and its size is configurable.
+new audio if the content has changed. A text hash stored in the database
+enables fast change detection without regenerating the audio. The cache
+directory defaults to `public://local-tts/` and its size is configurable.
+
+Orphan audio files (files on disk with no matching database record) are
+automatically cleaned up during cron, rate-limited to once every 6 hours.
+
+## How does queue-based generation work?
+
+When a visitor clicks play on uncached content, the module queues a background
+generation job and returns a polling URL. The player's JavaScript checks the
+status endpoint every 3 seconds, showing "Generating speech..." until the
+audio is ready. Queue items are processed during cron; for faster delivery,
+run cron frequently or use `drush queue:run local_tts_generate`.
+
+## How does the module handle long content?
+
+Content over 2000 characters is automatically split at sentence boundaries
+(full stops, exclamation marks, question marks). Each chunk is generated
+separately, then all chunks are concatenated and transcoded into a single
+OGG Opus file in one ffmpeg pass.
+
+## Can I preview voices before selecting one?
+
+Yes. The settings page at `/admin/config/media/local-tts` includes a
+"Preview" button next to each voice dropdown. Clicking it generates a short
+sample sentence in the selected voice and speed.
+
+## Does the player remember where I stopped?
+
+Yes. Playback position is saved to the browser's localStorage every 5 seconds.
+When a visitor returns to the same page, the player offers a "Resume from
+X:XX?" link. Progress is cleared when playback reaches the end.
 
 ## Can I use Local TTS without eSpeak NG?
 
