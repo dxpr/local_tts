@@ -4,7 +4,7 @@ local_tts.settings:
     _form: '\Drupal\local_tts\Form\LocalTtsSettingsForm'
     _title: 'Local TTS Settings'
   requirements:
-    _permission: 'administer ai tts settings'
+    _permission: 'administer local tts settings'
 
 local_tts.test:
   path: '/admin/config/media/local-tts/test'
@@ -12,7 +12,7 @@ local_tts.test:
     _form: '\Drupal\local_tts\Form\LocalTtsTestForm'
     _title: 'Test Local TTS'
   requirements:
-    _permission: 'administer ai tts settings'
+    _permission: 'administer local tts settings'
 
 local_tts.batch:
   path: '/admin/config/media/local-tts/batch'
@@ -20,13 +20,29 @@ local_tts.batch:
     _form: '\Drupal\local_tts\Form\LocalTtsBatchForm'
     _title: 'Batch TTS Generation'
   requirements:
-    _permission: 'administer ai tts settings'
+    _permission: 'administer local tts settings'
+
+local_tts.cache_overview:
+  path: '/admin/config/media/local-tts/cache'
+  defaults:
+    _form: '\Drupal\local_tts\Form\TtsCacheOverviewForm'
+    _title: 'Audio Cache'
+  requirements:
+    _permission: 'administer local tts settings'
+
+local_tts.cache_delete:
+  path: '/admin/config/media/local-tts/cache/delete/{cache_key}'
+  defaults:
+    _controller: '\Drupal\local_tts\Controller\TtsCacheController::deleteFile'
+  requirements:
+    _permission: 'administer local tts settings'
+    _csrf_token: 'TRUE'
 
 local_tts.generate:
   path: '/local-tts/generate'
   defaults:
     _controller: '\Drupal\local_tts\Controller\TtsController::generate'
   requirements:
-    _permission: 'generate ai tts'
+    _permission: 'generate local tts'
   options:
     no_cache: TRUE

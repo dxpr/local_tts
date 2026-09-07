@@ -1,0 +1,29 @@
+site_name: 'Local Text-to-Speech - Documentation'
+site_url: 'https://project.pages.drupalcode.org/local_tts/'
+repo_url: https://git.drupalcode.org/project/local_tts
+repo_name: drupal/local_tts
+edit_uri: -/edit/1.x/docs/
+exclude_docs: |
+  local_tts_project_desc.html
+
+theme:
+  name: material
+  features:
+    - navigation.footer
+
+plugins:
+  - search
+  - privacy:
+      enabled: !ENV [CI, false]
+
+nav:
+  - Home: 'index.md'
+  - Getting Started:
+      - Installation: 'getting-started/installation.md'
+      - Configuration: 'getting-started/configuration.md'
+  - Guides:
+      - Available Voices: 'guides/voices.md'
+      - Drush Commands: 'guides/drush.md'
+      - FAQ: 'guides/faq.md'
+  - Development:
+      - Contributing: 'development/contributing.md'

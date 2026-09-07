@@ -20,7 +20,7 @@ function local_tts_help($route_name, RouteMatchInterface $route_match) {
     case 'help.page.local_tts':
       $output = '';
       $output .= '<h3>' . t('About') . '</h3>';
-      $output .= '<p>' . t('The Local Text-to-Speech module adds audio players to your content that read text aloud using AI-generated voices. It uses the Kokoro text-to-speech engine to create high-quality, natural-sounding speech in multiple languages.') . '</p>';
+      $output .= '<p>' . t('The Local Text-to-Speech module adds audio players to your content that read text aloud. It uses the Kokoro text-to-speech engine to create high-quality, natural-sounding speech in multiple languages, entirely on your own server.') . '</p>';
       $output .= '<h3>' . t('Requirements') . '</h3>';
       $output .= '<p>' . t('You need to install the Kokoro binary (koko) on your server. <a href="@url">Download and installation instructions</a>', [
         '@url' => 'https://github.com/lucasjinreal/Kokoros',

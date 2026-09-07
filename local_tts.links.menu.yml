@@ -1,7 +1,7 @@
 local_tts.settings:
   title: 'Local TTS'
   route_name: local_tts.settings
-  description: 'Configure and test AI text-to-speech settings.'
+  description: 'Configure and test local text-to-speech settings.'
   parent: system.admin_config_media
   weight: 10
 

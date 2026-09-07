@@ -80,15 +80,31 @@ final class LocalTtsSettingsForm extends ConfigFormBase {
       '#open' => TRUE,
     ];
 
-    $form['espeak']['description'] = [
-      '#markup' => '<p>' . $this->t('eSpeak NG is required for phoneme processing and must be installed system-wide.') . '</p>',
-    ];
+    $detected_path = $this->detectEspeakDataPath();
+    $current_path = $config->get('espeak_data_path');
+    $effective_path = $current_path ?: $detected_path;
+
+    if ($detected_path && !$current_path) {
+      $form['espeak']['description'] = [
+        '#markup' => '<p>' . $this->t('eSpeak NG data directory detected automatically at <code>@path</code>.', ['@path' => $detected_path]) . '</p>',
+      ];
+    }
+    elseif (!$detected_path && !$current_path) {
+      $form['espeak']['description'] = [
+        '#markup' => '<p>' . $this->t('eSpeak NG is required for phoneme processing. Install it with <code>apt-get install espeak-ng</code> (Linux) or <code>brew install espeak-ng</code> (macOS), then enter the data directory path below.') . '</p>',
+      ];
+    }
+    else {
+      $form['espeak']['description'] = [
+        '#markup' => '<p>' . $this->t('eSpeak NG is required for phoneme processing and must be installed system-wide.') . '</p>',
+      ];
+    }
 
     $form['espeak']['espeak_data_path'] = [
       '#type' => 'textfield',
       '#title' => $this->t('eSpeak NG data path'),
       '#description' => $this->t('Path to espeak-ng-data directory (contains phoneme data for text processing).'),
-      '#default_value' => $config->get('espeak_data_path'),
+      '#default_value' => $effective_path,
       '#required' => TRUE,
       '#attributes' => [
         'placeholder' => '/usr/share/espeak-ng-data',
@@ -330,6 +346,47 @@ final class LocalTtsSettingsForm extends ConfigFormBase {
       }
     }
     return $path;
+  }
+
+  /**
+   * Auto-detect the eSpeak NG data directory.
+   *
+   * @return string|null
+   *   Detected path, or NULL if not found.
+   */
+  protected function detectEspeakDataPath() {
+    $candidates = [
+      '/usr/share/espeak-ng-data',
+      '/usr/lib/x86_64-linux-gnu/espeak-ng-data',
+      '/usr/lib/aarch64-linux-gnu/espeak-ng-data',
+      '/usr/local/share/espeak-ng-data',
+      '/opt/homebrew/share/espeak-ng-data',
+    ];
+
+    // Check Homebrew Cellar paths on macOS.
+    $cellar = '/opt/homebrew/Cellar/espeak-ng';
+    if (is_dir($cellar)) {
+      $versions = @scandir($cellar, SCANDIR_SORT_DESCENDING);
+      if ($versions) {
+        foreach ($versions as $v) {
+          if ($v === '.' || $v === '..') {
+            continue;
+          }
+          $path = $cellar . '/' . $v . '/share/espeak-ng-data';
+          if (is_dir($path)) {
+            return $path;
+          }
+        }
+      }
+    }
+
+    foreach ($candidates as $path) {
+      if (is_dir($path)) {
+        return $path;
+      }
+    }
+
+    return NULL;
   }
 
 }

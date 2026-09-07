@@ -12,6 +12,12 @@ local_tts.test:
   base_route: local_tts.settings
   weight: 10
 
+local_tts.cache_overview:
+  route_name: local_tts.cache_overview
+  title: 'Cache'
+  base_route: local_tts.settings
+  weight: 15
+
 local_tts.batch:
   route_name: local_tts.batch
   title: 'Batch'

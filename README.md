@@ -5,7 +5,7 @@ across 9 languages.
 
 ## Features
 
-- **64 voices across 9 languages** (English, Japanese, Mandarin Chinese, French,
+- **54 voices across 9 languages** (English, Japanese, Mandarin Chinese, French,
   Hindi, Spanish, Italian, Portuguese)
 - **Language-aware voice filtering** - automatically shows only voices matching
   content language
@@ -152,7 +152,8 @@ Per-content-type control with Layout Builder support:
 3. Configure display: Manage display > position field
 4. Set voice/speed controls and field selection
 
-**Permissions:** Grant "Generate AI text-to-speech audio" permission.
+**Permissions:** Grant "Generate local text-to-speech audio"
+permission.
 
 ## Available Voices
 

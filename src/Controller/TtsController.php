@@ -379,7 +379,7 @@ final class TtsController extends ControllerBase {
    *   Response array with error, error_code, message, and admin_message.
    */
   protected function buildServiceErrorResponse($raw_message) {
-    $is_admin = $this->currentUser->hasPermission('administer ai tts settings');
+    $is_admin = $this->currentUser->hasPermission('administer local tts settings');
 
     if (strpos($raw_message, 'Server is experiencing high load') !== FALSE) {
       $config = $this->config('local_tts.settings');
@@ -497,8 +497,9 @@ final class TtsController extends ControllerBase {
               continue;
             }
 
-            // SECURITY: Strip all HTML tags and decode entities.
-            $text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5);
+            // Insert sentence breaks at block-level tag boundaries so the
+            // TTS engine pauses between headings, paragraphs, list items, etc.
+            $text = $this->htmlToPlainText($text);
             if (!empty(trim($text))) {
               $content .= (strlen($content) > 0 ? ' ' : '') . $text;
             }
@@ -508,6 +509,29 @@ final class TtsController extends ControllerBase {
     }
 
     return $content;
+  }
+
+  /**
+   * Convert HTML to plain text with sentence breaks at block boundaries.
+   */
+  protected function htmlToPlainText(string $html): string {
+    $block_tags = 'h[1-6]|p|div|section|article|header|footer|nav|aside|main|'
+      . 'blockquote|pre|figure|figcaption|details|summary|'
+      . 'li|dt|dd|tr|th|td|caption';
+
+    // Add a full stop + newline after closing block-level tags.
+    $html = preg_replace('#</(' . $block_tags . ')>#i', '. ', $html);
+    // Also handle self-closing <br> and <hr>.
+    $html = preg_replace('#<br\s*/?\s*>#i', '. ', $html);
+    $html = preg_replace('#<hr\s*/?\s*>#i', '. ', $html);
+
+    $text = html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5);
+    // Collapse doubled punctuation from injected full stops.
+    $text = preg_replace('/([.!?])\s*\.(\s)/', '$1$2', $text);
+    // Normalise whitespace.
+    $text = preg_replace('/\s+/', ' ', $text);
+
+    return trim($text);
   }
 
 }

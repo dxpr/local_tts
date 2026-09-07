@@ -196,16 +196,13 @@ class TtsService {
       }
     }
 
+    if (!$this->fileSystem->prepareDirectory($audio_dir, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS)) {
+      $this->logger->error('Failed to create audio directory: @dir', ['@dir' => $audio_dir]);
+      throw new TtsServiceUnavailableException(sprintf('Failed to create audio directory: %s', $audio_dir));
+    }
     $directory = $this->fileSystem->realpath($audio_dir);
     if (!$directory) {
-      if (!$this->fileSystem->prepareDirectory($audio_dir, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS)) {
-        $this->logger->error('Failed to create audio directory: @dir', ['@dir' => $audio_dir]);
-        throw new TtsServiceUnavailableException(sprintf('Failed to create audio directory: %s', $audio_dir));
-      }
-      $directory = $this->fileSystem->realpath($audio_dir);
-      if (!$directory) {
-        throw new TtsServiceUnavailableException(sprintf('Audio directory path could not be resolved: %s', $audio_dir));
-      }
+      throw new TtsServiceUnavailableException(sprintf('Audio directory path could not be resolved: %s', $audio_dir));
     }
 
     $output_file = $directory . '/' . $cache_key . '.wav';
@@ -214,17 +211,8 @@ class TtsService {
     $binary_path = DRUPAL_ROOT . '/' . $this->modulePath . '/bin/koko';
     $data_dir = DRUPAL_ROOT . '/' . $this->modulePath . '/data';
 
-    // Select model and voice data by language: Chinese voices use the v1.1-zh
-    // model; all others use the standard v1.0 model.
-    $is_chinese = str_starts_with($voice, 'z');
-    if ($is_chinese && file_exists($data_dir . '/kokoro-v1.1-zh.onnx')) {
-      $model_path = $data_dir . '/kokoro-v1.1-zh.onnx';
-      $data_path = $data_dir . '/voices-v1.1-zh.bin';
-    }
-    else {
-      $model_path = $data_dir . '/kokoro-v1.0.onnx';
-      $data_path = $data_dir . '/voices-v1.0.bin';
-    }
+    $model_path = $data_dir . '/kokoro-v1.0.onnx';
+    $data_path = $data_dir . '/voices-v1.0.bin';
 
     if (!file_exists($binary_path)) {
       $this->logger->error('Koko binary not found at: @path', ['@path' => $binary_path]);

@@ -17,8 +17,8 @@ use Drupal\Core\TypedData\DataDefinition;
  */
 #[FieldType(
   id: "local_tts_player",
-  label: new TranslatableMarkup("AI text-to-speech player"),
-  description: new TranslatableMarkup("Add an audio player that reads your content aloud using AI-generated speech"),
+  label: new TranslatableMarkup("Local text-to-speech player"),
+  description: new TranslatableMarkup("Add an audio player that reads your content aloud using locally generated speech"),
   default_widget: "local_tts_player_widget",
   default_formatter: "local_tts_player_formatter",
   cardinality: 1,

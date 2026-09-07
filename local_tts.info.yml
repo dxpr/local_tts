@@ -1,6 +1,6 @@
 name: Local Text-to-Speech
 type: module
-description: 'Provides AI-powered text-to-speech using Kokoro TTS (Rust implementation).'
+description: 'Provides local text-to-speech using Kokoro TTS (Rust implementation).'
 package: Media
 core_version_requirement: ^9 || ^10 || ^11
 configure: local_tts.settings

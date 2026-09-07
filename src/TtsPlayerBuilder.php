@@ -324,7 +324,7 @@ class TtsPlayerBuilder {
           'entityType' => $entity->getEntityTypeId(),
           'entityId' => $entity->id(),
           'fields' => array_values(array_filter($settings['fields'] ?? [])),
-          'isAdmin' => (bool) $this->currentUser->hasPermission('administer ai tts settings'),
+          'isAdmin' => (bool) $this->currentUser->hasPermission('administer local tts settings'),
           'settingsUrl' => Url::fromRoute('local_tts.settings')->toString(),
         ],
       ],

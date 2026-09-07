@@ -97,6 +97,37 @@ function local_tts_requirements($phase) {
     $config = \Drupal::config('local_tts.settings');
     $file_system = \Drupal::service('file_system');
 
+    // Check 0: eSpeak NG installation.
+    $espeak_path = $config->get('espeak_data_path');
+    if (empty($espeak_path)) {
+      $requirements['local_tts_espeak'] = [
+        'title' => t('Local TTS: eSpeak NG'),
+        'value' => t('Not configured'),
+        'description' => t('The eSpeak NG data path must be set at <a href="@url">Local TTS settings</a> before audio generation will work.', [
+          '@url' => Url::fromRoute('local_tts.settings')->toString(),
+        ]),
+        'severity' => REQUIREMENT_ERROR,
+      ];
+    }
+    elseif (!is_dir($espeak_path)) {
+      $requirements['local_tts_espeak'] = [
+        'title' => t('Local TTS: eSpeak NG'),
+        'value' => t('Path not found'),
+        'description' => t('The configured eSpeak NG data path <code>@path</code> does not exist. Install eSpeak NG or update the path at <a href="@url">Local TTS settings</a>.', [
+          '@path' => $espeak_path,
+          '@url' => Url::fromRoute('local_tts.settings')->toString(),
+        ]),
+        'severity' => REQUIREMENT_ERROR,
+      ];
+    }
+    else {
+      $requirements['local_tts_espeak'] = [
+        'title' => t('Local TTS: eSpeak NG'),
+        'value' => t('Installed (@path)', ['@path' => $espeak_path]),
+        'severity' => REQUIREMENT_OK,
+      ];
+    }
+
     // Check 1: Bundled Files (Binary + Model Files).
     $module_path = \Drupal::service('extension.list.module')->getPath('local_tts');
     $binary_path = DRUPAL_ROOT . '/' . $module_path . '/bin/koko';

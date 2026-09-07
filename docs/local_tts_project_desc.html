@@ -1,0 +1,139 @@
+<p><strong>Local Text-to-Speech</strong> adds self-hosted text-to-speech to any Drupal site. Visitors click "Listen to this page" and hear the content read aloud by one of 54 voices across 9 languages. No cloud APIs, no subscriptions, no data leaving your server.</p>
+
+<p>Local TTS is part of the <a href="https://dxpr.com/c/marketing-cms?ref=50701">DXPR marketing CMS</a> stack and ships in <a href="https://www.drupal.org/project/dxpr_cms">DXPR CMS</a>.</p>
+
+<h2>Features</h2>
+
+<ul>
+  <li><strong>54 voices across 9 languages</strong>: American English, British English, Japanese, Mandarin Chinese, French, Hindi, Spanish, Italian, Portuguese</li>
+  <li><strong>Language-aware voice filtering</strong>: automatically shows only voices matching the content language</li>
+  <li><strong>Adjustable speech speed</strong>: 0.5x to 2.0x</li>
+  <li><strong>Audio caching</strong>: generated files cached on disk to reduce server load</li>
+  <li><strong>Block and field integration</strong>: place a player site-wide or per content type</li>
+  <li><strong>Drush commands</strong>: test, batch generate, list voices, clear cache</li>
+  <li><strong>Accessibility-optimised</strong>: ARIA labels, keyboard shortcuts, semantic HTML</li>
+  <li><strong>Privacy-first</strong>: all processing local, only publicly viewable content converted</li>
+  <li><strong>Data sovereignty</strong>: no cloud, no third-party SaaS, all data stays on your server</li>
+</ul>
+
+<h2>How it works</h2>
+
+<p>Local TTS uses the <a href="https://huggingface.co/hexgrad/Kokoro-82M">Kokoro TTS engine</a> (an 82M-parameter model) compiled to a native binary via <a href="https://github.com/lucasjinreal/Kokoros">Kokoros</a>. Text is converted to phonemes by <a href="https://github.com/espeak-ng/espeak-ng">eSpeak NG</a>, then the Kokoro ONNX model generates natural-sounding speech. The entire pipeline runs locally on your server.</p>
+
+<h2>You need Local TTS if</h2>
+
+<ul>
+  <li>You want to <strong>add text-to-speech</strong> to your Drupal site without a cloud service</li>
+  <li>You want <strong>multi-language speech</strong> from a single module with no per-request costs</li>
+  <li>You need <strong>GDPR-compliant audio</strong> where no visitor data leaves your infrastructure</li>
+  <li>You want a <strong>privacy-first accessibility feature</strong> that works without third-party JavaScript</li>
+</ul>
+
+<div class="note-tip">
+  <h3>Prefer a turnkey demo site?</h3>
+  <p>Spin up <strong>DXPR CMS</strong>, Drupal pre-configured with DXPR Builder, DXPR Theme, Local TTS, and security best practices.</p>
+  <p><a href="https://www.drupal.org/project/dxpr_cms" title="DXPR CMS platform">Get DXPR CMS</a></p>
+</div>
+
+<h2>Installation</h2>
+
+<h3>System dependency</h3>
+
+<p>eSpeak NG must be installed on the server for phoneme processing:</p>
+
+<pre><code># macOS
+brew install espeak-ng
+
+# Ubuntu/Debian
+sudo apt-get install espeak-ng</code></pre>
+
+<h3>Module installation</h3>
+
+<pre><code>composer require drupal/local_tts
+cd web/modules/contrib/local_tts
+composer run build-binary
+drush en local_tts</code></pre>
+
+<p>The <code>composer install</code> step downloads model and voice data files (~337MB). The binary must be built from source (requires Rust/Cargo). After enabling, configure the eSpeak NG data path at <code>/admin/config/media/local-tts</code>.</p>
+
+<h3>Verify installation</h3>
+
+<pre><code>drush local-tts:test "Hello World"</code></pre>
+
+<h2>Drush command reference</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Command</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>local-tts:test</code></td>
+      <td>Test TTS generation with instant playback</td>
+    </tr>
+    <tr>
+      <td><code>local-tts:read</code></td>
+      <td>Read entity content aloud (with caching)</td>
+    </tr>
+    <tr>
+      <td><code>local-tts:batch</code></td>
+      <td>Batch generate audio for multiple entities</td>
+    </tr>
+    <tr>
+      <td><code>local-tts:voices</code></td>
+      <td>List available voices, optionally filtered by language</td>
+    </tr>
+    <tr>
+      <td><code>local-tts:cache-clear</code></td>
+      <td>Clear all cached audio files</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>FAQ</h2>
+
+<dl>
+  <dt>Does my content leave the server?</dt>
+  <dd>
+    <p>No. All speech generation happens locally using the bundled Kokoro binary and ONNX model files. No text or audio is sent to any external service.</p>
+  </dd>
+
+  <dt>How large are the model files?</dt>
+  <dd>
+    <p>The model is approximately 310MB and the voice data is approximately 27MB. Files are downloaded automatically during <code>composer install</code>.</p>
+  </dd>
+
+  <dt>Does Local TTS work with page caching?</dt>
+  <dd>
+    <p>Yes. Audio is loaded via AJAX when the visitor clicks the play button, so the page itself can be fully cached (including behind Varnish or a CDN). Cached audio files are served directly without regeneration.</p>
+  </dd>
+
+  <dt>Does Local TTS set cookies or track users?</dt>
+  <dd>
+    <p>No. The module only processes the content text server-side when requested. It does not set cookies, store user IDs, or create visitor profiles.</p>
+  </dd>
+
+  <dt>Can I add custom voices?</dt>
+  <dd>
+    <p>Not at present. Local TTS uses the voices bundled with the Kokoro model. New voices would require training a custom ONNX model.</p>
+  </dd>
+</dl>
+
+<div class="note-tip">
+  <ul>
+    <li><a href="https://project.pages.drupalcode.org/local_tts/">Module documentation</a>: installation, configuration, voice reference, and Drush commands</li>
+    <li><a href="https://project.pages.drupalcode.org/local_tts/getting-started/installation/">Installation guide</a>: system dependencies, binary build, and Nginx configuration</li>
+    <li><a href="https://project.pages.drupalcode.org/local_tts/guides/voices/">Available voices</a>: all 54 voices across 9 languages with voice IDs</li>
+    <li><a href="https://project.pages.drupalcode.org/local_tts/guides/faq/">FAQ</a>: caching, privacy, load management, and troubleshooting</li>
+  </ul>
+</div>
+
+<h2>Related modules</h2>
+
+<ul>
+  <li><a href="https://www.drupal.org/project/dxpr_cms">DXPR CMS</a>: Drupal pre-configured with DXPR Builder, DXPR Theme, and security best practices</li>
+  <li><a href="https://www.drupal.org/project/ai">AI module</a>: Drupal's AI integration framework</li>
+</ul>

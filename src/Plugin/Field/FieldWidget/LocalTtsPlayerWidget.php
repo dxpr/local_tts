@@ -37,7 +37,7 @@ class LocalTtsPlayerWidget extends WidgetBase {
     $element['display_label'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Use field label instead of default label'),
-      '#description' => $this->t('By default, shows "Show AI text-to-speech player". Check this to use the field label instead.'),
+      '#description' => $this->t('By default, shows "Show Local text-to-speech player". Check this to use the field label instead.'),
       '#default_value' => $this->getSetting('display_label'),
       '#weight' => -1,
     ];
@@ -72,7 +72,7 @@ class LocalTtsPlayerWidget extends WidgetBase {
       $element['value']['#title'] = $this->fieldDefinition->getLabel();
     }
     else {
-      $element['value']['#title'] = $this->t('Show AI text-to-speech player');
+      $element['value']['#title'] = $this->t('Show Local text-to-speech player');
     }
 
     return $element;
