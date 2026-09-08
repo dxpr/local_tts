@@ -159,24 +159,33 @@ class TtsBatchService {
 
         // Only published content (for nodes).
         if ($entity_type_id === 'node') {
-          $query->condition('status', 1);
+          $query->condition('status', 1, '=', $langcode);
         }
 
         // Filter by updated date if specified.
         if ($updated_after !== NULL) {
           $changed_key = $storage->getEntityType()->getKey('changed');
+          if (!$changed_key) {
+            $definitions = \Drupal::service('entity_field.manager')->getFieldDefinitions($entity_type_id, $bundle);
+            foreach ($definitions as $field_name => $definition) {
+              if ($definition->getType() === 'changed') {
+                $changed_key = $field_name;
+                break;
+              }
+            }
+          }
           if ($changed_key) {
             // Convert date string to timestamp.
             $timestamp = strtotime($updated_after . ' 00:00:00');
             if ($timestamp !== FALSE) {
-              $query->condition($changed_key, $timestamp, '>=');
+              $query->condition($changed_key, $timestamp, '>=', $langcode);
             }
           }
         }
 
         // Skip entities with cached audio (unless force refresh).
         if (!$force_refresh) {
-          $cached_ids = $this->getCachedEntityIds($entity_type_id, $bundle, $langcode);
+          $cached_ids = $this->getCachedEntityIds($entity_type_id, $langcode);
           if (!empty($cached_ids)) {
             $id_key = $storage->getEntityType()->getKey('id');
             $query->condition($id_key, $cached_ids, 'NOT IN');
@@ -213,24 +222,30 @@ class TtsBatchService {
    *
    * @param string $entity_type_id
    *   The entity type ID.
-   * @param string $bundle
-   *   The bundle.
    * @param string $langcode
    *   The language code.
    *
    * @return array
    *   Array of entity IDs.
    */
-  protected function getCachedEntityIds(string $entity_type_id, string $bundle, string $langcode): array {
+  protected function getCachedEntityIds(string $entity_type_id, string $langcode): array {
     $connection = \Drupal::database();
 
-    return $connection->select('local_tts_cache', 'c')
-      ->fields('c', ['entity_id'])
+    $records = $connection->select('local_tts_cache', 'c')
+      ->fields('c', ['entity_id', 'cache_key'])
       ->condition('entity_type', $entity_type_id)
       ->condition('language', $langcode)
       ->isNotNull('entity_id')
       ->execute()
-      ->fetchCol();
+      ->fetchAll();
+    $audio_dir = $this->configFactory->get('local_tts.settings')->get('audio_directory') ?: 'public://local-tts';
+    $ids = [];
+    foreach ($records as $record) {
+      if (file_exists($audio_dir . '/' . $record->cache_key . '.ogg') || file_exists($audio_dir . '/' . $record->cache_key . '.wav')) {
+        $ids[] = $record->entity_id;
+      }
+    }
+    return array_values(array_unique($ids));
   }
 
   /**
@@ -398,32 +413,29 @@ class TtsBatchService {
             'force_refresh' => $options['force_refresh'],
           ];
 
+          $cache_key = $this->ttsService->computeCacheKey($text, $voice, (float) $options['speed'], $langcode);
+          $audio_dir = $this->configFactory->get('local_tts.settings')->get('audio_directory') ?: 'public://local-tts';
+          $was_cached = empty($options['force_refresh']) && file_exists($audio_dir . '/' . $cache_key . '.ogg');
+
           // Generate TTS (CPU-intensive operation).
           // Suppress output to prevent batch corruption.
           ob_start();
 
           try {
-            $file_uri = $this->ttsService->generateSpeech($text, $generation_options);
+            $this->ttsService->generateSpeech($text, $generation_options);
           }
           finally {
             ob_end_clean();
           }
 
-          if ($file_uri) {
-            $context['results']['generated']++;
-            $generated = TRUE;
+          $context['results'][$was_cached ? 'cached' : 'generated']++;
+          $generated = TRUE;
 
-            $logger->info('Generated TTS for @type:@id (@lang)', [
-              '@type' => $entity_data['entity_type'],
-              '@id' => $entity_data['entity_id'],
-              '@lang' => $langcode,
-            ]);
-          }
-          else {
-            // File was cached, not newly generated.
-            $context['results']['cached']++;
-            $generated = TRUE;
-          }
+          $logger->info('Audio ready for @type:@id (@lang)', [
+            '@type' => $entity_data['entity_type'],
+            '@id' => $entity_data['entity_id'],
+            '@lang' => $langcode,
+          ]);
 
         }
         catch (TtsServiceUnavailableException $e) {

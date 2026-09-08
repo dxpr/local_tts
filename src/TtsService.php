@@ -989,6 +989,9 @@ class TtsService {
     }
 
     $file_path = $directory . '/' . $cache_key . '.ogg';
+    if (!file_exists($file_path)) {
+      $file_path = $directory . '/' . $cache_key . '.wav';
+    }
     $file_size = file_exists($file_path) ? filesize($file_path) : 0;
     $now = $this->time->getRequestTime();
 
@@ -1428,6 +1431,7 @@ class TtsService {
     $binary_path = DRUPAL_ROOT . '/' . $this->modulePath . '/bin/koko';
     if (!file_exists($binary_path)) {
       $health['binary'] = [
+        'label' => 'Kokoro binary',
         'status' => 'error',
         'message' => 'Not found at ' . $binary_path,
         'path' => $binary_path,
@@ -1435,6 +1439,7 @@ class TtsService {
     }
     elseif (!is_executable($binary_path)) {
       $health['binary'] = [
+        'label' => 'Kokoro binary',
         'status' => 'error',
         'message' => 'Found but not executable',
         'path' => $binary_path,
@@ -1442,6 +1447,7 @@ class TtsService {
     }
     else {
       $health['binary'] = [
+        'label' => 'Kokoro binary',
         'status' => 'ok',
         'message' => 'Found and executable',
         'path' => $binary_path,
@@ -1551,11 +1557,17 @@ class TtsService {
       $file_count = 0;
     }
 
+    $percent = $max_size > 0 ? (int) round(($total_size / $max_size) * 100) : 0;
+    $disk_status = $percent >= 90 ? 'warning' : 'ok';
     $health['disk_usage'] = [
+      'label' => 'Disk usage',
+      'status' => $disk_status,
+      'message' => $percent . '% of cache limit used',
+      'path' => '',
       'total_size' => $total_size,
       'file_count' => $file_count,
       'max_size' => (int) $max_size,
-      'percent' => $max_size > 0 ? (int) round(($total_size / $max_size) * 100) : 0,
+      'percent' => $percent,
     ];
 
     return $health;
