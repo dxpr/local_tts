@@ -75,10 +75,8 @@ function local_tts_schema() {
       ],
     ],
     'primary key' => ['id'],
-    'unique keys' => [
-      'cache_key' => ['cache_key'],
-    ],
     'indexes' => [
+      'cache_key' => ['cache_key'],
       'entity' => ['entity_type', 'entity_id'],
       'accessed' => ['accessed'],
     ],
@@ -545,6 +543,22 @@ function local_tts_update_10001() {
     'not null' => FALSE,
   ];
   $schema->changeField('local_tts_cache', 'entity_id', 'entity_id', $spec);
+}
+
+/**
+ * Allow several entities to share one cached audio file.
+ *
+ * Metadata rows are keyed per entity and language, so two entities with
+ * identical text produced the same cache key and violated the unique index.
+ */
+function local_tts_update_10002() {
+  $schema = \Drupal::database()->schema();
+  // dropUniqueKey() is a no-op when the key is already gone.
+  $schema->dropUniqueKey('local_tts_cache', 'cache_key');
+  if (!$schema->indexExists('local_tts_cache', 'cache_key')) {
+    $spec = local_tts_schema()['local_tts_cache'];
+    $schema->addIndex('local_tts_cache', 'cache_key', ['cache_key'], $spec);
+  }
 }
 
 /**
