@@ -88,6 +88,7 @@ function local_tts_entity_view(array &$build, EntityInterface $entity, EntityVie
           'fields' => [],
           'wrapper_classes' => '',
         ]),
+        $entity->language()->getId(),
       ],
     ],
   ];

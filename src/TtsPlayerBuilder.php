@@ -5,12 +5,14 @@ namespace Drupal\local_tts;
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Entity\EntityRepositoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Security\TrustedCallbackInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\Core\TypedData\TranslatableInterface;
 use Drupal\Core\Url;
 
 /**
@@ -70,6 +72,13 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
   protected $entityTypeManager;
 
   /**
+   * The entity repository.
+   *
+   * @var \Drupal\Core\Entity\EntityRepositoryInterface|null
+   */
+  protected $entityRepository;
+
+  /**
    * Constructs a TtsPlayerBuilder.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
@@ -80,17 +89,21 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
    *   The current user.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
    *   The entity type manager.
+   * @param \Drupal\Core\Entity\EntityRepositoryInterface|null $entity_repository
+   *   The entity repository.
    */
   public function __construct(
     ConfigFactoryInterface $config_factory,
     TtsService $tts_service,
     AccountProxyInterface $current_user,
     EntityTypeManagerInterface $entity_type_manager,
+    ?EntityRepositoryInterface $entity_repository = NULL,
   ) {
     $this->configFactory = $config_factory;
     $this->ttsService = $tts_service;
     $this->currentUser = $current_user;
     $this->entityTypeManager = $entity_type_manager;
+    $this->entityRepository = $entity_repository;
   }
 
   /**
@@ -102,9 +115,30 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
 
   /**
    * Lazy builder callback for the TTS player.
+   *
+   * @param string $entity_type
+   *   The entity type ID.
+   * @param string $entity_id
+   *   The entity ID.
+   * @param string $settings_json
+   *   JSON-encoded player settings.
+   * @param string|null $langcode
+   *   The language of the translation being displayed. When omitted, the
+   *   translation matching the current content language is used.
+   *
+   * @return array
+   *   The player render array.
    */
-  public function buildPlayerLazy(string $entity_type, string $entity_id, string $settings_json): array {
+  public function buildPlayerLazy(string $entity_type, string $entity_id, string $settings_json, ?string $langcode = NULL): array {
     $entity = $this->entityTypeManager->getStorage($entity_type)->load($entity_id);
+    if ($entity instanceof TranslatableInterface) {
+      if ($langcode !== NULL && $entity->hasTranslation($langcode)) {
+        $entity = $entity->getTranslation($langcode);
+      }
+      elseif ($this->entityRepository) {
+        $entity = $this->entityRepository->getTranslationFromContext($entity);
+      }
+    }
     $settings = json_decode($settings_json, TRUE) ?: [];
     return $this->buildPlayer($entity, $settings);
   }

@@ -216,6 +216,7 @@ final class LocalTtsPlayerFormatter extends FormatterBase implements ContainerFa
             $entity->getEntityTypeId(),
             (string) $entity->id(),
             json_encode($this->getSettings()),
+            $langcode,
           ],
         ],
       ];
