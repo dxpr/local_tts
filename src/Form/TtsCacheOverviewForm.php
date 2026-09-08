@@ -103,17 +103,17 @@ final class TtsCacheOverviewForm extends FormBase {
       'operations' => $this->t('Operations'),
     ];
 
-    // Total count and size (unfiltered) for the summary.
-    $totals = $this->database->select('local_tts_cache', 'c')
-      ->fields('c', [])
-      ->countQuery()
-      ->execute()
-      ->fetchField();
-    $total_count = (int) $totals;
-
-    $total_size_result = $this->database->query('SELECT COALESCE(SUM(file_size), 0) FROM {local_tts_cache}')
-      ->fetchField();
-    $total_size = (int) $total_size_result;
+    // Each file may have several entity references; count it only once.
+    $files = $this->database->select('local_tts_cache', 'c');
+    $files->fields('c', ['cache_key']);
+    $files->addExpression('MAX(file_size)', 'file_size');
+    $files->groupBy('cache_key');
+    $totals = $this->database->select($files, 'f');
+    $totals->addExpression('COUNT(*)', 'file_count');
+    $totals->addExpression('COALESCE(SUM(file_size), 0)', 'total_size');
+    $summary = $totals->execute()->fetchObject();
+    $total_count = (int) $summary->file_count;
+    $total_size = (int) $summary->total_size;
     $percent = $max_size > 0 ? round(($total_size / $max_size) * 100) : 0;
 
     // Summary bar.

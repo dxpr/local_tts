@@ -246,18 +246,13 @@ function _local_tts_text_content_changed($entity, $original) {
 }
 
 /**
- * Clean up audio files where source content has changed or been deleted.
+ * Clean up audio references whose source entities have been deleted.
  */
 function _local_tts_cleanup_stale_content() {
-  $directory = _local_tts_get_audio_directory();
-
-  if (!$directory) {
-    return;
-  }
-
   $deleted = 0;
   $records = \Drupal::database()->select('local_tts_cache', 'a')
-    ->fields('a', ['id', 'cache_key', 'entity_type', 'entity_id'])
+    ->fields('a', ['entity_type', 'entity_id'])
+    ->distinct()
     ->isNotNull('entity_type')
     ->isNotNull('entity_id')
     ->execute()
@@ -296,15 +291,9 @@ function _local_tts_cleanup_stale_content() {
     }
   }
 
+  $tts_service = \Drupal::service('local_tts.tts_service');
   foreach ($stale_records as $record) {
-    $file_path = $directory . '/' . $record->cache_key . '.ogg';
-    if (file_exists($file_path)) {
-      @unlink($file_path);
-    }
-    \Drupal::database()->delete('local_tts_cache')
-      ->condition('id', $record->id)
-      ->execute();
-    $deleted++;
+    $deleted += $tts_service->deleteAudioForEntity($record->entity_type, $record->entity_id);
   }
 
   if ($deleted > 0) {
@@ -326,37 +315,49 @@ function _local_tts_enforce_size_limit() {
     return;
   }
 
-  $current_size = (int) \Drupal::database()->query('SELECT SUM(file_size) FROM {local_tts_cache}')->fetchField();
-
-  if ($current_size <= $max_size) {
-    return;
-  }
-
-  $records = \Drupal::database()->select('local_tts_cache', 'a')
-    ->fields('a', ['id', 'cache_key', 'file_size'])
-    ->orderBy('accessed', 'ASC')
+  // Metadata contains one row per entity/variant, but files may be shared.
+  // Count disk bytes once per key and use the most recent access by any entity.
+  $query = \Drupal::database()->select('local_tts_cache', 'a');
+  $query->fields('a', ['cache_key']);
+  $query->addExpression('MAX(accessed)', 'last_accessed');
+  $records = $query->groupBy('cache_key')
+    ->orderBy('last_accessed', 'ASC')
     ->execute()
     ->fetchAll();
+  $current_size = 0;
+  foreach ($records as $record) {
+    $record->files = [];
+    foreach (['.ogg', '.wav'] as $extension) {
+      $path = $directory . '/' . $record->cache_key . $extension;
+      if (file_exists($path)) {
+        $size = (int) filesize($path);
+        $record->files[$path] = $size;
+        $current_size += $size;
+      }
+    }
+  }
 
   $bytes_freed = 0;
   $deleted = 0;
-
   foreach ($records as $record) {
     if ($current_size - $bytes_freed <= $max_size) {
       break;
     }
-
-    $file_path = $directory . '/' . $record->cache_key . '.ogg';
-    if (file_exists($file_path)) {
-      @unlink($file_path);
+    $removed = TRUE;
+    foreach ($record->files as $path => $size) {
+      if (@unlink($path)) {
+        $bytes_freed += $size;
+        $deleted++;
+      }
+      else {
+        $removed = FALSE;
+      }
     }
-
-    \Drupal::database()->delete('local_tts_cache')
-      ->condition('id', $record->id)
-      ->execute();
-
-    $bytes_freed += $record->file_size;
-    $deleted++;
+    if ($removed) {
+      \Drupal::database()->delete('local_tts_cache')
+        ->condition('cache_key', $record->cache_key)
+        ->execute();
+    }
   }
 
   if ($deleted > 0) {
