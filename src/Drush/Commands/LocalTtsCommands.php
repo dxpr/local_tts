@@ -444,7 +444,7 @@ final class LocalTtsCommands extends DrushCommands {
    * @option voice The voice to use (e.g., af_sky, am_adam).
    * @option speed The speech speed (0.5 to 2.0).
    * @option language The language code for proper pronunciation (e.g., en, es, ja).
-   * @option field The field to read (default: auto-detect body field).
+   * @option field The field to read (default: rendered entity text).
    * @option stream Use streaming mode instead of cached files.
    * @usage local-tts:read node 123
    *   Generate and play TTS for node 123 (caches the audio file).
@@ -461,7 +461,7 @@ final class LocalTtsCommands extends DrushCommands {
   #[CLI\Option(name: 'voice', description: 'The voice to use')]
   #[CLI\Option(name: 'speed', description: 'The speech speed (0.5 to 2.0)')]
   #[CLI\Option(name: 'language', description: 'The language code')]
-  #[CLI\Option(name: 'field', description: 'The field to read (default: auto-detect)')]
+  #[CLI\Option(name: 'field', description: 'The field to read (default: rendered entity text)')]
   #[CLI\Option(name: 'stream', description: 'Use streaming mode instead of cached files')]
   #[CLI\Usage(name: 'local-tts:read node 123', description: 'Generate and play TTS for node 123')]
   #[CLI\Usage(name: 'local-tts:read node 123 --voice=am_adam', description: 'Use a specific voice')]
@@ -595,24 +595,9 @@ final class LocalTtsCommands extends DrushCommands {
       return $this->extractFieldText($entity, $field_name);
     }
 
-    // Auto-detect common text fields.
-    $common_fields = [
-      'body',
-      'field_body',
-      'field_description',
-      'field_text',
-      'field_content',
-      'description',
-    ];
-
-    foreach ($common_fields as $field) {
-      if ($entity->hasField($field) && !$entity->get($field)->isEmpty()) {
-        return $this->extractFieldText($entity, $field);
-      }
-    }
-
-    // Fallback to entity label.
-    return $entity->label() ?? '';
+    // Use the same render-based extraction as the player, so the cached
+    // file and text hash written here are the ones the player serves.
+    return $this->ttsService->extractTextFromEntity($entity);
   }
 
   /**

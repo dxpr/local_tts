@@ -2,7 +2,6 @@
 
 namespace Drupal\local_tts\Service;
 
-use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Database\Database;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
@@ -547,6 +546,10 @@ class TtsBatchService {
   /**
    * Extract text content from an entity.
    *
+   * Uses the same render-based extraction as the player endpoint and the
+   * queue worker, so the stored text hash and cache key match what the
+   * player requests and batch-generated audio is actually served.
+   *
    * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
    *   The entity to extract text from.
    *
@@ -554,76 +557,7 @@ class TtsBatchService {
    *   The extracted text content.
    */
   protected function extractTextFromEntity(FieldableEntityInterface $entity): string {
-    // Auto-detect common text fields.
-    $common_fields = [
-      'body',
-      'field_body',
-      'field_description',
-      'field_text',
-      'field_content',
-      'description',
-    ];
-
-    foreach ($common_fields as $field) {
-      if ($entity->hasField($field) && !$entity->get($field)->isEmpty()) {
-        return $this->extractFieldText($entity, $field);
-      }
-    }
-
-    // Fallback to entity label.
-    return $entity->label() ?? '';
-  }
-
-  /**
-   * Extract text from a specific field.
-   *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity.
-   * @param string $field_name
-   *   The field name.
-   *
-   * @return string
-   *   The extracted text.
-   */
-  protected function extractFieldText(FieldableEntityInterface $entity, string $field_name): string {
-    if (!$entity->hasField($field_name)) {
-      return '';
-    }
-
-    $field = $entity->get($field_name);
-
-    if ($field->isEmpty()) {
-      return '';
-    }
-
-    $text_parts = [];
-
-    // Handle different field types.
-    foreach ($field as $item) {
-      // Text fields with format (like body).
-      if (isset($item->value)) {
-        $text = $item->value;
-
-        // Strip HTML tags for formatted text.
-        if (isset($item->format)) {
-          $text = strip_tags($text);
-        }
-
-        $text_parts[] = $text;
-      }
-      // Plain string fields.
-      elseif (is_string($item->value)) {
-        $text_parts[] = $item->value;
-      }
-      elseif (property_exists($item, 'entity') && $item->entity) {
-        $referenced = $item->entity;
-        if ($referenced instanceof EntityInterface) {
-          $text_parts[] = $referenced->label() ?? '';
-        }
-      }
-    }
-
-    return implode(' ', $text_parts);
+    return $this->ttsService->extractTextFromEntity($entity);
   }
 
   /**
