@@ -1,0 +1,22 @@
+################
+# DrupalCI GitLab CI/CD template.
+#
+# Project: https://project.pages.drupalcode.org/gitlab_templates/
+# Source: https://git.drupalcode.org/project/gitlab_templates/
+################
+
+variables:
+  SKIP_COMPOSER_LINT: '1'
+  SKIP_PHPCS: '1'
+  SKIP_PHPSTAN: '1'
+  SKIP_STYLELINT: '1'
+  SKIP_ESLINT: '1'
+  SKIP_CSPELL: '1'
+
+include:
+  - project: $_GITLAB_TEMPLATES_REPO
+    ref: $_GITLAB_TEMPLATES_REF
+    file:
+      - '/includes/include.drupalci.main.yml'
+      - '/includes/include.drupalci.variables.yml'
+      - '/includes/include.drupalci.workflows.yml'
