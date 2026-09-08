@@ -85,7 +85,7 @@ final class LocalTtsCommands extends DrushCommands {
       'no-play' => FALSE,
     ],
   ): void {
-    $this->output()->writeln('🔊 Testing Local TTS (streaming mode)...');
+    $this->output()->writeln('🔊 Testing Local TTS...');
 
     $config = $this->configFactory->get('local_tts.settings');
 
@@ -102,8 +102,13 @@ final class LocalTtsCommands extends DrushCommands {
     $this->output()->writeln('');
 
     if ($options['no-play']) {
-      $this->output()->writeln('⚠️  Streaming mode requires audio playback.');
-      $this->output()->writeln('Use the web interface to generate cached audio files.');
+      $uri = $this->ttsService->generateSpeech($text, [
+        'voice' => $voice,
+        'speed' => $speed,
+        'language' => $language,
+        'use_cache' => FALSE,
+      ]);
+      $this->output()->writeln('Audio generated: ' . $uri);
       return;
     }
 
@@ -190,7 +195,10 @@ final class LocalTtsCommands extends DrushCommands {
     if ($use_temp_file) {
       // macOS: Use text command instead of stream to avoid log
       // pollution in audio output.
-      $temp_file = tempnam(sys_get_temp_dir(), 'tts_') . '.wav';
+      $temp_file = tempnam(sys_get_temp_dir(), 'tts_');
+      if ($temp_file === FALSE) {
+        throw new \RuntimeException('Could not create a temporary audio file.');
+      }
 
       $command = sprintf(
         '%s%s --lan %s --model %s --data %s --style %s --speed %s text %s --output %s 2>/dev/null',
@@ -209,7 +217,6 @@ final class LocalTtsCommands extends DrushCommands {
 
       if ($return_code === 0 && file_exists($temp_file) && filesize($temp_file) > 0) {
         exec(escapeshellarg($player_command) . ' ' . escapeshellarg($temp_file), $play_output, $play_return);
-        @unlink($temp_file);
         $return_code = $play_return;
       }
       elseif ($return_code !== 0) {
@@ -217,7 +224,9 @@ final class LocalTtsCommands extends DrushCommands {
       }
       elseif (!file_exists($temp_file) || filesize($temp_file) === 0) {
         $this->logger()->error('TTS temp file not created or empty at: ' . $temp_file);
+        $return_code = 1;
       }
+      @unlink($temp_file);
     }
     else {
       // Linux: Stream to player.
