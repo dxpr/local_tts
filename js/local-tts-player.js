@@ -41,6 +41,8 @@
         const config = Object.assign({}, globalConfig, instanceConfig);
         let isPlaying = false;
         let currentAudioUrl = null;
+        let generationId = 0;
+        let cancelAudioLoad = null;
         // Speed the current audio file was generated at on the server.
         let generatedSpeed = 1;
         let lastAriaUpdate = 0;
@@ -230,12 +232,13 @@
           audioElement.playbackRate = getSelectedSpeed() / generatedSpeed;
         }
 
-        function pollForAudio(pollUrl) {
+        function pollForAudio(pollUrl, requestId) {
           var maxPollTime = 5 * 60 * 1000;
           var pollInterval = 3000;
           var startTime = Date.now();
 
           function poll() {
+            if (requestId !== generationId) { return; }
             if (Date.now() - startTime > maxPollTime) {
               var timeoutMsg = Drupal.t('Audio generation timed out. Please try again later.');
               if (labelText) {
@@ -252,9 +255,10 @@
             fetch(pollUrl)
               .then(function (response) { return response.json(); })
               .then(function (data) {
+                if (requestId !== generationId) { return; }
                 if (data.status === 'ready' && data.audio_url) {
                   currentAudioUrl = data.audio_url;
-                  playSpeech(data.audio_url);
+                  playSpeech(data.audio_url, requestId);
                 } else {
                   setTimeout(poll, pollInterval);
                 }
@@ -268,6 +272,7 @@
         }
 
         function generateSpeech() {
+          const requestId = ++generationId;
           const voice = voiceSelect ? voiceSelect.value : config.defaultVoice;
           const speed = getSelectedSpeed();
           generatedSpeed = speed;
@@ -314,19 +319,21 @@
               }));
             })
             .then(result => {
+              if (requestId !== generationId) { return; }
               if (result.ok && result.data.success && result.data.audio_url) {
                 currentAudioUrl = result.data.audio_url;
-                playSpeech(result.data.audio_url);
+                playSpeech(result.data.audio_url, requestId);
               } else if (result.ok && result.data.status === 'processing' && result.data.poll_url) {
                 if (labelText) {
                   setLabelWithIcon('local-tts-loading', '', Drupal.t('Generating speech... This may take a moment.'));
                 }
-                pollForAudio(result.data.poll_url);
+                pollForAudio(result.data.poll_url, requestId);
               } else {
                 showGenerateError(result);
               }
             })
             .catch(() => {
+              if (requestId !== generationId) { return; }
               handleError(Drupal.t('Could not connect to the server. Check your internet connection.'));
             });
         }
@@ -365,22 +372,39 @@
           restoreLabelAfterDelay();
         }
 
-        function playSpeech(audioUrl) {
-          audioElement.src = audioUrl;
-          audioElement.load();
+        function playSpeech(audioUrl, requestId) {
+          if (cancelAudioLoad) { cancelAudioLoad(); }
 
           var loadTimeout = setTimeout(function () {
+            cleanup();
+            currentAudioUrl = null;
             handleError(Drupal.t('Audio could not be loaded. Try refreshing the page.'));
           }, 15000);
 
+          function cleanup() {
+            clearTimeout(loadTimeout);
+            audioElement.removeEventListener('canplaythrough', onReady);
+            audioElement.removeEventListener('canplay', onReady);
+            audioElement.removeEventListener('error', onLoadError);
+            cancelAudioLoad = null;
+          }
+          cancelAudioLoad = cleanup;
+
+          function onLoadError() {
+            cleanup();
+            currentAudioUrl = null;
+            handleError(Drupal.t('Audio could not be loaded. The file may be corrupted.'));
+          }
+
           var readyFired = false;
           function onReady() {
-            if (readyFired) { return; }
+            if (readyFired || requestId !== generationId) { return; }
             readyFired = true;
-            clearTimeout(loadTimeout);
+            cleanup();
             var savedPosition = getSavedProgress();
 
             audioElement.play().then(function() {
+              if (requestId !== generationId) { return; }
               isPlaying = true;
               applyPlaybackRate();
               playButton.disabled = false;
@@ -402,17 +426,17 @@
                 }, 10000);
               }
             }).catch(function() {
-              handleError(Drupal.t('Error playing audio.'));
+              if (requestId !== generationId) { return; }
               isPlaying = false;
+              handleError(Drupal.t('Error playing audio.'));
             });
           }
 
           audioElement.addEventListener('canplaythrough', onReady, { once: true });
           audioElement.addEventListener('canplay', onReady, { once: true });
-          audioElement.addEventListener('error', function () {
-            clearTimeout(loadTimeout);
-            handleError(Drupal.t('Audio could not be loaded. The file may be corrupted.'));
-          }, { once: true });
+          audioElement.addEventListener('error', onLoadError, { once: true });
+          audioElement.src = audioUrl;
+          audioElement.load();
         }
 
         function togglePlay() {
@@ -425,6 +449,9 @@
                 updateButtonStates();
                 showPlaybackControls();
                 updateStatus('', 'status');
+              }).catch(function() {
+                isPlaying = false;
+                handleError(Drupal.t('Error playing audio.'));
               });
             }
           } else {
@@ -437,6 +464,10 @@
         }
 
         function stopPlayback() {
+          generationId++;
+          if (cancelAudioLoad) { cancelAudioLoad(); }
+          playButton.disabled = false;
+          playButton.classList.remove('loading');
           if (audioElement) {
             audioElement.pause();
             audioElement.currentTime = 0;
@@ -502,8 +533,9 @@
         });
 
         audioElement.addEventListener('error', function() {
-          handleError(Drupal.t('Error playing audio.'));
           isPlaying = false;
+          currentAudioUrl = null;
+          handleError(Drupal.t('Error playing audio.'));
         });
 
         audioElement.addEventListener('loadedmetadata', function() {
@@ -650,9 +682,7 @@
 
         if (voiceSelect) {
           voiceSelect.addEventListener('change', function() {
-            if (isPlaying || currentAudioUrl) {
-              stopPlayback();
-            }
+            stopPlayback();
           });
         }
 
