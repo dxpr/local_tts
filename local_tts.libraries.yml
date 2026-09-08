@@ -1,5 +1,5 @@
 player:
-  version: 2.4
+  version: 1.0
   css:
     theme:
       css/local-tts-player.css: {}
