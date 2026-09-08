@@ -11,8 +11,9 @@
  * values change to match the generic dark palette from
  * local-tts-player.css.
  *
- * Rules are repeated at each dark-mode specificity level so that Gin
- * tokens are not overridden by the generic dark palette.
+ * Gin dark mode activates via .gin--dark-mode on <html>; the
+ * @media / [data-theme] blocks cover the system-preference and
+ * explicit-toggle paths for Claro or other admin themes.
  */
 
 .local-tts-container {
@@ -29,6 +30,23 @@
   --ltt-color-select-disabled-bg: var(--gin-bg-layer2, var(--color-gray-050, #f3f4f9));
 }
 
+/* Gin's own dark mode toggle (class on <html>). */
+.gin--dark-mode .local-tts-container {
+  --ltt-color-text: var(--gin-color-text, var(--color-text, #e5e5e5));
+  --ltt-color-text-muted: var(--gin-color-text-light, var(--color-gray-600, #e5e5e5));
+  --ltt-color-focus: var(--gin-color-primary, var(--color-absolutezero, #6db3f2));
+  --ltt-color-focus-ring: var(--gin-color-focus, var(--color-focus, #6db3f2));
+  --ltt-color-focus-offset: var(--gin-bg-layer, #1a1a1a);
+  --ltt-color-border: var(--gin-border-color, var(--color-gray-200, #555));
+  --ltt-color-border-hover: var(--gin-border-color-layer, var(--color-gray-500, #888));
+  --ltt-color-track: var(--gin-border-color, var(--color-gray-200, #444));
+  --ltt-color-thumb: var(--gin-color-primary, var(--color-absolutezero, #6db3f2));
+  --ltt-color-select-bg: var(--gin-bg-layer, #2a2a2a);
+  --ltt-color-select-disabled-bg: var(--gin-bg-layer2, var(--color-gray-050, #333));
+  --ltt-color-icon-filter: invert(1);
+}
+
+/* System preference dark (Claro or Gin "auto" mode). */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .local-tts-container {
     --ltt-color-text: var(--gin-color-text, var(--color-text, #e5e5e5));
@@ -42,9 +60,11 @@
     --ltt-color-thumb: var(--gin-color-primary, var(--color-absolutezero, #6db3f2));
     --ltt-color-select-bg: var(--gin-bg-layer, #2a2a2a);
     --ltt-color-select-disabled-bg: var(--gin-bg-layer2, var(--color-gray-050, #333));
+    --ltt-color-icon-filter: invert(1);
   }
 }
 
+/* Explicit dark toggle via data-theme attribute. */
 :root[data-theme="dark"] .local-tts-container {
   --ltt-color-text: var(--gin-color-text, var(--color-text, #e5e5e5));
   --ltt-color-text-muted: var(--gin-color-text-light, var(--color-gray-600, #e5e5e5));
@@ -57,4 +77,5 @@
   --ltt-color-thumb: var(--gin-color-primary, var(--color-absolutezero, #6db3f2));
   --ltt-color-select-bg: var(--gin-bg-layer, #2a2a2a);
   --ltt-color-select-disabled-bg: var(--gin-bg-layer2, var(--color-gray-050, #333));
+  --ltt-color-icon-filter: invert(1);
 }
