@@ -44,17 +44,9 @@ function local_tts_views_data() {
     'entity_id' => [
       'title' => t('Entity ID'),
       'help' => t('The entity ID.'),
-      'field' => ['id' => 'numeric'],
+      'field' => ['id' => 'standard'],
       'sort' => ['id' => 'standard'],
-      'filter' => ['id' => 'numeric'],
-      'relationship' => [
-        'title' => t('Content'),
-        'help' => t('The node referenced by this cache entry.'),
-        'base' => 'node_field_data',
-        'base field' => 'nid',
-        'id' => 'standard',
-        'label' => t('Node'),
-      ],
+      'filter' => ['id' => 'string'],
     ],
     'language' => [
       'title' => t('Language'),

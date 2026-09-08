@@ -14,7 +14,7 @@
         return;
       }
 
-      const forms = once('local-tts-voice-preview', '#local-tts-settings-form', context);
+      const forms = once('local-tts-voice-preview', '#local-tts-voice-settings-form', context);
       if (!forms.length) {
         return;
       }
@@ -22,7 +22,6 @@
       const form = forms[0];
       let currentAudio = null;
       let currentButton = null;
-      let currentBlobUrl = null;
 
       const selects = form.querySelectorAll('select[name^="voice_settings["]');
 
@@ -90,56 +89,33 @@
       });
 
       function playPreview(audioUrl, button) {
-        fetch(audioUrl, {credentials: 'same-origin'})
-          .then(function (response) {
-            if (!response.ok) {
-              throw new Error('HTTP ' + response.status);
-            }
-            return response.blob();
-          })
-          .then(function (blob) {
-            revokeBlobUrl();
-            const blobUrl = URL.createObjectURL(blob);
-            currentBlobUrl = blobUrl;
-            const audio = new Audio(blobUrl);
-            currentAudio = audio;
-            currentButton = button;
+        const audio = new Audio(audioUrl);
+        currentAudio = audio;
+        currentButton = button;
 
-            button.textContent = Drupal.t('Stop');
-            button.disabled = false;
-            button.classList.add('is-active');
+        button.textContent = Drupal.t('Stop');
+        button.disabled = false;
+        button.classList.add('is-active');
 
-            audio.addEventListener('ended', function () {
-              cleanupPreview(button);
-            });
+        audio.addEventListener('ended', function () {
+          cleanupPreview(button);
+        });
 
-            audio.addEventListener('error', function () {
-              showError(button, Drupal.t('Audio playback failed. The file may be corrupted.'));
-              cleanupPreview(button);
-            });
+        audio.addEventListener('error', function () {
+          showError(button, Drupal.t('Audio playback failed. The file may be corrupted.'));
+          cleanupPreview(button);
+        });
 
-            audio.play().catch(function () {
-              showError(button, Drupal.t('Audio playback was blocked by the browser.'));
-              cleanupPreview(button);
-            });
-          })
-          .catch(function () {
-            showError(button, Drupal.t('Audio could not be loaded. Try refreshing the page.'));
-          });
+        audio.play().catch(function () {
+          showError(button, Drupal.t('Audio playback was blocked by the browser.'));
+          cleanupPreview(button);
+        });
       }
 
       function cleanupPreview(button) {
         resetButton(button);
         currentAudio = null;
         currentButton = null;
-        revokeBlobUrl();
-      }
-
-      function revokeBlobUrl() {
-        if (currentBlobUrl) {
-          URL.revokeObjectURL(currentBlobUrl);
-          currentBlobUrl = null;
-        }
       }
 
       function stopPreview() {
@@ -152,7 +128,6 @@
         }
         currentAudio = null;
         currentButton = null;
-        revokeBlobUrl();
       }
 
       function resetButton(button) {
