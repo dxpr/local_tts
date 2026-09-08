@@ -6,5 +6,7 @@ parameters:
     - local_tts.install
   excludePaths:
     - src/Drush/Commands/*
+  scanDirectories:
+    - vendor/drupal/core/modules/views/src
   bootstrapFiles:
     - phpstan-bootstrap.php
