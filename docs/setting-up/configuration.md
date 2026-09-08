@@ -89,26 +89,6 @@ Speed multiplier from 0.5x (slow) to 2.0x (fast). The default is 1x.
 - **Show download button**: allow visitors to download the generated
   audio file
 
-## Placing the player
-
-### Block integration
-
-For site-wide TTS on all content pages:
-
-1. Go to **Structure > Block layout**
-2. Place the **Local Text-to-Speech** block in a region (e.g. Content)
-3. Configure which fields to include and voice/speed controls
-
-### Field integration
-
-For per-content-type control with Layout Builder support:
-
-1. Go to **Structure > Content types > [Type] > Manage fields**
-2. Add a field of type **Local TTS Player**
-3. Position the field in **Manage display**
-4. Configure voice/speed controls and field selection in the formatter
-   settings
-
 ## Permissions
 
 Two permissions control access:

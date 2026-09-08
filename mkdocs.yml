@@ -10,6 +10,7 @@ theme:
   name: material
   features:
     - navigation.footer
+    - navigation.sections
 
 extra_css:
   - stylesheets/extra.css
@@ -21,13 +22,24 @@ plugins:
 
 nav:
   - Home: 'index.md'
-  - Getting Started:
-      - Installation: 'getting-started/installation.md'
-      - Configuration: 'getting-started/configuration.md'
-  - Guides:
-      - Available Voices: 'guides/voices.md'
-      - Cache and Batch: 'guides/cache-and-batch.md'
-      - Drush Commands: 'guides/drush.md'
-      - FAQ: 'guides/faq.md'
+  - Using Local TTS:
+      - How the Player Works: 'using/how-the-player-works.md'
+      - Choosing a Voice: 'using/choosing-a-voice.md'
+  - Setting Up:
+      - Quick Start: 'setting-up/quick-start.md'
+      - Installation: 'setting-up/installation.md'
+      - Configuration: 'setting-up/configuration.md'
+  - Integrations:
+      - Overview: 'integrations/index.md'
+      - Block: 'integrations/block.md'
+      - Entity Field: 'integrations/field.md'
+      - Extra Field: 'integrations/extra-field.md'
+      - Views Field: 'integrations/views-field.md'
+  - Managing Audio:
+      - Keeping Audio Current: 'managing-audio/cache.md'
+      - Batch Generation: 'managing-audio/batch-generation.md'
+      - Drush Commands: 'managing-audio/drush.md'
+  - FAQ: 'faq.md'
   - Development:
+      - Architecture: 'development/architecture.md'
       - Contributing: 'development/contributing.md'

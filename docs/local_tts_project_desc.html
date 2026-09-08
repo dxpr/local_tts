@@ -2,10 +2,46 @@
 
 <p>Local TTS is part of the <a href="https://dxpr.com/c/marketing-cms?ref=50701">DXPR marketing CMS</a> stack and ships in <a href="https://www.drupal.org/project/dxpr_cms">DXPR CMS</a>.</p>
 
+<h2>Four ways to integrate</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Method</th>
+      <th>Best for</th>
+      <th>Setup</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="https://project.pages.drupalcode.org/local_tts/integrations/block/">Block</a></td>
+      <td>Site-wide player on every content page</td>
+      <td>Place block in a region</td>
+    </tr>
+    <tr>
+      <td><a href="https://project.pages.drupalcode.org/local_tts/integrations/field/">Entity field</a></td>
+      <td>Per-content-type voice/speed control</td>
+      <td>Add field to selected bundles</td>
+    </tr>
+    <tr>
+      <td><a href="https://project.pages.drupalcode.org/local_tts/integrations/extra-field/">Extra field</a></td>
+      <td>Quick toggle, no field storage needed</td>
+      <td>Enable in Manage Display</td>
+    </tr>
+    <tr>
+      <td><a href="https://project.pages.drupalcode.org/local_tts/integrations/views-field/">Views field</a></td>
+      <td>Player per row in content listings</td>
+      <td>Add field to a View</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>All methods share the same player UI, accessibility features, and caching system. <a href="https://project.pages.drupalcode.org/local_tts/integrations/">Which should I use?</a></p>
+
 <h2>Features</h2>
 
 <ul>
-  <li><strong>54 voices across 9 languages</strong>: American English, British English, Japanese, Mandarin Chinese, French, Hindi, Spanish, Italian, Portuguese. <a href="https://project.pages.drupalcode.org/local_tts/guides/voices/">Listen to voice samples</a></li>
+  <li><strong>54 voices across 9 languages</strong>: American English, British English, Japanese, Mandarin Chinese, French, Hindi, Spanish, Italian, Portuguese. <a href="https://project.pages.drupalcode.org/local_tts/using/choosing-a-voice/">Listen to voice samples</a></li>
   <li><strong>Language-aware voice filtering</strong>: automatically shows only voices matching the content language</li>
   <li><strong>Adjustable speech speed</strong>: 0.5x to 2.0x</li>
   <li><strong>Audio caching</strong>: generated files cached on disk with automatic cleanup when the size limit is exceeded</li>
@@ -13,7 +49,6 @@
   <li><strong>Content type filtering</strong>: limit TTS to specific content types</li>
   <li><strong>Download button</strong>: optional download icon in the player controls</li>
   <li><strong>Batch generation</strong>: generate audio for many entities at once via admin UI or Drush, with date filtering and dry-run preview</li>
-  <li><strong>Block and field integration</strong>: place a player site-wide or per content type, with Layout Builder support</li>
   <li><strong>Drush commands</strong>: test, batch generate, list voices, clear cache</li>
   <li><strong>Accessibility-optimised</strong>: ARIA labels, keyboard shortcuts, semantic HTML</li>
   <li><strong>Privacy-first</strong>: all processing local, only publicly viewable content converted</li>
@@ -139,15 +174,9 @@ drush en local_tts</code></pre>
 <div class="note-tip">
   <ul>
     <li><a href="https://project.pages.drupalcode.org/local_tts/">Module documentation</a>: installation, configuration, voice reference, and Drush commands</li>
-    <li><a href="https://project.pages.drupalcode.org/local_tts/guides/voices/">Voice samples</a>: listen to all 54 voices across 9 languages</li>
-    <li><a href="https://project.pages.drupalcode.org/local_tts/guides/cache-and-batch/">Cache and batch generation</a>: manage cached audio and generate in bulk</li>
-    <li><a href="https://project.pages.drupalcode.org/local_tts/guides/faq/">FAQ</a>: caching, privacy, load management, and troubleshooting</li>
+    <li><a href="https://project.pages.drupalcode.org/local_tts/using/choosing-a-voice/">Voice samples</a>: listen to all 54 voices across 9 languages</li>
+    <li><a href="https://project.pages.drupalcode.org/local_tts/integrations/">Integration methods</a>: block, entity field, extra field, and Views</li>
+    <li><a href="https://project.pages.drupalcode.org/local_tts/managing-audio/batch-generation/">Batch generation</a>: generate audio in bulk via admin UI or Drush</li>
+    <li><a href="https://project.pages.drupalcode.org/local_tts/faq/">FAQ</a>: caching, privacy, load management</li>
   </ul>
 </div>
-
-<h2>Related modules</h2>
-
-<ul>
-  <li><a href="https://www.drupal.org/project/dxpr_cms">DXPR CMS</a>: Drupal pre-configured with DXPR Builder, DXPR Theme, and security best practices</li>
-  <li><a href="https://www.drupal.org/project/ai">AI module</a>: Drupal's AI integration framework</li>
-</ul>
