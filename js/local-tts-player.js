@@ -337,13 +337,6 @@
           generationTimer = setInterval(function () {
             var elapsed = Math.floor((Date.now() - startTime) / 1000);
             var msg = Drupal.t('Generating speech... (@seconds)', {'@seconds': elapsed + 's'});
-            if (elapsed > 10 && config.wordCount) {
-              var estimate = Math.max(5, Math.ceil(config.wordCount / 25));
-              msg = Drupal.t('Generating speech... (@elapsed, usually @estimates for this content)', {
-                '@elapsed': elapsed + 's',
-                '@estimates': estimate + 's',
-              });
-            }
             if (labelText) {
               setLabelWithIcon('local-tts-loading', '', msg);
             }
