@@ -5,9 +5,27 @@
  * Maps --ltt-* design tokens to dxpr_theme runtime CSS custom
  * properties so the player inherits the site's configured accent
  * colour automatically.
+ *
+ * Rules are repeated at each dark-mode specificity level so that
+ * dxpr_theme tokens are not overridden by the generic dark palette
+ * in local-tts-player.css.
  */
 
 .local-tts-container {
+  --ltt-color-focus: var(--dxpr-theme-accent-color, #0678be);
+  --ltt-color-focus-ring: var(--dxpr-theme-accent-color, #0678be);
+  --ltt-color-thumb: var(--dxpr-theme-accent-color, #0678be);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .local-tts-container {
+    --ltt-color-focus: var(--dxpr-theme-accent-color, #0678be);
+    --ltt-color-focus-ring: var(--dxpr-theme-accent-color, #0678be);
+    --ltt-color-thumb: var(--dxpr-theme-accent-color, #0678be);
+  }
+}
+
+:root[data-theme="dark"] .local-tts-container {
   --ltt-color-focus: var(--dxpr-theme-accent-color, #0678be);
   --ltt-color-focus-ring: var(--dxpr-theme-accent-color, #0678be);
   --ltt-color-thumb: var(--dxpr-theme-accent-color, #0678be);

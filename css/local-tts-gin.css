@@ -5,6 +5,14 @@
  * Maps --ltt-* design tokens to Gin and Claro runtime CSS custom
  * properties so the player inherits the admin theme's accent colours,
  * surface tones, and dark mode automatically.
+ *
+ * Gin variables (--gin-*) adapt to Gin's own dark mode, so the same
+ * var() references work in both light and dark contexts; the fallback
+ * values change to match the generic dark palette from
+ * local-tts-player.css.
+ *
+ * Rules are repeated at each dark-mode specificity level so that Gin
+ * tokens are not overridden by the generic dark palette.
  */
 
 .local-tts-container {
@@ -19,4 +27,34 @@
   --ltt-color-thumb: var(--gin-color-primary, var(--color-absolutezero, #003cc5));
   --ltt-color-select-bg: var(--gin-bg-layer, #fff);
   --ltt-color-select-disabled-bg: var(--gin-bg-layer2, var(--color-gray-050, #f3f4f9));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .local-tts-container {
+    --ltt-color-text: var(--gin-color-text, var(--color-text, #e5e5e5));
+    --ltt-color-text-muted: var(--gin-color-text-light, var(--color-gray-600, #e5e5e5));
+    --ltt-color-focus: var(--gin-color-primary, var(--color-absolutezero, #6db3f2));
+    --ltt-color-focus-ring: var(--gin-color-focus, var(--color-focus, #6db3f2));
+    --ltt-color-focus-offset: var(--gin-bg-layer, #1a1a1a);
+    --ltt-color-border: var(--gin-border-color, var(--color-gray-200, #555));
+    --ltt-color-border-hover: var(--gin-border-color-layer, var(--color-gray-500, #888));
+    --ltt-color-track: var(--gin-border-color, var(--color-gray-200, #444));
+    --ltt-color-thumb: var(--gin-color-primary, var(--color-absolutezero, #6db3f2));
+    --ltt-color-select-bg: var(--gin-bg-layer, #2a2a2a);
+    --ltt-color-select-disabled-bg: var(--gin-bg-layer2, var(--color-gray-050, #333));
+  }
+}
+
+:root[data-theme="dark"] .local-tts-container {
+  --ltt-color-text: var(--gin-color-text, var(--color-text, #e5e5e5));
+  --ltt-color-text-muted: var(--gin-color-text-light, var(--color-gray-600, #e5e5e5));
+  --ltt-color-focus: var(--gin-color-primary, var(--color-absolutezero, #6db3f2));
+  --ltt-color-focus-ring: var(--gin-color-focus, var(--color-focus, #6db3f2));
+  --ltt-color-focus-offset: var(--gin-bg-layer, #1a1a1a);
+  --ltt-color-border: var(--gin-border-color, var(--color-gray-200, #555));
+  --ltt-color-border-hover: var(--gin-border-color-layer, var(--color-gray-500, #888));
+  --ltt-color-track: var(--gin-border-color, var(--color-gray-200, #444));
+  --ltt-color-thumb: var(--gin-color-primary, var(--color-absolutezero, #6db3f2));
+  --ltt-color-select-bg: var(--gin-bg-layer, #2a2a2a);
+  --ltt-color-select-disabled-bg: var(--gin-bg-layer2, var(--color-gray-050, #333));
 }

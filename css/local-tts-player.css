@@ -87,7 +87,6 @@
   border: none;
   background: transparent url('../images/play-icon.svg') center / contain no-repeat;
   cursor: pointer;
-  transition: background-image var(--ltt-transition-speed) ease;
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
@@ -121,6 +120,7 @@
 /* Content area */
 .local-tts-content {
   flex: 1;
+  min-width: 0;
   min-height: var(--ltt-btn-size);
   display: flex;
   align-items: center;
@@ -197,6 +197,7 @@
 /* Scrubber (progress slider) */
 .local-tts-container .local-tts-scrubber {
   flex: 1;
+  min-width: 0;
   height: var(--ltt-thumb-size);
   border: none;
   outline: none;
