@@ -377,6 +377,10 @@
   white-space: nowrap;
 }
 
+.local-tts-container .local-tts-download-button[hidden] {
+  display: none;
+}
+
 .local-tts-container .local-tts-download-button:hover {
   background: var(--ltt-color-text);
   color: var(--ltt-color-focus-offset);

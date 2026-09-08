@@ -258,27 +258,7 @@ final class LocalTtsCommands extends DrushCommands {
    *   espeak-ng language identifier.
    */
   protected function mapLanguageToEspeak(string $langcode): string {
-    $langcode = strtolower($langcode);
-
-    $map = [
-      'en' => 'en-us',
-      'en-us' => 'en-us',
-      'en-gb' => 'en-gb',
-      'es' => 'es',
-      'fr' => 'fr-fr',
-      'hi' => 'hi',
-      'it' => 'it',
-      'ja' => 'ja',
-      'pt' => 'pt-pt',
-      'pt-br' => 'pt-br',
-      'pt-pt' => 'pt-pt',
-      'zh' => 'cmn',
-      'zh-hans' => 'cmn',
-      'zh-hant' => 'cmn',
-      'ko' => 'ko',
-    ];
-
-    return $map[$langcode] ?? 'en-us';
+    return $this->ttsService->mapLanguageToEspeak($langcode);
   }
 
   /**

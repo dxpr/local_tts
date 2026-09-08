@@ -360,7 +360,7 @@ final class LocalTtsSettingsForm extends ConfigFormBase {
     }
 
     $this->config('local_tts.settings')
-      ->set('espeak_data_path', $form_state->getValue('espeak_data_path'))
+      ->set('espeak_data_path', TtsService::expandPath($form_state->getValue('espeak_data_path')))
       ->set('default_voices', $voice_settings)
       ->set('default_speed', $default_speed)
       ->set('cache_audio', $form_state->getValue('cache_audio'))

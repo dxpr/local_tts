@@ -272,7 +272,7 @@ class TtsService {
 
     // Security: Validate speed is within safe range.
     $speed = (float) $speed;
-    if ($speed < 0.5 || $speed > 2.0) {
+    if (!is_finite($speed) || $speed < 0.5 || $speed > 2.0) {
       $this->logger->error('Invalid speed: @speed (must be between 0.5 and 2.0)', ['@speed' => $speed]);
       throw new \InvalidArgumentException(sprintf('Invalid speed: %s (must be between 0.5 and 2.0)', $speed));
     }
@@ -755,7 +755,7 @@ class TtsService {
       'ko' => 'ko',
     ];
 
-    return $map[$langcode] ?? 'en-us';
+    return $map[$langcode] ?? $map[explode('-', $langcode)[0]] ?? 'en-us';
   }
 
   /**
@@ -1244,6 +1244,8 @@ class TtsService {
    *   Clean plain text with natural sentence breaks.
    */
   public function htmlToPlainText(string $html): string {
+    // These elements contain source code or inert markup, not spoken content.
+    $html = preg_replace('#<(script|style|template)\b[^>]*>.*?</\1\s*>#is', '', $html);
     $block_tags = 'h[1-6]|p|div|section|article|header|footer|nav|aside|main|'
       . 'blockquote|pre|figure|figcaption|details|summary|'
       . 'li|dt|dd|tr|th|td|caption';
