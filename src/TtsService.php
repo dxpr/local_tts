@@ -10,12 +10,14 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Database\Database;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Extension\ModuleExtensionList;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Render\RendererInterface;
 use Drupal\Core\Session\AccountSwitcherInterface;
+use Drupal\Core\TypedData\TranslatableInterface;
 
 /**
  * Service for interfacing with Kokoro TTS binary.
@@ -196,6 +198,7 @@ class TtsService {
    *   - speed: Speech speed (default: from config)
    *   - language: Language code for G2P (default: detected from voice)
    *   - use_cache: Whether to use cached audio (default: from config)
+   *   - force_refresh: Regenerate while retaining cache metadata
    *   - entity_type: Entity type for tracking (e.g., 'node')
    *   - entity_id: Entity ID for tracking.
    *
@@ -221,31 +224,21 @@ class TtsService {
 
     $entity_type = $options['entity_type'] ?? NULL;
     $entity_id = $options['entity_id'] ?? NULL;
-    $skip_access_check = $options['skip_access_check'] ?? FALSE;
-
-    // Security: Only generate audio for publicly accessible content.
-    if (!$skip_access_check && $entity_type !== NULL && $entity_id !== NULL) {
-      try {
-        $entity = $this->entityTypeManager
-          ->getStorage($entity_type)
-          ->load($entity_id);
-
-        if ($entity) {
-          $anonymous = new AnonymousUserSession();
-          if (!$entity->access('view', $anonymous)) {
-            $this->logger->warning('Refusing to cache audio for non-public content: @type:@id', [
-              '@type' => $entity_type,
-              '@id' => $entity_id,
-            ]);
-            throw new \RuntimeException('Cannot generate audio for private content. Only content viewable by anonymous users can be cached.');
-          }
+    // Public audio must always be tied to an existing, publicly viewable
+    // translation, including when a caller requests a cache hit.
+    if ($entity_type !== NULL && $entity_id !== NULL) {
+      $entity = $this->entityTypeManager->getStorage($entity_type)->load($entity_id);
+      if (!$entity) {
+        throw new \InvalidArgumentException('Cannot generate audio for a missing entity.');
+      }
+      if (!empty($options['language']) && $entity instanceof TranslatableInterface) {
+        if (!$entity->hasTranslation($options['language'])) {
+          throw new \InvalidArgumentException('Cannot generate audio for a missing translation.');
         }
+        $entity = $entity->getTranslation($options['language']);
       }
-      catch (\RuntimeException $e) {
-        throw $e;
-      }
-      catch (\Exception $e) {
-        $this->logger->error('Error checking entity access: @message', ['@message' => $e->getMessage()]);
+      if (!$entity->access('view', new AnonymousUserSession())) {
+        throw new \RuntimeException('Cannot generate audio for private content. Only content viewable by anonymous users can be cached.');
       }
     }
 
@@ -259,9 +252,12 @@ class TtsService {
       throw new \InvalidArgumentException(sprintf('Text length (%d characters) exceeds maximum allowed (%d characters)', mb_strlen($text), $max_length));
     }
 
-    $voice = $options['voice'] ?? $config->get('default_voice');
+    $default_language = $options['language'] ?? 'en';
+    $defaults = $config->get('default_voices') ?? [];
+    $voice = $options['voice'] ?? $defaults[$default_language] ?? $config->get('default_voice') ?? array_key_first($this->getAvailableVoices($default_language)) ?? 'af_sky';
     $speed = $options['speed'] ?? $config->get('default_speed');
     $language = $options['language'] ?? $this->detectLanguageFromVoice($voice);
+    $use_cache = $options['use_cache'] ?? $config->get('cache_audio');
 
     // Security: Validate voice against allowed list.
     $available_voices = array_keys($this->getAvailableVoices());
@@ -278,12 +274,13 @@ class TtsService {
     }
 
     $espeak_lang = $this->mapLanguageToEspeak($language);
+    $options['language'] = $language;
 
     // Language is part of the cache KEY (separate files per language).
     $cache_key = $this->computeCacheKey($text, $voice, $speed, $language);
     $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
 
-    if ($use_cache) {
+    if ($use_cache && empty($options['force_refresh'])) {
       $cached_file = $audio_dir . '/' . $cache_key . '.ogg';
       if (file_exists($cached_file)) {
         $this->saveMetadata($cache_key, $text, $voice, $speed, $options);
@@ -357,8 +354,9 @@ class TtsService {
 
     $uri = $audio_dir . '/' . $cache_key . '.ogg';
 
-    // Only save metadata for cached files (requires entity context).
-    if ($use_cache) {
+    // Track entity audio even when reuse is disabled, so deletion and access
+    // changes can still remove its public file.
+    if ($entity_type !== NULL && $entity_id !== NULL) {
       $this->saveMetadata($cache_key, $text, $voice, $speed, $options);
     }
 
@@ -957,7 +955,10 @@ class TtsService {
     $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
 
     try {
-      $this->fileSystem->deleteRecursive($audio_dir);
+      if (!$this->fileSystem->deleteRecursive($audio_dir)) {
+        return FALSE;
+      }
+      $this->database->truncate('local_tts_cache')->execute();
       return TRUE;
     }
     catch (\Exception $e) {
@@ -980,7 +981,7 @@ class TtsService {
    * @param array $options
    *   Additional options including entity tracking info.
    */
-  protected function saveMetadata($cache_key, $text, $voice, $speed, array $options = []) {
+  public function saveMetadata($cache_key, $text, $voice, $speed, array $options = []) {
     $config = $this->configFactory->get('local_tts.settings');
     $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
     $directory = $this->fileSystem->realpath($audio_dir);
@@ -1019,13 +1020,14 @@ class TtsService {
       $this->logger->info('Database connection refreshed before saving metadata.');
     }
 
-    // Merge on entity_type + entity_id + language when entity context exists.
+    // Keep every variant tracked so invalidation removes all old audio.
     $merge_keys = [];
     if (isset($record['entity_type'], $record['entity_id'])) {
       $merge_keys = [
         'entity_type' => $record['entity_type'],
         'entity_id' => $record['entity_id'],
         'language' => $record['language'],
+        'cache_key' => $cache_key,
       ];
     }
     else {
@@ -1080,108 +1082,50 @@ class TtsService {
    *   The number of files deleted.
    */
   public function deleteAudioForEntity($entity_type, $entity_id) {
-    $config = $this->configFactory->get('local_tts.settings');
-    $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
-    $directory = $this->fileSystem->realpath($audio_dir);
-
-    if (!$directory || !is_dir($directory)) {
-      return 0;
-    }
-
-    $cache_keys = $this->database->select('local_tts_cache', 'a')
-      ->fields('a', ['cache_key'])
-      ->condition('entity_type', $entity_type)
-      ->condition('entity_id', $entity_id)
-      ->execute()
-      ->fetchCol();
-
-    if (empty($cache_keys)) {
-      return 0;
-    }
-
-    $deleted = 0;
-    foreach ($cache_keys as $cache_key) {
-      $file_path = $directory . '/' . $cache_key . '.ogg';
-      if (file_exists($file_path)) {
-        @unlink($file_path);
-        $deleted++;
-      }
-    }
-
-    $this->database->delete('local_tts_cache')
-      ->condition('entity_type', $entity_type)
-      ->condition('entity_id', $entity_id)
-      ->execute();
-
-    if ($deleted > 0) {
-      $this->logger->info('Deleted @count audio files for @type:@id', [
-        '@count' => $deleted,
-        '@type' => $entity_type,
-        '@id' => $entity_id,
-      ]);
-    }
-
-    return $deleted;
+    return $this->deleteAudioMatching([
+      'entity_type' => $entity_type,
+      'entity_id' => $entity_id,
+    ]);
   }
 
   /**
    * Delete audio for a single entity translation.
-   *
-   * @param string $entity_type
-   *   The entity type.
-   * @param int|string $entity_id
-   *   The entity ID.
-   * @param string $langcode
-   *   The language code of the translation to invalidate.
-   *
-   * @return int
-   *   The number of files deleted.
    */
   public function deleteAudioForEntityTranslation($entity_type, $entity_id, $langcode) {
-    $config = $this->configFactory->get('local_tts.settings');
-    $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
-    $directory = $this->fileSystem->realpath($audio_dir);
+    return $this->deleteAudioMatching([
+      'entity_type' => $entity_type,
+      'entity_id' => $entity_id,
+      'language' => $langcode,
+    ]);
+  }
 
-    if (!$directory || !is_dir($directory)) {
-      return 0;
+  /**
+   * Remove matching metadata, deleting files only after their last reference.
+   */
+  protected function deleteAudioMatching(array $conditions): int {
+    $select = $this->database->select('local_tts_cache', 'c')->fields('c', ['cache_key']);
+    $delete = $this->database->delete('local_tts_cache');
+    foreach ($conditions as $field => $value) {
+      $select->condition($field, $value);
+      $delete->condition($field, $value);
     }
+    $keys = $select->execute()->fetchCol();
+    $delete->execute();
 
-    $cache_keys = $this->database->select('local_tts_cache', 'a')
-      ->fields('a', ['cache_key'])
-      ->condition('entity_type', $entity_type)
-      ->condition('entity_id', $entity_id)
-      ->condition('language', $langcode)
-      ->execute()
-      ->fetchCol();
-
-    if (empty($cache_keys)) {
-      return 0;
-    }
-
+    $audio_dir = $this->configFactory->get('local_tts.settings')->get('audio_directory') ?: 'public://local-tts';
     $deleted = 0;
-    foreach ($cache_keys as $cache_key) {
-      $file_path = $directory . '/' . $cache_key . '.ogg';
-      if (file_exists($file_path)) {
-        @unlink($file_path);
-        $deleted++;
+    foreach (array_unique($keys) as $key) {
+      $remaining = $this->database->select('local_tts_cache', 'c')
+        ->condition('cache_key', $key)->countQuery()->execute()->fetchField();
+      if (!$remaining) {
+        foreach (['.ogg', '.wav'] as $extension) {
+          $uri = $audio_dir . '/' . $key . $extension;
+          if (file_exists($uri) && $this->fileSystem->delete($uri)) {
+            $deleted++;
+          }
+        }
       }
     }
-
-    $this->database->delete('local_tts_cache')
-      ->condition('entity_type', $entity_type)
-      ->condition('entity_id', $entity_id)
-      ->condition('language', $langcode)
-      ->execute();
-
-    if ($deleted > 0) {
-      $this->logger->info('Deleted @count audio files for @type:@id (@lang)', [
-        '@count' => $deleted,
-        '@type' => $entity_type,
-        '@id' => $entity_id,
-        '@lang' => $langcode,
-      ]);
-    }
-
     return $deleted;
   }
 
@@ -1190,11 +1134,13 @@ class TtsService {
    *
    * @param \Drupal\Core\Entity\EntityInterface $entity
    *   The entity to extract text from.
+   * @param array $fields
+   *   Optional text field names to render. Empty means the full entity display.
    *
    * @return string
    *   The extracted and sanitised plain text content.
    */
-  public function extractTextFromEntity($entity) {
+  public function extractTextFromEntity($entity, array $fields = []) {
     // Generated audio is public, so render exactly what an anonymous visitor
     // would see: never bake editor-only output into the spoken text.
     $switched = FALSE;
@@ -1202,19 +1148,39 @@ class TtsService {
       $this->accountSwitcher->switchTo(new AnonymousUserSession());
       $switched = TRUE;
     }
+    $was_extracting = $this->extracting;
     $this->extracting = TRUE;
 
     try {
       $langcode = $entity->language()->getId();
       $entity_type_id = $entity->getEntityTypeId();
       $view_builder = $this->entityTypeManager->getViewBuilder($entity_type_id);
-      $view = $view_builder->view($entity, 'default', $langcode);
+      if ($fields) {
+        $view = [];
+        if ($entity instanceof FieldableEntityInterface) {
+          foreach ($fields as $field_name) {
+            if (!is_string($field_name) || !$entity->hasField($field_name)
+              || in_array($field_name, TtsPlayerBuilder::EXCLUDED_BASE_FIELDS, TRUE)) {
+              continue;
+            }
+            $items = $entity->get($field_name);
+            if (in_array($items->getFieldDefinition()->getType(), TtsPlayerBuilder::ALLOWED_FIELD_TYPES, TRUE)) {
+              // viewField applies field access and text format filtering.
+              $view[$field_name] = $view_builder->viewField($items, ['label' => 'hidden']);
+            }
+          }
+        }
+      }
+      else {
+        $view = $view_builder->view($entity, 'default', $langcode);
+      }
       $rendered = $this->renderer->renderInIsolation($view);
       $text = $this->htmlToPlainText((string) $rendered);
 
       $context = [
         'entity' => $entity,
         'langcode' => $langcode,
+        'fields' => $fields,
       ];
       $this->moduleHandler->alter('local_tts_text', $text, $context);
 
@@ -1227,7 +1193,7 @@ class TtsService {
       return '';
     }
     finally {
-      $this->extracting = FALSE;
+      $this->extracting = $was_extracting;
       if ($switched) {
         $this->accountSwitcher->switchBack();
       }

@@ -8,6 +8,7 @@ use Drupal\Core\Queue\Attribute\QueueWorker;
 use Drupal\Core\Queue\QueueWorkerBase;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\Core\TypedData\TranslatableInterface;
+use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\local_tts\TtsService;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -83,18 +84,18 @@ final class TtsGenerationWorker extends QueueWorkerBase implements ContainerFact
       return;
     }
 
-    $text = $data['text'] ?? '';
-
-    // Extract text from entity when not provided in queue item.
+    // Reload the source even when the job contains text: it may have been
+    // edited, unpublished, translated or deleted while waiting for cron.
+    $text = $this->extractTextForQueueItem($data);
     if (empty($text)) {
-      $text = $this->extractTextForQueueItem($data);
-      if (empty($text)) {
-        $this->logger->warning('No text could be extracted for @type:@id; skipping.', [
-          '@type' => $data['entity_type'],
-          '@id' => $data['entity_id'],
-        ]);
-        return;
-      }
+      return;
+    }
+    if (isset($data['text']) && $data['text'] !== '' && $data['text'] !== $text) {
+      $this->logger->info('Dropping stale TTS job for @type:@id.', [
+        '@type' => $data['entity_type'],
+        '@id' => $data['entity_id'],
+      ]);
+      return;
     }
 
     $options = [
@@ -147,11 +148,17 @@ final class TtsGenerationWorker extends QueueWorkerBase implements ContainerFact
       }
 
       $langcode = $data['language'] ?? NULL;
-      if ($langcode && $entity instanceof TranslatableInterface && $entity->hasTranslation($langcode)) {
+      if ($langcode && $entity instanceof TranslatableInterface) {
+        if (!$entity->hasTranslation($langcode)) {
+          return '';
+        }
         $entity = $entity->getTranslation($langcode);
       }
+      if (!$entity->access('view', new AnonymousUserSession())) {
+        return '';
+      }
 
-      return $this->ttsService->extractTextFromEntity($entity);
+      return $this->ttsService->extractTextFromEntity($entity, $data['fields'] ?? []);
     }
     catch (\Exception $e) {
       $this->logger->error('Failed to extract text for @type:@id: @msg', [

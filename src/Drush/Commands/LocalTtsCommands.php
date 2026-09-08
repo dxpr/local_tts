@@ -786,7 +786,8 @@ final class LocalTtsCommands extends DrushCommands {
           'speed' => $config->get('default_speed') ?? 1.0,
           'entity_type' => $entity_data['entity_type'],
           'entity_id' => $entity_data['entity_id'],
-          'use_cache' => !$options['force'],
+          'use_cache' => TRUE,
+          'force_refresh' => (bool) $options['force'],
           'skip_access_check' => FALSE,
         ];
 

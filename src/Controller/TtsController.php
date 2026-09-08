@@ -155,10 +155,14 @@ final class TtsController extends ControllerBase {
    */
   public function generate(Request $request) {
     $voice = $request->request->get('voice') ?: $request->query->get('voice');
-    $speed = $request->request->get('speed') ?: $request->query->get('speed');
+    $speed = $request->request->get('speed') ?? $request->query->get('speed');
     $entity_type = $request->request->get('entity_type') ?: $request->query->get('entity_type');
     $entity_id = $request->request->get('entity_id') ?: $request->query->get('entity_id');
     $language_from_request = $request->request->get('language') ?: $request->query->get('language');
+    $fields = json_decode($request->request->get('fields') ?? '[]', TRUE);
+    if (!is_array($fields) || array_filter($fields, 'is_string') !== $fields) {
+      return new JsonResponse(['error' => 'Bad Request', 'message' => 'Invalid fields'], 400);
+    }
 
     // SECURITY: Never accept text from client.
     if (empty($entity_type) || empty($entity_id)) {
@@ -211,7 +215,7 @@ final class TtsController extends ControllerBase {
       }
 
       // Render-based text extraction captures computed fields.
-      $text = $this->ttsService->extractTextFromEntity($entity);
+      $text = $this->ttsService->extractTextFromEntity($entity, $fields);
 
       if (empty(trim($text))) {
         return new JsonResponse([
@@ -247,38 +251,45 @@ final class TtsController extends ControllerBase {
       ], 400);
     }
     $resolved_speed = $speed !== NULL && $speed !== '' ? (float) $speed : (float) ($config->get('default_speed') ?: 1);
-    if ($resolved_speed < 0.5 || $resolved_speed > 2.0) {
+    if (!is_finite($resolved_speed) || $resolved_speed < 0.5 || $resolved_speed > 2.0) {
       return new JsonResponse([
         'error' => 'Bad Request',
         'message' => 'Invalid speed (must be between 0.5 and 2.0)',
       ], 400);
     }
 
-    // Content change detection: serve cached audio when text is unchanged.
+    // The cache key includes text, voice, speed and language. A text hash
+    // alone cannot identify the variant the visitor requested.
     $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
-    $text_hash = md5($text);
-
-    $existing = $this->database->select('local_tts_cache', 'c')
-      ->fields('c', ['cache_key', 'text_hash'])
-      ->condition('entity_type', $entity_type)
-      ->condition('entity_id', $entity_id)
-      ->condition('language', $language)
-      ->execute()
-      ->fetchAssoc();
-
-    if ($existing && $existing['text_hash'] === $text_hash) {
-      $cached_uri = $this->findAudioFile($audio_dir, $existing['cache_key']);
-      if ($cached_uri) {
-        $audio_url = $this->fileUrlGenerator->generateAbsoluteString($cached_uri);
-        return new JsonResponse([
-          'success' => TRUE,
-          'audio_url' => $audio_url,
-          'text' => mb_substr($text, 0, 100) . (mb_strlen($text) > 100 ? '...' : ''),
-        ]);
-      }
+    $max_length = $config->get('max_text_length') ?? 1000000;
+    if ($max_length > 0 && mb_strlen($text) > $max_length) {
+      return new JsonResponse([
+        'error' => 'Bad Request',
+        'message' => 'Text content exceeds the maximum allowed length',
+      ], 400);
     }
 
-    // HTTP 429: Rate limiting.
+    // Compute cache key using the same formula as TtsService.
+    $cache_key = $this->ttsService->computeCacheKey($text, $resolved_voice, $resolved_speed, $language);
+
+    // Return immediately when the file already exists on disk.
+    $cached_uri = $this->findAudioFile($audio_dir, $cache_key);
+    if ($cached_uri) {
+      // Register this entity's use of a shared file and update its access time.
+      $this->ttsService->saveMetadata($cache_key, $text, $resolved_voice, $resolved_speed, [
+        'entity_type' => $entity_type,
+        'entity_id' => $entity_id,
+        'language' => $language,
+      ]);
+      $audio_url = $this->fileUrlGenerator->generateAbsoluteString($cached_uri);
+      return new JsonResponse([
+        'success' => TRUE,
+        'audio_url' => $audio_url,
+        'text' => mb_substr($text, 0, 100) . (mb_strlen($text) > 100 ? '...' : ''),
+      ]);
+    }
+
+    // Only generation consumes the rate limit; cached playback remains free.
     if (!$this->checkRateLimit()) {
       $retry_after = $this->getRetryAfter();
       $minutes = max(1, (int) ceil($retry_after / 60));
@@ -288,20 +299,6 @@ final class TtsController extends ControllerBase {
         'message' => 'You have made too many requests. Please try again in ' . $minutes . ' minutes.',
         'retry_after' => $retry_after,
       ], 429, ['Retry-After' => $retry_after]);
-    }
-
-    // Compute cache key using the same formula as TtsService.
-    $cache_key = $this->ttsService->computeCacheKey($text, $resolved_voice, $resolved_speed, $language);
-
-    // Return immediately when the file already exists on disk.
-    $cached_uri = $this->findAudioFile($audio_dir, $cache_key);
-    if ($cached_uri) {
-      $audio_url = $this->fileUrlGenerator->generateAbsoluteString($cached_uri);
-      return new JsonResponse([
-        'success' => TRUE,
-        'audio_url' => $audio_url,
-        'text' => mb_substr($text, 0, 100) . (mb_strlen($text) > 100 ? '...' : ''),
-      ]);
     }
 
     // Queue for background generation and return a poll URL.
@@ -314,6 +311,7 @@ final class TtsController extends ControllerBase {
       'speed' => $resolved_speed,
       'language' => $language,
       'cache_key' => $cache_key,
+      'fields' => $fields,
     ]);
 
     // Record rate limit event after successful queuing.

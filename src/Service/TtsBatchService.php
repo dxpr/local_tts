@@ -10,6 +10,7 @@ use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\TypedData\TranslatableInterface;
+use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\local_tts\TtsService;
 use Drupal\local_tts\Exception\TtsServiceUnavailableException;
 use Drupal\local_tts\Exception\TtsTimeoutException;
@@ -272,14 +273,17 @@ class TtsBatchService {
       }
 
       $context['sandbox']['progress'] = 0;
-      $context['sandbox']['total'] = $total_entities;
+      $context['sandbox']['total'] = count($entities);
       $context['sandbox']['current_batch_start'] = time();
-      $context['results']['processed'] = 0;
-      $context['results']['generated'] = 0;
-      $context['results']['cached'] = 0;
-      $context['results']['errors'] = [];
-      $context['results']['high_load_pauses'] = 0;
-      $context['results']['retry_counts'] = [];
+      // Results span the whole batch; Drupal resets sandbox for each chunk.
+      $context['results'] += [
+        'processed' => 0,
+        'generated' => 0,
+        'cached' => 0,
+        'errors' => [],
+        'high_load_pauses' => 0,
+        'retry_counts' => [],
+      ];
     }
 
     $logger = $this->loggerFactory->get('local_tts');
@@ -301,7 +305,7 @@ class TtsBatchService {
           sleep(10);
 
           // Don't increment progress - we'll retry this batch.
-          $context['finished'] = $context['sandbox']['progress'] / $context['sandbox']['total'];
+          $context['finished'] = 0;
           return;
         }
         else {
@@ -314,12 +318,12 @@ class TtsBatchService {
     }
 
     // Inter-batch delay.
-    if ($options['inter_batch_delay'] > 0 && $context['sandbox']['progress'] > 0) {
+    if ($options['inter_batch_delay'] > 0 && $context['results']['processed'] > 0) {
       sleep($options['inter_batch_delay']);
     }
 
     // Process entities.
-    foreach ($entities as $entity_data) {
+    foreach (array_slice($entities, $context['sandbox']['progress']) as $entity_data) {
       $retry_count = 0;
       $max_retries = $options['max_retries'];
       $generated = FALSE;
@@ -366,6 +370,10 @@ class TtsBatchService {
             $entity = $entity->getTranslation($langcode);
           }
 
+          if (!$entity->access('view', new AnonymousUserSession())) {
+            throw new \RuntimeException('Cannot generate audio for private content.');
+          }
+
           // Extract text from entity.
           $text = $this->extractTextFromEntity($entity);
 
@@ -377,11 +385,7 @@ class TtsBatchService {
             break;
           }
 
-          // Build generation options.
-          // Note: We skip access check since we're in a batch operation and
-          // already verified the entity exists. This avoids database timeout
-          // issues during long TTS generation.
-          // Get default voice for this language (or use override from form).
+          // Get the default voice for this translation unless overridden.
           $voice = $options['voice'] ?? $this->getDefaultVoiceForLanguage($langcode);
 
           $generation_options = [
@@ -390,20 +394,20 @@ class TtsBatchService {
             'speed' => $options['speed'],
             'entity_type' => $entity_data['entity_type'],
             'entity_id' => $entity_data['entity_id'],
-            'use_cache' => !$options['force_refresh'],
-            'skip_access_check' => TRUE,
+            'use_cache' => TRUE,
+            'force_refresh' => $options['force_refresh'],
           ];
 
           // Generate TTS (CPU-intensive operation).
           // Suppress output to prevent batch corruption.
           ob_start();
 
-          $file_uri = $this->ttsService->generateSpeech(
-            $text,
-            $generation_options
-          );
-
-          ob_end_clean();
+          try {
+            $file_uri = $this->ttsService->generateSpeech($text, $generation_options);
+          }
+          finally {
+            ob_end_clean();
+          }
 
           if ($file_uri) {
             $context['results']['generated']++;
@@ -420,9 +424,6 @@ class TtsBatchService {
             $context['results']['cached']++;
             $generated = TRUE;
           }
-
-          $context['results']['processed']++;
-          $context['sandbox']['progress']++;
 
         }
         catch (TtsServiceUnavailableException $e) {
@@ -490,6 +491,10 @@ class TtsBatchService {
         }
       }
 
+      // Failed items also finish: repeating permanent errors cannot help.
+      $context['results']['processed']++;
+      $context['sandbox']['progress']++;
+
       // Track retry statistics.
       if ($retry_count > 0 && $generated) {
         $context['results']['retry_counts'][$entity_data['entity_id']] = $retry_count;
@@ -501,12 +506,12 @@ class TtsBatchService {
     $rate = $context['sandbox']['progress'] > 0
       ? $elapsed / $context['sandbox']['progress']
       : 0;
-    $remaining = $context['sandbox']['total'] - $context['sandbox']['progress'];
+    $remaining = max(0, $total_entities - $context['results']['processed']);
     $estimate = $rate > 0 ? round(($remaining * $rate) / 60, 1) : '?';
 
     $context['message'] = $this->t('Processed @current of @total entities. Generated: @generated, Cached: @cached, Errors: @errors. Est. @estimate min remaining.', [
-      '@current' => $context['sandbox']['progress'],
-      '@total' => $context['sandbox']['total'],
+      '@current' => $context['results']['processed'],
+      '@total' => $total_entities,
       '@generated' => $context['results']['generated'],
       '@cached' => $context['results']['cached'],
       '@errors' => count($context['results']['errors']),
