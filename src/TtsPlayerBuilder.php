@@ -98,7 +98,7 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
    * {@inheritdoc}
    */
   public static function trustedCallbacks(): array {
-    return ['buildPlayerLazy'];
+    return ['buildPlayerLazy', 'buildFilePlayerLazy'];
   }
 
   /**
@@ -133,18 +133,6 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
 
   /**
    * Build the TTS player render array for an entity.
-   *
-   * @param \Drupal\Core\Entity\EntityInterface|null $entity
-   *   The entity to build player for.
-   * @param array $settings
-   *   Player settings:
-   *   - show_voice_selector: (bool) Show voice dropdown.
-   *   - show_speed_control: (bool) Show speed control.
-   *   - fields: (array) Field names to include (empty = all).
-   *   - wrapper_classes: (string) Additional CSS classes for the wrapper.
-   *
-   * @return array
-   *   Render array for the player, or empty array if player cannot be shown.
    */
   public function buildPlayer(?EntityInterface $entity, array $settings = []) {
     $settings += [
@@ -155,20 +143,10 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
       'wrapper_classes' => '',
     ];
 
-    $id_suffix = substr(md5(microtime() . random_bytes(8)), 0, 8);
-    $global_config = $this->configFactory->get('local_tts.settings');
-
-    $langcode = NULL;
-    if ($entity) {
-      $langcode = $entity->language()->getId();
-    }
-
     if (!$entity) {
       return [];
     }
 
-    // Never render the player while its own entity is being rendered for
-    // text extraction; otherwise the UI labels and voice list get spoken.
     if ($this->ttsService->isExtracting()) {
       return [];
     }
@@ -186,16 +164,88 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
       return [];
     }
 
+    $langcode = $entity->language()->getId();
     $available_voices = $this->ttsService->getAvailableVoices($langcode);
     if (empty($available_voices)) {
       return [];
     }
 
+    $global_config = $this->configFactory->get('local_tts.settings');
+    $show_download = $global_config->get('show_download') ?? FALSE;
+
+    $instance_settings = [
+      'defaultVoice' => $this->ttsService->getDefaultVoice($langcode),
+      'defaultSpeed' => $global_config->get('default_speed'),
+      'language' => $langcode,
+      'entityType' => $entity->getEntityTypeId(),
+      'entityId' => $entity->id(),
+      'fields' => array_values(array_filter($settings['fields'] ?? [])),
+      'showDownload' => (bool) $show_download,
+      'wordCount' => ($entity instanceof FieldableEntityInterface) ? $this->ttsService->estimateWordCount($entity, $settings['fields'] ?? []) : 0,
+    ];
+
+    $drupal_settings = [
+      'generateUrl' => Url::fromRoute('local_tts.generate')->toString(),
+    ];
+
+    $build = $this->buildPlayerWidget($settings, $langcode, $available_voices, $instance_settings, $drupal_settings);
+
+    $build['#cache']['contexts'][] = 'route';
+    $build['#cache']['contexts'][] = 'languages:language_content';
+    $build['#cache']['contexts'][] = 'user.permissions';
+    $build['#cache']['tags'][] = $entity->getEntityTypeId() . ':' . $entity->id();
+    $build['#cache']['tags'][] = 'config:local_tts.settings';
+
+    return $build;
+  }
+
+  /**
+   * Lazy builder callback for file-based TTS player.
+   */
+  public function buildFilePlayerLazy(string $audio_url, string $langcode, string $settings_json): array {
+    $settings = json_decode($settings_json, TRUE) ?: [];
+    return $this->buildFilePlayer($audio_url, $langcode, $settings);
+  }
+
+  /**
+   * Build the TTS player for an existing audio file URL.
+   */
+  public function buildFilePlayer(string $audio_url, string $langcode, array $settings = []): array {
+    $settings += [
+      'show_voice_selector' => FALSE,
+      'show_speed_control' => TRUE,
+      'show_volume_control' => TRUE,
+      'wrapper_classes' => '',
+    ];
+
+    $available_voices = $this->ttsService->getAvailableVoices($langcode);
+    $global_config = $this->configFactory->get('local_tts.settings');
+
+    $instance_settings = [
+      'audioUrl' => $audio_url,
+      'defaultSpeed' => $global_config->get('default_speed'),
+      'language' => $langcode,
+    ];
+
+    $build = $this->buildPlayerWidget($settings, $langcode, $available_voices, $instance_settings, []);
+
+    $build['#cache']['tags'][] = 'config:local_tts.settings';
+
+    return $build;
+  }
+
+  /**
+   * Build the shared player widget render array.
+   */
+  protected function buildPlayerWidget(array $settings, ?string $langcode, array $available_voices, array $instance_settings, array $global_drupal_settings): array {
+    $id_suffix = substr(md5(microtime() . random_bytes(8)), 0, 8);
+    $global_config = $this->configFactory->get('local_tts.settings');
+    $show_download = $global_config->get('show_download') ?? FALSE;
+
     $container_classes = ['local-tts-container', 'local-tts-initializing'];
-    $custom_classes = trim($settings['wrapper_classes']);
+    $custom_classes = trim($settings['wrapper_classes'] ?? '');
     if (!empty($custom_classes)) {
-      $additional_classes = array_filter(explode(' ', $custom_classes));
-      foreach ($additional_classes as $class) {
+      foreach (array_filter(explode(' ', $custom_classes)) as $class) {
         $container_classes[] = Html::cleanCssIdentifier($class);
       }
     }
@@ -338,13 +388,11 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
       '#value' => '',
     ];
 
-    if ($settings['show_volume_control']) {
+    if (!empty($settings['show_volume_control'])) {
       $build['play_wrapper']['content']['playback_controls']['volume_wrapper'] = [
         '#type' => 'container',
         '#weight' => 30,
-        '#attributes' => [
-          'class' => ['local-tts-volume-wrapper'],
-        ],
+        '#attributes' => ['class' => ['local-tts-volume-wrapper']],
       ];
 
       $build['play_wrapper']['content']['playback_controls']['volume_wrapper']['mute_button'] = [
@@ -387,7 +435,7 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
       ],
     ];
 
-    if ($settings['show_voice_selector']) {
+    if (!empty($settings['show_voice_selector']) && !empty($available_voices)) {
       $default_voice = $this->ttsService->getDefaultVoice($langcode);
 
       $build['play_wrapper']['settings']['voice_select'] = [
@@ -403,22 +451,21 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
       ];
     }
 
-    if ($settings['show_speed_control']) {
+    if (!empty($settings['show_speed_control'])) {
       $default_speed = $this->ttsService->normalizeSpeed(
         $global_config->get('default_speed') ?: '1'
       );
 
-      $speed_options = [
-        '0.8' => '0.8×',
-        '1' => '1×',
-        '1.5' => '1.5×',
-        '2' => '2×',
-      ];
-
       $build['play_wrapper']['settings']['speed_select'] = [
         '#type' => 'select',
         '#title' => $this->t('Speed'),
-        '#options' => $speed_options,
+        '#options' => [
+          '0.8' => $this->t('0.8×'),
+          '1' => $this->t('1×'),
+          '1.2' => $this->t('1.2×'),
+          '1.5' => $this->t('1.5×'),
+          '2' => $this->t('2×'),
+        ],
         '#value' => $default_speed,
         '#attributes' => [
           'id' => 'local-tts-speed-select-' . $id_suffix,
@@ -428,7 +475,6 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
       ];
     }
 
-    $show_download = $global_config->get('show_download') ?? FALSE;
     if ($show_download) {
       $build['play_wrapper']['settings']['download_button'] = [
         '#type' => 'html_tag',
@@ -464,38 +510,16 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
       ],
     ];
 
-    $js_default_voice = $this->ttsService->getDefaultVoice($langcode);
-
-    // SECURITY: Pass only entity reference to JavaScript, NOT the content.
     $build['#attached'] = [
       'library' => ['local_tts/player'],
       'drupalSettings' => [
-        'aiTts' => [
-          'generateUrl' => Url::fromRoute('local_tts.generate')->toString(),
+        'localTts' => $global_drupal_settings + [
           'instances' => [
-            $id_suffix => [
-              'defaultVoice' => $js_default_voice,
-              'defaultSpeed' => $global_config->get('default_speed'),
-              'language' => $langcode,
-              'entityType' => $entity->getEntityTypeId(),
-              'entityId' => $entity->id(),
-              'fields' => array_values(array_filter($settings['fields'] ?? [])),
-              'showDownload' => (bool) $show_download,
-              'wordCount' => ($entity instanceof FieldableEntityInterface) ? $this->ttsService->estimateWordCount($entity, $settings['fields'] ?? []) : 0,
-            ],
+            $id_suffix => $instance_settings,
           ],
         ],
       ],
     ];
-
-    $build['#cache']['contexts'][] = 'route';
-    $build['#cache']['contexts'][] = 'languages:language_content';
-    $build['#cache']['contexts'][] = 'user.permissions';
-
-    $entity_type = $entity->getEntityTypeId();
-    $entity_id = $entity->id();
-    $build['#cache']['tags'][] = "{$entity_type}:{$entity_id}";
-    $build['#cache']['tags'][] = 'config:local_tts.settings';
 
     return $build;
   }

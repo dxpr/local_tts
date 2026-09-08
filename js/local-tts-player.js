@@ -6,55 +6,58 @@
 (function (Drupal, drupalSettings, once) {
   'use strict';
 
-  Drupal.behaviors.aiTtsPlayer = {
+  Drupal.behaviors.localTtsPlayer = {
     attach: function (context) {
-      var players = once('local-tts-player', '.local-tts-container', context);
+      const players = once('local-tts-player', '.local-tts-container', context);
 
       if (players.length === 0) {
         return;
       }
 
       players.forEach(function (player) {
-        var playButton = player.querySelector('.local-tts-play-button');
-        var labelContainer = player.querySelector('.local-tts-label');
-        var labelText = player.querySelector('.local-tts-label-text');
-        var labelDuration = player.querySelector('.local-tts-label-duration');
-        var playbackControls = player.querySelector('.local-tts-playback-controls');
-        var currentTimeDisplay = player.querySelector('.local-tts-current-time');
-        var scrubberInput = player.querySelector('.local-tts-scrubber');
-        var remainingTimeDisplay = player.querySelector('.local-tts-remaining-time');
-        var voiceSelect = player.querySelector('.local-tts-voice-select');
-        var speedSelect = player.querySelector('.local-tts-speed-select');
-        var skipBackBtn = player.querySelector('.local-tts-skip-back');
-        var skipForwardBtn = player.querySelector('.local-tts-skip-forward');
-        var statusDiv = player.querySelector('.local-tts-status');
-        var audioElement = player.querySelector('audio');
-        var muteButton = player.querySelector('.local-tts-mute-button');
-        var volumeSlider = player.querySelector('.local-tts-volume-slider');
-        var downloadButton = player.querySelector('.local-tts-download-button');
+        const playButton = player.querySelector('.local-tts-play-button');
+        const labelContainer = player.querySelector('.local-tts-label');
+        const labelText = player.querySelector('.local-tts-label-text');
+        const labelDuration = player.querySelector('.local-tts-label-duration');
+        const playbackControls = player.querySelector('.local-tts-playback-controls');
+        const currentTimeDisplay = player.querySelector('.local-tts-current-time');
+        const scrubberInput = player.querySelector('.local-tts-scrubber');
+        const remainingTimeDisplay = player.querySelector('.local-tts-remaining-time');
+        const voiceSelect = player.querySelector('.local-tts-voice-select');
+        const speedSelect = player.querySelector('.local-tts-speed-select');
+        const skipBackBtn = player.querySelector('.local-tts-skip-back');
+        const skipForwardBtn = player.querySelector('.local-tts-skip-forward');
+        const statusDiv = player.querySelector('.local-tts-status');
+        const audioElement = player.querySelector('audio');
+        const muteButton = player.querySelector('.local-tts-mute-button');
+        const volumeSlider = player.querySelector('.local-tts-volume-slider');
+        const downloadButton = player.querySelector('.local-tts-download-button');
 
         if (!playButton || !audioElement) {
           return;
         }
 
-        var ttsId = player.getAttribute('data-tts-id');
-        var globalConfig = drupalSettings.aiTts || {};
-        var instanceConfig = (globalConfig.instances || {})[ttsId] || {};
-        var config = Object.assign({}, globalConfig, instanceConfig);
-        var isPlaying = false;
-        var currentAudioUrl = null;
-        var generationId = 0;
-        var cancelAudioLoad = null;
-        var generatedSpeed = 1;
-        var lastAriaUpdate = 0;
-        var lastProgressSave = 0;
-        var previousVolume = 1;
-        var generationTimer = null;
-        var lastAnnounce = 0;
-        var ARIA_THROTTLE_MS = 200;
-        var PROGRESS_SAVE_MS = 5000;
-        var ANNOUNCE_THROTTLE_MS = 500;
-        var storageKey = 'local_tts_progress_' + config.entityType + '_' + config.entityId;
+        const ttsId = player.getAttribute('data-tts-id');
+        const globalConfig = drupalSettings.localTts || {};
+        const instanceConfig = (globalConfig.instances || {})[ttsId] || {};
+        const config = Object.assign({}, globalConfig, instanceConfig);
+        let isPlaying = false;
+        let currentAudioUrl = null;
+        let generationId = 0;
+        let cancelAudioLoad = null;
+        let generatedSpeed = 1;
+        let lastAriaUpdate = 0;
+        let lastProgressSave = 0;
+        let previousVolume = 1;
+        let generationTimer = null;
+        let lastAnnounce = 0;
+        const ARIA_THROTTLE_MS = 200;
+        const PROGRESS_SAVE_MS = 5000;
+        const ANNOUNCE_THROTTLE_MS = 500;
+        const isFileMode = !!config.audioUrl;
+        const storageKey = isFileMode
+          ? 'local_tts_progress_file_' + config.audioUrl.replace(/[^a-z0-9]/gi, '_').slice(-60)
+          : 'local_tts_progress_' + config.entityType + '_' + config.entityId;
 
         audioElement.loop = false;
         audioElement.preload = 'metadata';
@@ -67,8 +70,8 @@
           if (!seconds || !isFinite(seconds)) {
             return '';
           }
-          var mins = Math.floor(seconds / 60);
-          var secs = Math.floor(seconds % 60);
+          const mins = Math.floor(seconds / 60);
+          const secs = Math.floor(seconds % 60);
           return mins + ':' + (secs < 10 ? '0' : '') + secs;
         }
 
@@ -76,9 +79,9 @@
           if (!seconds || !isFinite(seconds)) {
             return '0 seconds';
           }
-          var mins = Math.floor(seconds / 60);
-          var secs = Math.floor(seconds % 60);
-          var parts = [];
+          const mins = Math.floor(seconds / 60);
+          const secs = Math.floor(seconds % 60);
+          const parts = [];
           if (mins > 0) {
             parts.push(mins + ' minute' + (mins !== 1 ? 's' : ''));
           }
@@ -89,8 +92,8 @@
         }
 
         function getAriaTimeText(currentTime, duration) {
-          var elapsed = formatTimeForAria(currentTime);
-          var remaining = duration ? formatTimeForAria(duration - currentTime) : 'duration unknown';
+          const elapsed = formatTimeForAria(currentTime);
+          const remaining = duration ? formatTimeForAria(duration - currentTime) : 'duration unknown';
           return elapsed + ' elapsed, ' + remaining + ' remaining';
         }
 
@@ -98,8 +101,8 @@
           if (!wordCount || wordCount <= 0) {
             return '';
           }
-          var wpm = 150 * (speed || 1);
-          var seconds = Math.round((wordCount / wpm) * 60);
+          const wpm = 150 * (speed || 1);
+          const seconds = Math.round((wordCount / wpm) * 60);
           if (seconds < 60) {
             return Drupal.t('(@sec sec)', {'@sec': seconds});
           }
@@ -108,7 +111,7 @@
 
         function updateDurationEstimate() {
           if (labelDuration && config.wordCount) {
-            var est = estimateDuration(config.wordCount, getSelectedSpeed());
+            const est = estimateDuration(config.wordCount, getSelectedSpeed());
             labelDuration.textContent = est || '';
             labelDuration.hidden = false;
           }
@@ -125,7 +128,7 @@
         }
 
         function announceToScreenReader(message) {
-          var now = Date.now();
+          const now = Date.now();
           if (now - lastAnnounce < ANNOUNCE_THROTTLE_MS) {
             return;
           }
@@ -134,20 +137,20 @@
             statusDiv.removeChild(statusDiv.firstChild);
           }
           if (message) {
-            var span = document.createElement('span');
+            const span = document.createElement('span');
             span.textContent = message;
             statusDiv.appendChild(span);
           }
         }
 
         function updateStatus(message, type) {
-          type = type || 'info';
+          const statusType = type || 'info';
           while (statusDiv.firstChild) {
             statusDiv.removeChild(statusDiv.firstChild);
           }
           if (message) {
-            var div = document.createElement('div');
-            div.className = 'messages messages--' + type;
+            const div = document.createElement('div');
+            div.className = 'messages messages--' + statusType;
             div.textContent = message;
             statusDiv.appendChild(div);
           }
@@ -157,7 +160,7 @@
           while (labelText.firstChild) {
             labelText.removeChild(labelText.firstChild);
           }
-          var icon = document.createElement('span');
+          const icon = document.createElement('span');
           icon.className = iconClass;
           if (iconText) {
             icon.textContent = iconText;
@@ -173,9 +176,9 @@
           while (statusDiv.firstChild) {
             statusDiv.removeChild(statusDiv.firstChild);
           }
-          var div = document.createElement('div');
+          const div = document.createElement('div');
           div.className = 'messages messages--status';
-          var link = document.createElement('a');
+          const link = document.createElement('a');
           link.href = '#';
           link.className = 'local-tts-resume';
           link.textContent = Drupal.t('Resume from @time?', {'@time': formatDuration(savedPosition)});
@@ -192,13 +195,13 @@
           while (statusDiv.firstChild) {
             statusDiv.removeChild(statusDiv.firstChild);
           }
-          var wrapper = document.createElement('div');
+          const wrapper = document.createElement('div');
           wrapper.className = 'messages messages--error';
-          var msgSpan = document.createElement('span');
+          const msgSpan = document.createElement('span');
           msgSpan.textContent = errorMsg;
           wrapper.appendChild(msgSpan);
 
-          var retryBtn = document.createElement('button');
+          const retryBtn = document.createElement('button');
           retryBtn.type = 'button';
           retryBtn.className = 'local-tts-retry-btn';
           retryBtn.textContent = Drupal.t('Try again');
@@ -207,7 +210,14 @@
             if (labelText) {
               labelText.textContent = Drupal.t('Listen to this article');
             }
-            generateSpeech();
+            if (isFileMode) {
+              const requestId = ++generationId;
+              currentAudioUrl = config.audioUrl;
+              playSpeech(config.audioUrl, requestId);
+            }
+            else {
+              generateSpeech();
+            }
           });
 
           statusDiv.appendChild(wrapper);
@@ -259,9 +269,9 @@
 
         function getSavedProgress() {
           try {
-            var saved = localStorage.getItem(storageKey);
+            const saved = localStorage.getItem(storageKey);
             if (saved) {
-              var value = parseFloat(saved);
+              const value = parseFloat(saved);
               if (isFinite(value)) {
                 return value;
               }
@@ -282,12 +292,12 @@
 
         function getSelectedSpeed() {
           if (speedSelect) {
-            var val = parseFloat(speedSelect.value);
+            const val = parseFloat(speedSelect.value);
             if (isFinite(val) && val > 0) {
               return val;
             }
           }
-          var fallback = parseFloat(config.defaultSpeed);
+          const fallback = parseFloat(config.defaultSpeed);
           return isFinite(fallback) && fallback > 0 ? fallback : 1;
         }
 
@@ -297,21 +307,21 @@
 
         function restorePreferences() {
           try {
-            var savedVoice = localStorage.getItem('local_tts_voice');
+            const savedVoice = localStorage.getItem('local_tts_voice');
             if (savedVoice && voiceSelect) {
-              var opts = voiceSelect.options;
-              for (var i = 0; i < opts.length; i++) {
-                if (opts[i].value === savedVoice) {
+              const voiceOpts = voiceSelect.options;
+              for (let i = 0; i < voiceOpts.length; i++) {
+                if (voiceOpts[i].value === savedVoice) {
                   voiceSelect.value = savedVoice;
                   break;
                 }
               }
             }
-            var savedSpeed = localStorage.getItem('local_tts_speed');
+            const savedSpeed = localStorage.getItem('local_tts_speed');
             if (savedSpeed && speedSelect) {
-              var opts = speedSelect.options;
-              for (var i = 0; i < opts.length; i++) {
-                if (opts[i].value === savedSpeed) {
+              const speedOpts = speedSelect.options;
+              for (let i = 0; i < speedOpts.length; i++) {
+                if (speedOpts[i].value === savedSpeed) {
                   speedSelect.value = savedSpeed;
                   break;
                 }
@@ -331,10 +341,10 @@
         }
 
         function startGenerationTimer() {
-          var startTime = Date.now();
+          const startTime = Date.now();
           generationTimer = setInterval(function () {
-            var elapsed = Math.floor((Date.now() - startTime) / 1000);
-            var msg = Drupal.t('Generating speech... (@seconds)', {'@seconds': elapsed + 's'});
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const msg = Drupal.t('Generating speech... (@seconds)', {'@seconds': elapsed + 's'});
             if (labelText) {
               setLabelWithIcon('local-tts-loading', '', msg);
             }
@@ -352,14 +362,14 @@
           if (!audioElement.duration) {
             return;
           }
-          var newTime = Math.max(0, Math.min(audioElement.duration, audioElement.currentTime + seconds));
+          const newTime = Math.max(0, Math.min(audioElement.duration, audioElement.currentTime + seconds));
           audioElement.currentTime = newTime;
         }
 
         function pollForAudio(pollUrl, requestId) {
-          var maxPollTime = 5 * 60 * 1000;
-          var pollInterval = 3000;
-          var startTime = Date.now();
+          const maxPollTime = 5 * 60 * 1000;
+          const pollInterval = 3000;
+          const startTime = Date.now();
 
           function poll() {
             if (requestId !== generationId) {
@@ -367,7 +377,7 @@
             }
             if (Date.now() - startTime > maxPollTime) {
               stopGenerationTimer();
-              var timeoutMsg = Drupal.t('Audio generation timed out. Please try again later.');
+              const timeoutMsg = Drupal.t('Audio generation timed out. Please try again later.');
               if (labelText) {
                 setLabelWithIcon('local-tts-error', '⚠', timeoutMsg);
               }
@@ -403,9 +413,9 @@
         }
 
         function generateSpeech() {
-          var requestId = ++generationId;
-          var voice = voiceSelect ? voiceSelect.value : config.defaultVoice;
-          var speed = getSelectedSpeed();
+          const requestId = ++generationId;
+          const voice = voiceSelect ? voiceSelect.value : config.defaultVoice;
+          const speed = getSelectedSpeed();
           generatedSpeed = speed;
 
           if (labelText) {
@@ -416,7 +426,7 @@
           announceToScreenReader(Drupal.t('Generating speech'));
           startGenerationTimer();
 
-          var formData = new FormData();
+          const formData = new FormData();
           formData.append('entity_type', config.entityType);
           formData.append('entity_id', config.entityId);
           formData.append('voice', voice);
@@ -435,7 +445,7 @@
             credentials: 'same-origin',
           })
             .then(function (response) {
-              var contentType = response.headers.get('content-type') || '';
+              const contentType = response.headers.get('content-type') || '';
               if (contentType.indexOf('application/json') === -1) {
                 return {ok: false, status: response.status, data: {}, htmlResponse: true};
               }
@@ -473,7 +483,7 @@
         }
 
         function showGenerateError(result) {
-          var msg;
+          let msg;
           if (result.htmlResponse) {
             msg = Drupal.t('The server did not return a valid response. This usually means the "Generate local text-to-speech audio" permission is not granted for your role.');
           }
@@ -484,7 +494,7 @@
             msg = result.data.message || Drupal.t('Content not found.');
           }
           else if (result.status === 429) {
-            var minutes = result.data.retry_after ? Math.ceil(result.data.retry_after / 60) : 1;
+            const minutes = result.data.retry_after ? Math.ceil(result.data.retry_after / 60) : 1;
             msg = result.data.message || Drupal.t('Too many requests. Please try again in @minutes minutes.', {'@minutes': minutes});
           }
           else if (result.status === 503) {
@@ -518,79 +528,99 @@
             cancelAudioLoad();
           }
 
-          var loadTimeout = setTimeout(function () {
-            cleanup();
-            currentAudioUrl = null;
-            handleError(Drupal.t('Audio could not be loaded. Try refreshing the page.'));
-          }, 15000);
-
-          function cleanup() {
-            clearTimeout(loadTimeout);
-            audioElement.removeEventListener('canplaythrough', onReady);
-            audioElement.removeEventListener('canplay', onReady);
-            audioElement.removeEventListener('error', onLoadError);
+          let cancelled = false;
+          cancelAudioLoad = function () {
+            cancelled = true;
             cancelAudioLoad = null;
-          }
-          cancelAudioLoad = cleanup;
+          };
 
-          function onLoadError() {
-            cleanup();
-            currentAudioUrl = null;
-            handleError(Drupal.t('Audio could not be loaded. The file may be corrupted.'));
-          }
-
-          var readyFired = false;
-          function onReady() {
-            if (readyFired || requestId !== generationId) {
-              return;
-            }
-            readyFired = true;
-            cleanup();
-            var savedPosition = getSavedProgress();
-
-            audioElement.play().then(function () {
-              if (requestId !== generationId) {
+          fetch(audioUrl, {credentials: 'same-origin'})
+            .then(function (response) {
+              if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+              }
+              return response.blob();
+            })
+            .then(function (blob) {
+              if (cancelled || requestId !== generationId) {
                 return;
               }
-              isPlaying = true;
-              applyPlaybackRate();
-              playButton.disabled = false;
-              playButton.classList.remove('loading');
-              updateButtonStates();
-              showPlaybackControls();
-              updateStatus('', 'status');
-              updateDownloadButton(audioUrl);
-              announceToScreenReader(Drupal.t('Playback started'));
-              dispatchAnalytics('play');
+              const blobUrl = URL.createObjectURL(blob);
+              audioElement.src = blobUrl;
+              audioElement.load();
 
-              if (savedPosition > 5 && isFinite(savedPosition) && savedPosition < audioElement.duration - 5) {
-                showResumePrompt(savedPosition);
-                setTimeout(function () {
-                  if (statusDiv.querySelector('.local-tts-resume')) {
-                    updateStatus('', 'status');
-                    clearSavedProgress();
+              function onReady() {
+                audioElement.removeEventListener('canplay', onReady);
+                audioElement.removeEventListener('error', onLoadError);
+                if (cancelled || requestId !== generationId) {
+                  return;
+                }
+                cancelAudioLoad = null;
+                const savedPosition = getSavedProgress();
+
+                audioElement.play().then(function () {
+                  if (requestId !== generationId) {
+                    return;
                   }
-                }, 10000);
+                  isPlaying = true;
+                  applyPlaybackRate();
+                  playButton.disabled = false;
+                  playButton.classList.remove('loading');
+                  updateButtonStates();
+                  showPlaybackControls();
+                  updateStatus('', 'status');
+                  updateDownloadButton(audioUrl);
+                  announceToScreenReader(Drupal.t('Playback started'));
+                  dispatchAnalytics('play');
+
+                  if (savedPosition > 5 && isFinite(savedPosition) && savedPosition < audioElement.duration - 5) {
+                    showResumePrompt(savedPosition);
+                    setTimeout(function () {
+                      if (statusDiv.querySelector('.local-tts-resume')) {
+                        updateStatus('', 'status');
+                        clearSavedProgress();
+                      }
+                    }, 10000);
+                  }
+                }).catch(function () {
+                  if (requestId !== generationId) {
+                    return;
+                  }
+                  isPlaying = false;
+                  handleError(Drupal.t('Error playing audio.'));
+                });
               }
-            }).catch(function () {
-              if (requestId !== generationId) {
+
+              function onLoadError() {
+                audioElement.removeEventListener('canplay', onReady);
+                audioElement.removeEventListener('error', onLoadError);
+                cancelAudioLoad = null;
+                currentAudioUrl = null;
+                handleError(Drupal.t('Audio could not be loaded. The file may be corrupted.'));
+              }
+
+              audioElement.addEventListener('canplay', onReady, {once: true});
+              audioElement.addEventListener('error', onLoadError, {once: true});
+            })
+            .catch(function () {
+              if (cancelled || requestId !== generationId) {
                 return;
               }
-              isPlaying = false;
-              handleError(Drupal.t('Error playing audio.'));
+              cancelAudioLoad = null;
+              currentAudioUrl = null;
+              handleError(Drupal.t('Audio could not be loaded. Try refreshing the page.'));
             });
-          }
-
-          audioElement.addEventListener('canplaythrough', onReady, {once: true});
-          audioElement.addEventListener('canplay', onReady, {once: true});
-          audioElement.addEventListener('error', onLoadError, {once: true});
-          audioElement.src = audioUrl;
-          audioElement.load();
         }
 
         function togglePlay() {
           if (!isPlaying) {
             if (!currentAudioUrl || audioElement.ended) {
+              if (isFileMode) {
+                const requestId = ++generationId;
+                currentAudioUrl = config.audioUrl;
+                playSpeech(config.audioUrl, requestId);
+                return;
+              }
               generateSpeech();
             }
             else {
@@ -678,7 +708,7 @@
         }
 
         player.addEventListener('keydown', function (e) {
-          var tag = e.target.tagName.toLowerCase();
+          const tag = e.target.tagName.toLowerCase();
           if (tag === 'select' || tag === 'input' || tag === 'textarea') {
             return;
           }
@@ -731,9 +761,9 @@
           if (!audioElement.duration) {
             return;
           }
-          var ct = audioElement.currentTime;
-          var dur = audioElement.duration;
-          var percentage = (ct / dur) * 100;
+          const ct = audioElement.currentTime;
+          const dur = audioElement.duration;
+          const percentage = (ct / dur) * 100;
 
           if (scrubberInput) {
             scrubberInput.value = ct;
@@ -745,7 +775,7 @@
           if (remainingTimeDisplay) {
             remainingTimeDisplay.textContent = '-' + formatDuration(dur - ct);
           }
-          var now = Date.now();
+          const now = Date.now();
           if (now - lastProgressSave >= PROGRESS_SAVE_MS) {
             lastProgressSave = now;
             saveProgress(ct);
@@ -754,13 +784,13 @@
 
         if (scrubberInput) {
           scrubberInput.addEventListener('input', function () {
-            var newTime = parseFloat(scrubberInput.value);
+            const newTime = parseFloat(scrubberInput.value);
             audioElement.currentTime = newTime;
             if (audioElement.duration) {
-              var pct = (newTime / audioElement.duration) * 100;
+              const pct = (newTime / audioElement.duration) * 100;
               scrubberInput.style.background = 'linear-gradient(to right, var(--ltt-color-thumb) 0%, var(--ltt-color-thumb) ' + pct + '%, var(--ltt-color-track) ' + pct + '%, var(--ltt-color-track) 100%)';
             }
-            var now = Date.now();
+            const now = Date.now();
             if (now - lastAriaUpdate > ARIA_THROTTLE_MS) {
               scrubberInput.setAttribute('aria-valuenow', newTime.toString());
               scrubberInput.setAttribute('aria-valuetext', getAriaTimeText(newTime, audioElement.duration));
@@ -775,7 +805,7 @@
             }
           });
 
-          var wasPlaying = false;
+          let wasPlaying = false;
           scrubberInput.addEventListener('mousedown', function () {
             wasPlaying = !audioElement.paused;
             if (wasPlaying) {
@@ -816,7 +846,7 @@
 
         if (volumeSlider) {
           volumeSlider.addEventListener('input', function () {
-            var vol = parseFloat(volumeSlider.value);
+            const vol = parseFloat(volumeSlider.value);
             audioElement.volume = vol;
             audioElement.muted = vol === 0;
             if (muteButton) {
@@ -828,7 +858,7 @@
         }
 
         function updateVolumeAria(slider, vol) {
-          var pct = Math.round(vol * 100);
+          const pct = Math.round(vol * 100);
           slider.setAttribute('aria-valuenow', pct.toString());
           slider.setAttribute('aria-valuetext', Drupal.t('Volume @pct%', {'@pct': pct}));
         }
@@ -841,20 +871,26 @@
         }
 
         function dispatchAnalytics(action) {
+          const detail = { action: action };
+          if (isFileMode) {
+            detail.audioUrl = config.audioUrl;
+          }
+          else {
+            detail.entityType = config.entityType;
+            detail.entityId = config.entityId;
+          }
           player.dispatchEvent(new CustomEvent('localTtsEvent', {
             bubbles: true,
-            detail: {
-              action: action,
-              entityType: config.entityType,
-              entityId: config.entityId,
-            },
+            detail: detail,
           }));
         }
 
         if (voiceSelect) {
           voiceSelect.addEventListener('change', function () {
             savePreference('local_tts_voice', voiceSelect.value);
-            stopPlayback();
+            if (!isFileMode) {
+              stopPlayback();
+            }
           });
         }
 

@@ -1274,10 +1274,8 @@ class TtsService {
     $config = $this->configFactory->get('local_tts.settings');
     $espeak_data_path = $config->get('espeak_data_path');
 
-    if ($espeak_data_path) {
-      // Get parent directory that contains espeak-ng-data.
+    if ($espeak_data_path && is_dir($espeak_data_path)) {
       $espeak_parent = dirname($espeak_data_path);
-      // proc_open requires string env vars.
       $server_env = array_filter($_SERVER, 'is_string');
       $env = array_merge($server_env, [
         'ESPEAK_DATA_PATH' => $espeak_parent,
@@ -1490,26 +1488,29 @@ class TtsService {
       ];
     }
 
-    // eSpeak NG data directory.
+    // eSpeak NG data directory (optional; koko bundles espeak internally).
     $espeak_path = $config->get('espeak_data_path');
     if (!$espeak_path) {
       $health['espeak'] = [
-        'status' => 'error',
-        'message' => 'Path not configured',
+        'label' => 'espeak',
+        'status' => 'ok',
+        'message' => 'Using bundled espeak (no external path configured)',
         'path' => '',
       ];
     }
     elseif (!is_dir($espeak_path)) {
       $health['espeak'] = [
-        'status' => 'error',
-        'message' => 'Directory not found at ' . $espeak_path,
+        'label' => 'espeak',
+        'status' => 'warning',
+        'message' => 'Configured path not found; falling back to bundled espeak',
         'path' => $espeak_path,
       ];
     }
     else {
       $health['espeak'] = [
+        'label' => 'espeak',
         'status' => 'ok',
-        'message' => 'Found at ' . $espeak_path,
+        'message' => 'Using external path',
         'path' => $espeak_path,
       ];
     }

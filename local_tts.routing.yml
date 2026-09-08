@@ -6,6 +6,14 @@ local_tts.settings:
   requirements:
     _permission: 'administer local tts settings'
 
+local_tts.voices:
+  path: '/admin/config/media/local-tts/voices'
+  defaults:
+    _form: '\Drupal\local_tts\Form\LocalTtsVoiceSettingsForm'
+    _title: 'Voice & Content Settings'
+  requirements:
+    _permission: 'administer local tts settings'
+
 local_tts.test:
   path: '/admin/config/media/local-tts/test'
   defaults:
@@ -19,14 +27,6 @@ local_tts.batch:
   defaults:
     _form: '\Drupal\local_tts\Form\LocalTtsBatchForm'
     _title: 'Batch TTS Generation'
-  requirements:
-    _permission: 'administer local tts settings'
-
-local_tts.cache_overview:
-  path: '/admin/config/media/local-tts/cache'
-  defaults:
-    _form: '\Drupal\local_tts\Form\TtsCacheOverviewForm'
-    _title: 'Audio Cache'
   requirements:
     _permission: 'administer local tts settings'
 

@@ -47,7 +47,7 @@ final class TtsCacheController extends ControllerBase {
   public function deleteFile(string $cache_key) {
     if (!preg_match('/^[a-f0-9]{32}$/', $cache_key)) {
       $this->messenger()->addError($this->t('Invalid cache key.'));
-      return $this->redirect('local_tts.cache_overview');
+      return $this->redirect('local_tts.settings');
     }
 
     $config = $this->config('local_tts.settings');
@@ -55,9 +55,11 @@ final class TtsCacheController extends ControllerBase {
     $directory = $this->fileSystem->realpath($audio_dir);
 
     if ($directory) {
-      $file_path = $directory . '/' . $cache_key . '.ogg';
-      if (file_exists($file_path)) {
-        @unlink($file_path);
+      foreach (['ogg', 'wav'] as $ext) {
+        $file_path = $directory . '/' . $cache_key . '.' . $ext;
+        if (file_exists($file_path)) {
+          @unlink($file_path);
+        }
       }
     }
 
@@ -66,7 +68,7 @@ final class TtsCacheController extends ControllerBase {
       ->execute();
 
     $this->messenger()->addStatus($this->t('Audio file deleted.'));
-    return $this->redirect('local_tts.cache_overview');
+    return $this->redirect('local_tts.settings');
   }
 
 }

@@ -2,9 +2,15 @@
 
 local_tts.settings:
   route_name: local_tts.settings
-  title: 'Settings'
+  title: 'System'
   base_route: local_tts.settings
   weight: 0
+
+local_tts.voices:
+  route_name: local_tts.voices
+  title: 'Voices'
+  base_route: local_tts.settings
+  weight: 5
 
 local_tts.test:
   route_name: local_tts.test
@@ -12,11 +18,6 @@ local_tts.test:
   base_route: local_tts.settings
   weight: 10
 
-local_tts.cache_overview:
-  route_name: local_tts.cache_overview
-  title: 'Cache'
-  base_route: local_tts.settings
-  weight: 15
 
 local_tts.batch:
   route_name: local_tts.batch
