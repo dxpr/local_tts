@@ -117,7 +117,8 @@ function local_tts_cron() {
  */
 function local_tts_entity_update(EntityInterface $entity) {
   // Check if any text fields changed by comparing to original.
-  if (!empty($entity->original) && !_local_tts_text_content_changed($entity, $entity->original)) {
+  $original = method_exists($entity, 'getOriginal') ? $entity->getOriginal() : ($entity->original ?? NULL);
+  if ($original && !_local_tts_text_content_changed($entity, $original)) {
     return;
   }
 

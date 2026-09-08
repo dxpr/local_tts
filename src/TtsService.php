@@ -15,13 +15,10 @@ use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Render\RendererInterface;
+use Drupal\Core\Session\AccountSwitcherInterface;
 
 /**
  * Service for interfacing with Kokoro TTS binary.
- *
- * NOTE for local_tts.module maintainer: the audio format changed from .wav
- * to .ogg (Opus). Update .wav references in _local_tts_cleanup_stale_content()
- * and _local_tts_enforce_size_limit() to use .ogg instead.
  */
 class TtsService {
 
@@ -114,6 +111,23 @@ class TtsService {
   protected $moduleHandler;
 
   /**
+   * The account switcher.
+   *
+   * @var \Drupal\Core\Session\AccountSwitcherInterface|null
+   */
+  protected $accountSwitcher;
+
+  /**
+   * Whether text extraction is currently rendering an entity.
+   *
+   * Player builders check this flag so the player UI (button labels, voice
+   * and speed option lists) is never included in the text that is spoken.
+   *
+   * @var bool
+   */
+  protected $extracting = FALSE;
+
+  /**
    * Constructs a TtsService object.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
@@ -134,6 +148,8 @@ class TtsService {
    *   The renderer service.
    * @param \Drupal\Core\Extension\ModuleHandlerInterface $module_handler
    *   The module handler.
+   * @param \Drupal\Core\Session\AccountSwitcherInterface|null $account_switcher
+   *   The account switcher.
    */
   public function __construct(
     ConfigFactoryInterface $config_factory,
@@ -145,6 +161,7 @@ class TtsService {
     EntityTypeManagerInterface $entity_type_manager,
     RendererInterface $renderer,
     ModuleHandlerInterface $module_handler,
+    ?AccountSwitcherInterface $account_switcher = NULL,
   ) {
     $this->configFactory = $config_factory;
     $this->fileSystem = $file_system;
@@ -155,6 +172,17 @@ class TtsService {
     $this->entityTypeManager = $entity_type_manager;
     $this->renderer = $renderer;
     $this->moduleHandler = $module_handler;
+    $this->accountSwitcher = $account_switcher;
+  }
+
+  /**
+   * Whether the service is currently extracting text from an entity.
+   *
+   * @return bool
+   *   TRUE while extractTextFromEntity() is rendering an entity.
+   */
+  public function isExtracting(): bool {
+    return $this->extracting;
   }
 
   /**
@@ -196,7 +224,7 @@ class TtsService {
     $skip_access_check = $options['skip_access_check'] ?? FALSE;
 
     // Security: Only generate audio for publicly accessible content.
-    if (!$skip_access_check) {
+    if (!$skip_access_check && $entity_type !== NULL && $entity_id !== NULL) {
       try {
         $entity = $this->entityTypeManager
           ->getStorage($entity_type)
@@ -1136,12 +1164,21 @@ class TtsService {
    *   The extracted and sanitised plain text content.
    */
   public function extractTextFromEntity($entity) {
+    // Generated audio is public, so render exactly what an anonymous visitor
+    // would see: never bake editor-only output into the spoken text.
+    $switched = FALSE;
+    if ($this->accountSwitcher) {
+      $this->accountSwitcher->switchTo(new AnonymousUserSession());
+      $switched = TRUE;
+    }
+    $this->extracting = TRUE;
+
     try {
       $langcode = $entity->language()->getId();
       $entity_type_id = $entity->getEntityTypeId();
       $view_builder = $this->entityTypeManager->getViewBuilder($entity_type_id);
       $view = $view_builder->view($entity, 'default', $langcode);
-      $rendered = $this->renderer->renderPlain($view);
+      $rendered = $this->renderer->renderInIsolation($view);
       $text = $this->htmlToPlainText((string) $rendered);
 
       $context = [
@@ -1157,6 +1194,12 @@ class TtsService {
         '@msg' => $e->getMessage(),
       ]);
       return '';
+    }
+    finally {
+      $this->extracting = FALSE;
+      if ($switched) {
+        $this->accountSwitcher->switchBack();
+      }
     }
   }
 

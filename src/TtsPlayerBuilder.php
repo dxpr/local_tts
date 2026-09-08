@@ -179,6 +179,12 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
       return [];
     }
 
+    // Never render the player while its own entity is being rendered for
+    // text extraction; otherwise the UI labels and voice list get spoken.
+    if ($this->ttsService->isExtracting()) {
+      return [];
+    }
+
     $anonymous = new AnonymousUserSession();
     if (!$entity->access('view', $anonymous)) {
       return [];
