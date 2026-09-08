@@ -41,6 +41,8 @@
         const config = Object.assign({}, globalConfig, instanceConfig);
         let isPlaying = false;
         let currentAudioUrl = null;
+        // Speed the current audio file was generated at on the server.
+        let generatedSpeed = 1;
         let lastAriaUpdate = 0;
         let lastProgressSave = 0;
         let previousVolume = 1;
@@ -217,6 +219,17 @@
           }
         }
 
+        function getSelectedSpeed() {
+          const value = speedInput ? parseFloat(speedInput.value) : parseFloat(config.defaultSpeed);
+          return isFinite(value) && value > 0 ? value : 1;
+        }
+
+        // The server already synthesises at the selected speed, so the
+        // element only needs to compensate for changes made after generation.
+        function applyPlaybackRate() {
+          audioElement.playbackRate = getSelectedSpeed() / generatedSpeed;
+        }
+
         function pollForAudio(pollUrl) {
           var maxPollTime = 5 * 60 * 1000;
           var pollInterval = 3000;
@@ -256,7 +269,8 @@
 
         function generateSpeech() {
           const voice = voiceSelect ? voiceSelect.value : config.defaultVoice;
-          const speed = speedInput ? parseFloat(speedInput.value) : config.defaultSpeed;
+          const speed = getSelectedSpeed();
+          generatedSpeed = speed;
 
           if (labelText) {
             setLabelWithIcon('local-tts-loading', '', Drupal.t('Generating speech...'));
@@ -368,7 +382,7 @@
 
             audioElement.play().then(function() {
               isPlaying = true;
-              audioElement.playbackRate = speedInput ? parseFloat(speedInput.value) : 1;
+              applyPlaybackRate();
               playButton.disabled = false;
               playButton.classList.remove('loading');
               updateButtonStates();
@@ -644,7 +658,7 @@
 
         if (speedInput) {
           speedInput.addEventListener('change', function() {
-            audioElement.playbackRate = parseFloat(speedInput.value);
+            applyPlaybackRate();
           });
         }
       });
