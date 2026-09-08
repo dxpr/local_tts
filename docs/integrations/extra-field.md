@@ -5,7 +5,11 @@ without adding a real field to the database. It appears in **Manage
 Display** for every fieldable entity type and can be toggled on or off
 per display mode.
 
-<!-- TODO: screenshot of extra field in Manage Display -->
+![Extra field in Manage Display](../images/manage-display-extra-field.jpg)
+
+<video autoplay loop muted playsinline>
+  <source src="../videos/extra-field-setup.mp4" type="video/mp4">
+</video>
 
 ## Enable the extra field
 
@@ -15,8 +19,6 @@ per display mode.
    for all content types)
 3. Drag it from the **Disabled** section to the desired position
 4. Click **Save**
-
-<!-- TODO: video showing extra field setup -->
 
 ## Configuration
 

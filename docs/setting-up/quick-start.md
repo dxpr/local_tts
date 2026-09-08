@@ -56,6 +56,8 @@ generate and hear the audio.
 drush local-tts:test "Hello World"
 ```
 
+![Test Local TTS form](../images/test-form.jpg)
+
 If you hear audio, the installation is working. If not, expand the
 **System health** panel at `/admin/config/media/local-tts` to check
 which component is missing.

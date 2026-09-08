@@ -4,7 +4,7 @@ Place a TTS player site-wide using Drupal's block system. The block
 auto-detects the current page's entity, so it works on any content page
 without extra configuration.
 
-<!-- TODO: screenshot of TTS player on a content page via block -->
+![TTS player on a content page](../images/player-on-page.jpg)
 
 ## Add the block
 
@@ -16,7 +16,11 @@ without extra configuration.
 4. Optionally restrict visibility by content type, role, or page
 5. Click **Save block**
 
-<!-- TODO: video showing block placement -->
+![Block layout showing TTS block in Content Top region](../images/block-layout.jpg)
+
+<video autoplay loop muted playsinline>
+  <source src="../videos/block-placement.mp4" type="video/mp4">
+</video>
 
 ## Configure the block
 

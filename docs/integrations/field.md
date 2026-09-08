@@ -5,7 +5,11 @@ you per-bundle control over which content types have TTS, and lets you
 configure voice, speed, and volume per display mode via the field
 formatter.
 
-<!-- TODO: screenshot of TTS player on a content page via field -->
+![TTS player field in Manage fields](../images/manage-fields.jpg)
+
+<video autoplay loop muted playsinline>
+  <source src="../videos/field-setup.mp4" type="video/mp4">
+</video>
 
 ## Add the field
 
@@ -14,8 +18,6 @@ formatter.
 2. Click **Create a new field**
 3. Select **Local TTS Player** as the field type
 4. Give it a label (e.g. "Audio player") and click **Save**
-
-<!-- TODO: video showing field creation -->
 
 ## Position the field
 

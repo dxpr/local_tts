@@ -4,6 +4,8 @@ This page explains what visitors see and how to use the TTS player.
 
 ## What the visitor sees
 
+![TTS player on a content page](../images/player-on-page.jpg)
+
 When a page has TTS enabled, a player bar appears with:
 
 - A **play/pause** button
