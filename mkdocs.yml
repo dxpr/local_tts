@@ -11,6 +11,9 @@ theme:
   features:
     - navigation.footer
 
+extra_css:
+  - stylesheets/extra.css
+
 plugins:
   - search
   - privacy:
