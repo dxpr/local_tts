@@ -368,10 +368,11 @@ function _local_tts_cleanup_orphan_files() {
     return;
   }
 
-  // Scan for both .ogg and .wav files to handle the format transition.
+  // Scan .ogg and legacy .wav files, plus leftovers of interrupted writes.
   $files = array_merge(
     glob($directory . '/*.ogg') ?: [],
-    glob($directory . '/*.wav') ?: []
+    glob($directory . '/*.wav') ?: [],
+    glob($directory . '/*.ogg.part') ?: []
   );
 
   if (empty($files)) {
@@ -380,6 +381,7 @@ function _local_tts_cleanup_orphan_files() {
 
   // Limit to 500 files per run to avoid timeout.
   $files = array_slice($files, 0, 500);
+  $now = \Drupal::time()->getRequestTime();
 
   // Build a set of all known cache keys from the database.
   $known_keys = \Drupal::database()->select('local_tts_cache', 'a')
@@ -390,7 +392,13 @@ function _local_tts_cleanup_orphan_files() {
 
   $deleted = 0;
   foreach ($files as $file_path) {
-    $cache_key = pathinfo($file_path, PATHINFO_FILENAME);
+    // Files still being written (or just finished, but whose metadata row is
+    // not saved yet) must not be treated as orphans.
+    $mtime = @filemtime($file_path);
+    if ($mtime !== FALSE && $now - $mtime < 3600) {
+      continue;
+    }
+    $cache_key = explode('.', basename($file_path))[0];
     if (!isset($known_keys[$cache_key])) {
       @unlink($file_path);
       $deleted++;

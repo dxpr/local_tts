@@ -543,24 +543,49 @@ class TtsService {
     }
     file_put_contents($list_file, implode("\n", $lines));
 
+    $partial_output = $ogg_output . '.part';
     $command = sprintf(
-      '%s -y -f concat -safe 0 -i %s -c:a libopus -b:a 48k %s 2>&1',
+      '%s -y -f concat -safe 0 -i %s -c:a libopus -b:a 48k -f ogg %s 2>&1',
       escapeshellarg($this->findFfmpeg()),
       escapeshellarg($list_file),
-      escapeshellarg($ogg_output)
+      escapeshellarg($partial_output)
     );
 
     $result = $this->execWithTimeout($command, 60);
 
     if ($result['return_code'] !== 0) {
+      @unlink($partial_output);
       $this->logger->error('ffmpeg concat+transcode failed: @output', [
         '@output' => implode("\n", $result['output']),
       ]);
       throw new \RuntimeException(sprintf('ffmpeg concat and transcode failed: %s', implode(' ', array_slice($result['output'], -3))));
     }
 
-    if (!file_exists($ogg_output)) {
-      throw new \RuntimeException(sprintf('ffmpeg did not produce output file: %s', $ogg_output));
+    $this->publishOutput($partial_output, $ogg_output);
+  }
+
+  /**
+   * Atomically move a finished .part file to its final .ogg path.
+   *
+   * The ffmpeg process writes output progressively. Using a temporary file and
+   * renaming it prevents the status endpoint (and any other file_exists()
+   * check) from serving a half-written file.
+   *
+   * @param string $partial_output
+   *   Path of the completed temporary file.
+   * @param string $ogg_output
+   *   Final destination path.
+   *
+   * @throws \RuntimeException
+   *   When ffmpeg produced no file or the rename fails.
+   */
+  protected function publishOutput($partial_output, $ogg_output) {
+    if (!file_exists($partial_output)) {
+      throw new \RuntimeException(sprintf('ffmpeg did not produce output file: %s', $partial_output));
+    }
+    if (!@rename($partial_output, $ogg_output)) {
+      @unlink($partial_output);
+      throw new \RuntimeException(sprintf('Could not move audio file into place: %s', $ogg_output));
     }
   }
 
@@ -576,28 +601,28 @@ class TtsService {
    *   When ffmpeg fails or the output file is not created.
    */
   protected function transcodeToOpus($wav_path, $ogg_path) {
+    $partial_output = $ogg_path . '.part';
     $command = sprintf(
-      '%s -y -i %s -c:a libopus -b:a 48k %s 2>&1',
+      '%s -y -i %s -c:a libopus -b:a 48k -f ogg %s 2>&1',
       escapeshellarg($this->findFfmpeg()),
       escapeshellarg($wav_path),
-      escapeshellarg($ogg_path)
+      escapeshellarg($partial_output)
     );
 
     $result = $this->execWithTimeout($command, 60);
 
+    // Remove the intermediate WAV file regardless of the outcome.
+    @unlink($wav_path);
+
     if ($result['return_code'] !== 0) {
+      @unlink($partial_output);
       $this->logger->error('ffmpeg transcode failed: @output', [
         '@output' => implode("\n", $result['output']),
       ]);
       throw new \RuntimeException(sprintf('ffmpeg transcode to OGG Opus failed: %s', implode(' ', array_slice($result['output'], -3))));
     }
 
-    if (!file_exists($ogg_path)) {
-      throw new \RuntimeException(sprintf('ffmpeg did not produce output file: %s', $ogg_path));
-    }
-
-    // Remove the intermediate WAV file.
-    @unlink($wav_path);
+    $this->publishOutput($partial_output, $ogg_path);
   }
 
   /**
