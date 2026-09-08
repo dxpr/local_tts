@@ -11,6 +11,7 @@ use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\Core\StringTranslation\ByteSizeMarkup;
 use Drupal\local_tts\TtsPlayerBuilder;
 
@@ -153,6 +154,11 @@ function _local_tts_auto_generate(EntityInterface $entity) {
     return;
   }
   if (!_local_tts_bundle_allowed($entity->getEntityTypeId(), $entity->bundle())) {
+    return;
+  }
+  // Audio is only ever generated for publicly viewable content; queueing
+  // anything else produces a job that fails on every cron run.
+  if (!$entity->access('view', new AnonymousUserSession())) {
     return;
   }
 

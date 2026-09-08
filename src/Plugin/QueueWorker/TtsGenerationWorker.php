@@ -108,6 +108,15 @@ final class TtsGenerationWorker extends QueueWorkerBase implements ContainerFact
     try {
       $this->ttsService->generateSpeech($text, $options);
     }
+    catch (\InvalidArgumentException $e) {
+      // Invalid voice, speed or text length will never succeed on retry, so
+      // log it and let the queue drop the item instead of retrying forever.
+      $this->logger->warning('Dropping queued TTS job for @type:@id: @msg', [
+        '@type' => $data['entity_type'],
+        '@id' => $data['entity_id'],
+        '@msg' => $e->getMessage(),
+      ]);
+    }
     catch (\Exception $e) {
       $this->logger->error('Queue TTS generation failed for @type:@id: @msg', [
         '@type' => $data['entity_type'],

@@ -10,6 +10,7 @@ use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\Core\Flood\FloodInterface;
 use Drupal\Core\Queue\QueueFactory;
 use Drupal\Core\Session\AccountProxyInterface;
+use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\Core\TypedData\TranslatableInterface;
 use Drupal\Core\Url;
 use Drupal\local_tts\TtsService;
@@ -199,6 +200,16 @@ final class TtsController extends ControllerBase {
         ], 403);
       }
 
+      // Generated audio is a public file, so it is only produced for content
+      // an anonymous visitor may view. The queue worker enforces the same
+      // rule; refusing here avoids a job that can never complete.
+      if (!$entity->access('view', new AnonymousUserSession())) {
+        return new JsonResponse([
+          'error' => 'Forbidden',
+          'message' => 'Audio is only available for publicly viewable content',
+        ], 403);
+      }
+
       // Render-based text extraction captures computed fields.
       $text = $this->ttsService->extractTextFromEntity($entity);
 
@@ -209,6 +220,10 @@ final class TtsController extends ControllerBase {
         ], 400);
       }
 
+      // Use the canonical identifiers from the loaded entity so that the
+      // metadata row and queue item never carry unnormalised request input.
+      $entity_type = $entity->getEntityTypeId();
+      $entity_id = (string) $entity->id();
       $language = $entity->language()->getId();
     }
     catch (\Exception $e) {
@@ -221,8 +236,25 @@ final class TtsController extends ControllerBase {
       ], 500);
     }
 
-    // Content change detection: serve cached audio when text is unchanged.
+    // Validate voice and speed before anything is queued: the queue worker
+    // rejects invalid values, and a rejected job would only be retried.
     $config = $this->config('local_tts.settings');
+    $resolved_voice = $voice ?: $this->getDefaultVoice($language);
+    if (!isset($this->ttsService->getAvailableVoices()[$resolved_voice])) {
+      return new JsonResponse([
+        'error' => 'Bad Request',
+        'message' => 'Invalid voice',
+      ], 400);
+    }
+    $resolved_speed = $speed !== NULL && $speed !== '' ? (float) $speed : (float) ($config->get('default_speed') ?: 1);
+    if ($resolved_speed < 0.5 || $resolved_speed > 2.0) {
+      return new JsonResponse([
+        'error' => 'Bad Request',
+        'message' => 'Invalid speed (must be between 0.5 and 2.0)',
+      ], 400);
+    }
+
+    // Content change detection: serve cached audio when text is unchanged.
     $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
     $text_hash = md5($text);
 
@@ -259,8 +291,6 @@ final class TtsController extends ControllerBase {
     }
 
     // Compute cache key using the same formula as TtsService.
-    $resolved_voice = $voice ?: $config->get('default_voice');
-    $resolved_speed = $speed ? (float) $speed : (float) ($config->get('default_speed') ?: 1);
     $cache_key = $this->ttsService->computeCacheKey($text, $resolved_voice, $resolved_speed, $language);
 
     // Return immediately when the file already exists on disk.
@@ -325,6 +355,32 @@ final class TtsController extends ControllerBase {
     return new JsonResponse([
       'status' => 'processing',
     ]);
+  }
+
+  /**
+   * Resolve the default voice for a language.
+   *
+   * Mirrors the player's default so a request without an explicit voice hits
+   * the same cached file the player would.
+   *
+   * @param string $language
+   *   The content language code.
+   *
+   * @return string
+   *   A voice code.
+   */
+  protected function getDefaultVoice(string $language): string {
+    $config = $this->config('local_tts.settings');
+    $default_voices = $config->get('default_voices') ?? [];
+    $available = $this->ttsService->getAvailableVoices($language);
+
+    if (isset($default_voices[$language], $available[$default_voices[$language]])) {
+      return $default_voices[$language];
+    }
+    if (!empty($available)) {
+      return (string) array_key_first($available);
+    }
+    return (string) ($config->get('default_voice') ?: 'af_sky');
   }
 
   /**
