@@ -5,11 +5,15 @@
 <h2>Features</h2>
 
 <ul>
-  <li><strong>54 voices across 9 languages</strong>: American English, British English, Japanese, Mandarin Chinese, French, Hindi, Spanish, Italian, Portuguese</li>
+  <li><strong>54 voices across 9 languages</strong>: American English, British English, Japanese, Mandarin Chinese, French, Hindi, Spanish, Italian, Portuguese. <a href="https://project.pages.drupalcode.org/local_tts/guides/voices/">Listen to voice samples</a></li>
   <li><strong>Language-aware voice filtering</strong>: automatically shows only voices matching the content language</li>
   <li><strong>Adjustable speech speed</strong>: 0.5x to 2.0x</li>
-  <li><strong>Audio caching</strong>: generated files cached on disk to reduce server load</li>
-  <li><strong>Block and field integration</strong>: place a player site-wide or per content type</li>
+  <li><strong>Audio caching</strong>: generated files cached on disk with automatic cleanup when the size limit is exceeded</li>
+  <li><strong>Auto-generate on save</strong>: optionally queue generation when content is created or updated, so audio is ready before the first visitor arrives</li>
+  <li><strong>Content type filtering</strong>: limit TTS to specific content types</li>
+  <li><strong>Download button</strong>: optional download icon in the player controls</li>
+  <li><strong>Batch generation</strong>: generate audio for many entities at once via admin UI or Drush, with date filtering and dry-run preview</li>
+  <li><strong>Block and field integration</strong>: place a player site-wide or per content type, with Layout Builder support</li>
   <li><strong>Drush commands</strong>: test, batch generate, list voices, clear cache</li>
   <li><strong>Accessibility-optimised</strong>: ARIA labels, keyboard shortcuts, semantic HTML</li>
   <li><strong>Privacy-first</strong>: all processing local, only publicly viewable content converted</li>
@@ -72,7 +76,7 @@ drush en local_tts</code></pre>
   <tbody>
     <tr>
       <td><code>local-tts:test</code></td>
-      <td>Test TTS generation with instant playback</td>
+      <td>Test TTS generation with instant playback; <code>--no-play</code> to skip audio output</td>
     </tr>
     <tr>
       <td><code>local-tts:read</code></td>
@@ -80,7 +84,7 @@ drush en local_tts</code></pre>
     </tr>
     <tr>
       <td><code>local-tts:batch</code></td>
-      <td>Batch generate audio for multiple entities</td>
+      <td>Batch generate audio; supports <code>--updated-after</code> and <code>--dry-run</code></td>
     </tr>
     <tr>
       <td><code>local-tts:voices</code></td>
@@ -88,7 +92,7 @@ drush en local_tts</code></pre>
     </tr>
     <tr>
       <td><code>local-tts:cache-clear</code></td>
-      <td>Clear all cached audio files</td>
+      <td>Clear all cached audio files and database records</td>
     </tr>
   </tbody>
 </table>
@@ -111,6 +115,16 @@ drush en local_tts</code></pre>
     <p>Yes. Audio is loaded via AJAX when the visitor clicks the play button, so the page itself can be fully cached (including behind Varnish or a CDN). Cached audio files are served directly without regeneration.</p>
   </dd>
 
+  <dt>Can I auto-generate audio when content is saved?</dt>
+  <dd>
+    <p>Yes. Enable "Auto-generate audio on content save" on the Voices settings tab. A TTS generation job is queued automatically whenever content is created or updated.</p>
+  </dd>
+
+  <dt>Can I generate audio for many pages at once?</dt>
+  <dd>
+    <p>Yes. Use the Batch tab at <code>/admin/config/media/local-tts/batch</code> or the <code>drush local-tts:batch</code> command. Both let you select content types, languages, and optionally filter by date. Use <code>--dry-run</code> to preview the count before generating.</p>
+  </dd>
+
   <dt>Does Local TTS set cookies or track users?</dt>
   <dd>
     <p>No. The module only processes the content text server-side when requested. It does not set cookies, store user IDs, or create visitor profiles.</p>
@@ -125,8 +139,8 @@ drush en local_tts</code></pre>
 <div class="note-tip">
   <ul>
     <li><a href="https://project.pages.drupalcode.org/local_tts/">Module documentation</a>: installation, configuration, voice reference, and Drush commands</li>
-    <li><a href="https://project.pages.drupalcode.org/local_tts/getting-started/installation/">Installation guide</a>: system dependencies, binary build, and Nginx configuration</li>
-    <li><a href="https://project.pages.drupalcode.org/local_tts/guides/voices/">Available voices</a>: all 54 voices across 9 languages with voice IDs</li>
+    <li><a href="https://project.pages.drupalcode.org/local_tts/guides/voices/">Voice samples</a>: listen to all 54 voices across 9 languages</li>
+    <li><a href="https://project.pages.drupalcode.org/local_tts/guides/cache-and-batch/">Cache and batch generation</a>: manage cached audio and generate in bulk</li>
     <li><a href="https://project.pages.drupalcode.org/local_tts/guides/faq/">FAQ</a>: caching, privacy, load management, and troubleshooting</li>
   </ul>
 </div>

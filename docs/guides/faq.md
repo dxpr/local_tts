@@ -16,16 +16,17 @@ system dependency is eSpeak NG, which also runs locally.
 
 ## How large are the model files?
 
-The model (`kokoro-v1.0.onnx`) is approximately 310MB and the voice data
-(`voices-v1.0.bin`) is approximately 27MB. These files are downloaded
+The model (`kokoro-v1.0.onnx`) is approximately 310 MB and the voice data
+(`voices-v1.0.bin`) is approximately 27 MB. These files are downloaded
 automatically during `composer install`.
 
 ## What audio format is used?
 
 Audio is generated as OGG Opus, which provides excellent compression at high
-quality. A typical article produces files in the 5 to 50KB range. The module
-first generates WAV via the Kokoro engine, then transcodes to OGG Opus using
-ffmpeg. ffmpeg must be installed on the server (see
+quality. File sizes range from tens of KB for short text to several MB for
+long-form articles, depending on content length. The module first generates
+WAV via the Kokoro engine, then transcodes to OGG Opus using ffmpeg. ffmpeg
+must be installed on the server (see
 [Installation](../getting-started/installation.md)).
 
 ## How does caching work?
@@ -37,8 +38,11 @@ new audio if the content has changed. A text hash stored in the database
 enables fast change detection without regenerating the audio. The cache
 directory defaults to `public://local-tts/` and its size is configurable.
 
-Orphan audio files (files on disk with no matching database record) are
-automatically cleaned up during cron, rate-limited to once every 6 hours.
+Cache management is automatic: size-based cleanup removes least recently used
+files when the limit is exceeded, and content-based invalidation removes
+audio when source content is updated. Orphan audio files (files on disk with
+no matching database record) are cleaned up during cron, rate-limited to once
+every 6 hours.
 
 ## How does queue-based generation work?
 
@@ -57,7 +61,7 @@ OGG Opus file in one ffmpeg pass.
 
 ## Can I preview voices before selecting one?
 
-Yes. The settings page at `/admin/config/media/local-tts` includes a
+Yes. The Voices tab at `/admin/config/media/local-tts/voices` includes a
 "Preview" button next to each voice dropdown. Clicking it generates a short
 sample sentence in the selected voice and speed.
 
@@ -66,6 +70,28 @@ sample sentence in the selected voice and speed.
 Yes. Playback position is saved to the browser's localStorage every 5 seconds.
 When a visitor returns to the same page, the player offers a "Resume from
 X:XX?" link. Progress is cleared when playback reaches the end.
+
+## Can I auto-generate audio when content is saved?
+
+Yes. Enable "Auto-generate audio on content save" on the
+[Voices tab](../getting-started/configuration.md#generation-settings).
+When enabled, a TTS generation job is queued automatically whenever
+content is created or updated. You can also limit auto-generation to
+specific content types.
+
+## Can visitors download the audio?
+
+Yes, if enabled. Toggle "Show download button" in the
+[Player settings](../getting-started/configuration.md#player-settings)
+on the Voices tab. When enabled, a download icon appears in the player
+controls.
+
+## Can I generate audio for many pages at once?
+
+Yes, via the [Batch tab](cache-and-batch.md#batch-generation) at
+`/admin/config/media/local-tts/batch` or via the
+[`local-tts:batch` Drush command](drush.md#batch-generation). Both let
+you select content types, languages, and optionally filter by date.
 
 ## Can I use Local TTS without eSpeak NG?
 
@@ -95,6 +121,8 @@ anonymous users). Check that:
 - Voices are available for the content's language
   (`drush local-tts:voices --language=en`)
 - The block or field is placed and configured correctly
+- If content type filtering is enabled, the content type is selected on the
+  Voices tab
 
 ## Can I add custom voices?
 

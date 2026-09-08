@@ -23,6 +23,7 @@ nav:
       - Configuration: 'getting-started/configuration.md'
   - Guides:
       - Available Voices: 'guides/voices.md'
+      - Cache and Batch: 'guides/cache-and-batch.md'
       - Drush Commands: 'guides/drush.md'
       - FAQ: 'guides/faq.md'
   - Development:

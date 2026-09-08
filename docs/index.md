@@ -21,19 +21,28 @@ data leaving your server.
   entity, capturing computed fields, Views output, and block field content
 - **Playback progress persistence**: playback position is saved to
   localStorage every 5 seconds and restored on return visits
-- **Voice preview**: listen to any voice directly on the settings page before
-  selecting it as the default
+- **Voice preview**: listen to any voice directly on the
+  [Voices settings tab](getting-started/configuration.md#voice-settings)
+  before selecting it as the default
 - **Language-aware voice filtering**: automatically shows only voices matching
   the content language
 - **Adjustable speech speed**: 0.5x to 2.0x
-- **Audio caching**: generated files cached on disk to reduce server load
+- **Auto-generate on save**: optionally queue TTS generation whenever content
+  is created or updated, so audio is ready before the first visitor arrives
+- **Content type filtering**: limit TTS to specific content types
+- **Download button**: optionally allow visitors to download generated audio
+- **Audio caching**: generated files cached on disk with configurable size
+  limits and automatic LRU eviction
 - **Orphan cleanup**: stale audio files with no matching database record are
   removed automatically during cron
 - **Block and field integration**: place a player site-wide via Block layout or
   per content type via a dedicated field
 - **Drush commands**: test generation, batch processing, cache management, and
   voice listing
-- **Accessibility**: ARIA labels, keyboard shortcuts, semantic HTML
+- **Batch generation**: generate audio for multiple entities at once via the
+  admin UI or Drush
+- **Accessibility**: ARIA labels, keyboard shortcuts, screen reader
+  announcements, semantic HTML
 - **Privacy-first**: only publicly viewable content is converted to audio; no
   data sent to external services
 
@@ -56,18 +65,47 @@ data leaving your server.
 
 ## Architecture
 
-- **TtsService**: core service interfacing with the `koko` binary; handles
-  single and chunked generation, WAV to OGG Opus transcoding via ffmpeg
-- **TtsPlayerBuilder**: shared service for building the player UI
+The module is built around a service-oriented architecture with clear
+separation of concerns:
+
+- **TtsService**: facade coordinating voice management, health checks, and
+  generation; delegates to specialised services below
+- **TtsGenerator**: interfaces with the `koko` binary for speech generation,
+  handles chunked processing and WAV to OGG Opus transcoding via ffmpeg
+- **TtsCacheManager**: manages the cache metadata database table, file
+  reference counting, and metadata save/update operations
+- **TtsTextExtractor**: render-based text extraction with account switching
+  to anonymous, HTML-to-plain-text conversion, and re-entrancy safety
+- **TtsCronService**: cron-driven cleanup of stale metadata, LRU cache
+  eviction, orphan file removal, and bundle-filtering logic
+- **TtsBatchService**: batch generation with retry logic, database keepalive,
+  and translation-aware entity queries
+- **TtsPlayerBuilder**: shared service for building the player render array
+  with voice controls, speed selector, and accessibility markup
 - **TtsController**: AJAX endpoint that checks cache, queues generation, and
   exposes a status polling endpoint
 - **TtsGenerationWorker**: queue worker plugin that processes background
-  generation jobs
-- **VoicePreviewController**: endpoint for previewing voices on the settings
-  page
+  generation jobs with stale-content detection
+- **VoicePreviewController**: endpoint for previewing voices on the
+  settings page
 - **LocalTtsBlock**: block plugin for site-wide TTS
 - **LocalTtsPlayerItem**: field type for per-content TTS
-- **LocalTtsPlayerFormatter**: field formatter with voice/speed settings
+- **LocalTtsPlayerFormatter**: field formatter with voice/speed/volume
+  settings
+
+## Admin interface
+
+The module provides five admin tabs at **Configuration > Media > Local TTS**:
+
+| Tab | Path | Purpose |
+|-----|------|---------|
+| System | `/admin/config/media/local-tts` | eSpeak path, caching, cache size, security |
+| Voices | `/admin/config/media/local-tts/voices` | Per-language default voice, speed, auto-generate, content types, download button |
+| Test | `/admin/config/media/local-tts/test` | Generate and play speech from arbitrary text |
+| Cache | `/admin/config/media/local-tts/cache` | Browse cached audio files with inline players |
+| Batch | `/admin/config/media/local-tts/batch` | Generate audio for multiple entities at once |
+
+![System settings tab](images/settings-system.jpg)
 
 ## Related modules
 

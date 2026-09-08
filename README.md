@@ -20,6 +20,12 @@ across 9 languages.
   they left off
 - **Voice preview** on the settings page; hear any voice before selecting it
 - **Language-aware voice filtering** automatically shows only matching voices
+- **Auto-generate on save**: optionally queue TTS generation whenever content is
+  created or updated, so audio is ready before the first visitor arrives
+- **Content type filtering**: limit TTS to specific content types
+- **Download button**: optional download icon in the player controls
+- **Batch generation**: generate audio for many entities at once via admin UI or
+  Drush, with date filtering and dry-run support
 - Adjustable speech speed (0.5x to 2.0x)
 - Audio caching with automatic orphan cleanup during cron
 - Block and field-based integration options
@@ -150,7 +156,7 @@ Go to: Configuration > Media > Local TTS Settings
 **Key Settings:**
 - **eSpeak NG data path** - Path to espeak-ng-data directory (required)
 - **Default voice per language** - Set preferred voices
-- **Default speech speed** - Speed multiplier (0.8x to 2x)
+- **Default speech speed** - Speed multiplier (0.5x to 2.0x)
 - **Cache settings** - Enable/disable audio caching
 - **Security settings** - Rate limiting, text length limits, timeout
 
@@ -238,6 +244,13 @@ drush local-tts:batch --entity-type=node --bundle=page --language=en,es,fr
 
 # Force regeneration
 drush local-tts:batch --entity-type=node --bundle=article --force
+
+# Only entities updated since a date
+drush local-tts:batch --entity-type=node \
+  --bundle=article --updated-after=2026-01-01
+
+# Preview count without generating
+drush local-tts:batch --entity-type=node --bundle=article --dry-run
 ```
 
 ### Cache Management
@@ -250,16 +263,26 @@ drush local-tts:cache-clear
 ## Architecture
 
 **Services:**
-- `TtsService` - Core service for interfacing with koko binary
-- `TtsPlayerBuilder` - Shared service for building player UI
+- `TtsService` - Facade: voice management, health checks,
+  generation coordination
+- `TtsGenerator` - Binary execution, chunked processing,
+  WAV to OGG transcoding via ffmpeg
+- `TtsCacheManager` - Cache metadata, file reference counting
+- `TtsTextExtractor` - Render-based text extraction
+- `TtsCronService` - Stale metadata cleanup, LRU eviction,
+  orphan file removal
+- `TtsBatchService` - Batch generation with retry logic
+- `TtsPlayerBuilder` - Player render array with voice controls
 
 **Controllers:**
 - `TtsController` - AJAX endpoint for audio generation with queue-based
   processing and status polling
 - `VoicePreviewController` - Voice preview endpoint for settings page
+- `TtsCacheController` - Cache entry deletion
 
 **Queue Workers:**
-- `TtsGenerationWorker` - Background audio generation via Drupal Queue API
+- `TtsGenerationWorker` - Background audio generation
+  with stale-content detection
 
 **Plugins:**
 - `LocalTtsBlock` - Block plugin for site-wide TTS

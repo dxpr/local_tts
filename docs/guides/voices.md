@@ -3,7 +3,17 @@
 Local TTS ships 54 voices across 9 languages via the Kokoro TTS engine.
 The player automatically filters voices to match the content language.
 
+Listen to a sample from each language below, or use the Preview buttons
+on the [Voices settings tab](../getting-started/configuration.md#voice-settings)
+to hear any voice with different speed settings.
+
 ## American English (20 voices)
+
+<audio controls preload="none" src="../audio/af_alloy-sample.ogg"></audio>
+*Sample: af_alloy (Alloy, Female)*
+
+<audio controls preload="none" src="../audio/am_adam-sample.ogg"></audio>
+*Sample: am_adam (Adam, Male)*
 
 | Voice ID    | Description          |
 |-------------|----------------------|
@@ -30,6 +40,12 @@ The player automatically filters voices to match the content language.
 
 ## British English (8 voices)
 
+<audio controls preload="none" src="../audio/bf_emma-sample.ogg"></audio>
+*Sample: bf_emma (Emma, Female)*
+
+<audio controls preload="none" src="../audio/bm_fable-sample.ogg"></audio>
+*Sample: bm_fable (Fable, Male)*
+
 | Voice ID     | Description          |
 |--------------|----------------------|
 | bf_alice     | Female, Alice        |
@@ -43,6 +59,9 @@ The player automatically filters voices to match the content language.
 
 ## Japanese (5 voices)
 
+<audio controls preload="none" src="../audio/jf_alpha-sample.ogg"></audio>
+*Sample: jf_alpha (Alpha, Female)*
+
 | Voice ID      | Description        |
 |---------------|--------------------|
 | jf_alpha      | Female, Alpha      |
@@ -52,6 +71,9 @@ The player automatically filters voices to match the content language.
 | jm_kumo       | Male, Kumo         |
 
 ## Mandarin Chinese (8 voices)
+
+<audio controls preload="none" src="../audio/zf_xiaobei-sample.ogg"></audio>
+*Sample: zf_xiaobei (Xiaobei, Female)*
 
 | Voice ID    | Description      |
 |-------------|------------------|
@@ -66,11 +88,16 @@ The player automatically filters voices to match the content language.
 
 ## French (1 voice)
 
+*French voice generation was unavailable at sample recording time.*
+
 | Voice ID  | Description    |
 |-----------|----------------|
 | ff_siwis  | Female, Siwis  |
 
 ## Hindi (4 voices)
+
+<audio controls preload="none" src="../audio/hf_alpha-sample.ogg"></audio>
+*Sample: hf_alpha (Alpha, Female)*
 
 | Voice ID   | Description     |
 |------------|-----------------|
@@ -81,6 +108,9 @@ The player automatically filters voices to match the content language.
 
 ## Spanish (3 voices)
 
+<audio controls preload="none" src="../audio/ef_dora-sample.ogg"></audio>
+*Sample: ef_dora (Dora, Female)*
+
 | Voice ID  | Description   |
 |-----------|---------------|
 | ef_dora   | Female, Dora  |
@@ -89,12 +119,17 @@ The player automatically filters voices to match the content language.
 
 ## Italian (2 voices)
 
+<audio controls preload="none" src="../audio/if_sara-sample.ogg"></audio>
+*Sample: if_sara (Sara, Female)*
+
 | Voice ID     | Description       |
 |--------------|-------------------|
 | if_sara      | Female, Sara      |
 | im_nicola    | Male, Nicola      |
 
 ## Portuguese (3 voices)
+
+*Portuguese voice generation was unavailable at sample recording time.*
 
 | Voice ID   | Description     |
 |------------|-----------------|
