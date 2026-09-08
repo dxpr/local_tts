@@ -201,7 +201,7 @@ final class LocalTtsPlayerFormatter extends FormatterBase implements ContainerFa
 
     if (!empty($items[0]->value)) {
       $entity = $items->getEntity();
-      $elements[0] = [
+      $elements[0]['player'] = [
         '#create_placeholder' => TRUE,
         '#lazy_builder' => [
           'local_tts.player_builder:buildPlayerLazy',
