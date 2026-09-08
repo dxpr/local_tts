@@ -354,10 +354,7 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
     ];
 
     if ($settings['show_voice_selector']) {
-      $default_voice = $this->getValidDefaultVoice(
-        $available_voices,
-        $langcode
-      );
+      $default_voice = $this->ttsService->getDefaultVoice($langcode);
 
       $build['play_wrapper']['settings']['voice_select'] = [
         '#type' => 'select',
@@ -432,7 +429,7 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
       ],
     ];
 
-    $js_default_voice = $this->getValidDefaultVoice($available_voices, $langcode);
+    $js_default_voice = $this->ttsService->getDefaultVoice($langcode);
 
     // SECURITY: Pass only entity reference to JavaScript, NOT the content.
     $build['#attached'] = [
@@ -465,28 +462,6 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
     $build['#cache']['tags'][] = 'config:local_tts.settings';
 
     return $build;
-  }
-
-  /**
-   * Get valid default voice for given language.
-   *
-   * @param array $available_voices
-   *   Available voices.
-   * @param string $langcode
-   *   Language code.
-   *
-   * @return string
-   *   Voice code.
-   */
-  protected function getValidDefaultVoice(array $available_voices, $langcode) {
-    $config = $this->configFactory->get('local_tts.settings');
-    $default_voices = $config->get('default_voices') ?? [];
-
-    if (isset($default_voices[$langcode]) && isset($available_voices[$default_voices[$langcode]])) {
-      return $default_voices[$langcode];
-    }
-
-    return array_key_first($available_voices);
   }
 
   /**

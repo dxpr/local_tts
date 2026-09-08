@@ -375,7 +375,7 @@ class TtsBatchService {
           }
 
           // Extract text from entity.
-          $text = $this->extractTextFromEntity($entity);
+          $text = $this->ttsService->extractTextFromEntity($entity);
 
           if (empty($text)) {
             $context['results']['errors'][] = $this->t('No text content found for @type:@id.', [
@@ -386,7 +386,7 @@ class TtsBatchService {
           }
 
           // Get the default voice for this translation unless overridden.
-          $voice = $options['voice'] ?? $this->getDefaultVoiceForLanguage($langcode);
+          $voice = $options['voice'] ?? $this->ttsService->getDefaultVoice($langcode);
 
           $generation_options = [
             'language' => $langcode,
@@ -546,51 +546,6 @@ class TtsBatchService {
     $current_load = $load[0];
 
     return $current_load <= $max_load;
-  }
-
-  /**
-   * Extract text content from an entity.
-   *
-   * Uses the same render-based extraction as the player endpoint and the
-   * queue worker, so the stored text hash and cache key match what the
-   * player requests and batch-generated audio is actually served.
-   *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to extract text from.
-   *
-   * @return string
-   *   The extracted text content.
-   */
-  protected function extractTextFromEntity(FieldableEntityInterface $entity): string {
-    return $this->ttsService->extractTextFromEntity($entity);
-  }
-
-  /**
-   * Get the default voice for a given language.
-   *
-   * @param string $langcode
-   *   The language code.
-   *
-   * @return string
-   *   The default voice ID.
-   */
-  protected function getDefaultVoiceForLanguage(string $langcode): string {
-    $config = $this->configFactory->get('local_tts.settings');
-    $default_voices = $config->get('default_voices') ?? [];
-
-    // Check language-specific default first.
-    if (isset($default_voices[$langcode])) {
-      return $default_voices[$langcode];
-    }
-
-    // Fall back to first available voice for this language.
-    $available_voices = $this->ttsService->getAvailableVoices($langcode);
-    if (!empty($available_voices)) {
-      return array_key_first($available_voices);
-    }
-
-    // Final fallback to af_sky.
-    return 'af_sky';
   }
 
 }

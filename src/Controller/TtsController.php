@@ -217,7 +217,7 @@ final class TtsController extends ControllerBase {
     // Validate voice and speed before anything is queued: the queue worker
     // rejects invalid values, and a rejected job would only be retried.
     $config = $this->config('local_tts.settings');
-    $resolved_voice = $voice ?: $this->getDefaultVoice($language);
+    $resolved_voice = $voice ?: $this->ttsService->getDefaultVoice($language);
     if (!isset($this->ttsService->getAvailableVoices()[$resolved_voice])) {
       return new JsonResponse([
         'error' => 'Bad Request',
@@ -327,32 +327,6 @@ final class TtsController extends ControllerBase {
     return new JsonResponse([
       'status' => 'processing',
     ]);
-  }
-
-  /**
-   * Resolve the default voice for a language.
-   *
-   * Mirrors the player's default so a request without an explicit voice hits
-   * the same cached file the player would.
-   *
-   * @param string $language
-   *   The content language code.
-   *
-   * @return string
-   *   A voice code.
-   */
-  protected function getDefaultVoice(string $language): string {
-    $config = $this->config('local_tts.settings');
-    $default_voices = $config->get('default_voices') ?? [];
-    $available = $this->ttsService->getAvailableVoices($language);
-
-    if (isset($default_voices[$language], $available[$default_voices[$language]])) {
-      return $default_voices[$language];
-    }
-    if (!empty($available)) {
-      return (string) array_key_first($available);
-    }
-    return (string) ($config->get('default_voice') ?: 'af_sky');
   }
 
   /**

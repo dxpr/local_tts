@@ -183,8 +183,7 @@ function _local_tts_auto_generate(EntityInterface $entity) {
     return;
   }
 
-  $default_voices = $config->get('default_voices') ?? [];
-  $voice = $default_voices[$langcode] ?? array_key_first($voices);
+  $voice = $tts_service->getDefaultVoice($langcode);
   $speed = $config->get('default_speed') ?: '1';
 
   /** @var \Drupal\Core\Queue\QueueFactory $queue_factory */

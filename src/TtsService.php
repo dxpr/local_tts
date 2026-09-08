@@ -253,8 +253,7 @@ class TtsService {
     }
 
     $default_language = $options['language'] ?? 'en';
-    $defaults = $config->get('default_voices') ?? [];
-    $voice = $options['voice'] ?? $defaults[$default_language] ?? $config->get('default_voice') ?? array_key_first($this->getAvailableVoices($default_language)) ?? 'af_sky';
+    $voice = $options['voice'] ?? $this->getDefaultVoice($default_language);
     $speed = $options['speed'] ?? $config->get('default_speed');
     $language = $options['language'] ?? $this->detectLanguageFromVoice($voice);
 
@@ -1344,6 +1343,222 @@ class TtsService {
       'return_code' => -1,
       'timeout' => TRUE,
     ];
+  }
+
+  /**
+   * Get an available default voice for a content language.
+   *
+   * @param string $language
+   *   The content language code.
+   *
+   * @return string
+   *   The voice code.
+   */
+  public function getDefaultVoice(string $language): string {
+    $config = $this->configFactory->get('local_tts.settings');
+    $defaults = $config->get('default_voices') ?? [];
+    $available = $this->getAvailableVoices($language);
+    if (isset($defaults[$language], $available[$defaults[$language]])) {
+      return $defaults[$language];
+    }
+    return (string) (array_key_first($available) ?? ($config->get('default_voice') ?: 'af_sky'));
+  }
+
+  /**
+   * Check whether the TTS binary is available.
+   *
+   * @return bool
+   *   TRUE if the koko binary exists and is executable.
+   */
+  public function isBinaryAvailable(): bool {
+    static $available = NULL;
+    if ($available !== NULL) {
+      return $available;
+    }
+    $binary_path = DRUPAL_ROOT . '/' . $this->modulePath . '/bin/koko';
+    $available = file_exists($binary_path) && is_executable($binary_path);
+    return $available;
+  }
+
+  /**
+   * Estimate word count from an entity's text fields.
+   *
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   *   The entity to count words from.
+   * @param array $fields
+   *   Optional field names to limit counting to.
+   *
+   * @return int
+   *   Estimated word count.
+   */
+  public function estimateWordCount(FieldableEntityInterface $entity, array $fields = []): int {
+    $fields = array_filter($fields);
+    $count = 0;
+
+    foreach ($entity->getFieldDefinitions() as $field_name => $definition) {
+      if (in_array($field_name, TtsPlayerBuilder::EXCLUDED_BASE_FIELDS, TRUE)) {
+        continue;
+      }
+      if (!empty($fields) && !in_array($field_name, $fields, TRUE)) {
+        continue;
+      }
+      if (!in_array($definition->getType(), TtsPlayerBuilder::ALLOWED_FIELD_TYPES, TRUE)) {
+        continue;
+      }
+      $value = $entity->get($field_name)->getString();
+      if ($value !== '') {
+        $count += str_word_count(strip_tags($value));
+      }
+    }
+
+    return $count;
+  }
+
+  /**
+   * Run system health checks for TTS dependencies.
+   *
+   * @return array
+   *   Keyed array with binary, ffmpeg, espeak, audio_dir, disk_usage.
+   */
+  public function checkHealth(): array {
+    $config = $this->configFactory->get('local_tts.settings');
+    $health = [];
+
+    // Binary check.
+    $binary_path = DRUPAL_ROOT . '/' . $this->modulePath . '/bin/koko';
+    if (!file_exists($binary_path)) {
+      $health['binary'] = [
+        'status' => 'error',
+        'message' => 'Not found at ' . $binary_path,
+        'path' => $binary_path,
+      ];
+    }
+    elseif (!is_executable($binary_path)) {
+      $health['binary'] = [
+        'status' => 'error',
+        'message' => 'Found but not executable',
+        'path' => $binary_path,
+      ];
+    }
+    else {
+      $health['binary'] = [
+        'status' => 'ok',
+        'message' => 'Found and executable',
+        'path' => $binary_path,
+      ];
+    }
+
+    // Ffmpeg check: try known paths then `which`.
+    $ffmpeg_path = NULL;
+    $candidates = [
+      '/usr/bin/ffmpeg',
+      '/usr/local/bin/ffmpeg',
+      '/opt/homebrew/bin/ffmpeg',
+    ];
+    foreach ($candidates as $path) {
+      if (is_executable($path)) {
+        $ffmpeg_path = $path;
+        break;
+      }
+    }
+    if (!$ffmpeg_path) {
+      $output = [];
+      $code = 0;
+      @exec('which ffmpeg 2>/dev/null', $output, $code);
+      if ($code === 0 && !empty($output[0]) && is_executable($output[0])) {
+        $ffmpeg_path = $output[0];
+      }
+    }
+    if ($ffmpeg_path) {
+      $health['ffmpeg'] = [
+        'status' => 'ok',
+        'message' => 'Found at ' . $ffmpeg_path,
+        'path' => $ffmpeg_path,
+      ];
+    }
+    else {
+      $health['ffmpeg'] = [
+        'status' => 'error',
+        'message' => 'Not found; install ffmpeg for audio transcoding',
+        'path' => '',
+      ];
+    }
+
+    // eSpeak NG data directory.
+    $espeak_path = $config->get('espeak_data_path');
+    if (!$espeak_path) {
+      $health['espeak'] = [
+        'status' => 'error',
+        'message' => 'Path not configured',
+        'path' => '',
+      ];
+    }
+    elseif (!is_dir($espeak_path)) {
+      $health['espeak'] = [
+        'status' => 'error',
+        'message' => 'Directory not found at ' . $espeak_path,
+        'path' => $espeak_path,
+      ];
+    }
+    else {
+      $health['espeak'] = [
+        'status' => 'ok',
+        'message' => 'Found at ' . $espeak_path,
+        'path' => $espeak_path,
+      ];
+    }
+
+    // Audio directory.
+    $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
+    $real_path = $this->fileSystem->realpath($audio_dir);
+    if (!$real_path) {
+      $health['audio_dir'] = [
+        'status' => 'warning',
+        'message' => 'Does not exist yet (created on first generation)',
+        'path' => $audio_dir,
+        'writable' => FALSE,
+      ];
+    }
+    elseif (!is_writable($real_path)) {
+      $health['audio_dir'] = [
+        'status' => 'error',
+        'message' => 'Not writable at ' . $audio_dir,
+        'path' => $audio_dir,
+        'writable' => FALSE,
+      ];
+    }
+    else {
+      $health['audio_dir'] = [
+        'status' => 'ok',
+        'message' => 'Writable at ' . $audio_dir,
+        'path' => $audio_dir,
+        'writable' => TRUE,
+      ];
+    }
+
+    // Disk usage from metadata table.
+    $max_size = $config->get('cache_max_size') ?: 1073741824;
+    try {
+      $query = $this->database->select('local_tts_cache', 'c');
+      $query->addExpression('COALESCE(SUM(file_size), 0)', 'total_size');
+      $query->addExpression('COUNT(DISTINCT cache_key)', 'file_count');
+      $result = $query->execute()->fetchObject();
+      $total_size = (int) $result->total_size;
+      $file_count = (int) $result->file_count;
+    }
+    catch (\Exception $e) {
+      $total_size = 0;
+      $file_count = 0;
+    }
+
+    $health['disk_usage'] = [
+      'total_size' => $total_size,
+      'file_count' => $file_count,
+      'max_size' => (int) $max_size,
+      'percent' => $max_size > 0 ? (int) round(($total_size / $max_size) * 100) : 0,
+    ];
+
+    return $health;
   }
 
 }

@@ -91,7 +91,7 @@ final class LocalTtsCommands extends DrushCommands {
 
     // Get configuration.
     $language = $options['language'] ?? 'en';
-    $voice = $options['voice'] ?? $this->getDefaultVoiceForLanguage($language);
+    $voice = $options['voice'] ?? $this->ttsService->getDefaultVoice($language);
     $speed = $options['speed'] ?? $config->get('default_speed') ?? 1.0;
 
     // Display settings.
@@ -138,7 +138,7 @@ final class LocalTtsCommands extends DrushCommands {
     }
 
     // Map language to espeak format.
-    $espeak_lang = $this->mapLanguageToEspeak($language);
+    $espeak_lang = $this->ttsService->mapLanguageToEspeak($language);
 
     // Detect platform and get audio player.
     $os = PHP_OS_FAMILY;
@@ -246,19 +246,6 @@ final class LocalTtsCommands extends DrushCommands {
     else {
       $this->output()->writeln('✅ Playback complete!');
     }
-  }
-
-  /**
-   * Map Drupal language code to espeak-ng language identifier.
-   *
-   * @param string $langcode
-   *   Drupal language code (e.g., 'en', 'es', 'ja').
-   *
-   * @return string
-   *   espeak-ng language identifier.
-   */
-  protected function mapLanguageToEspeak(string $langcode): string {
-    return $this->ttsService->mapLanguageToEspeak($langcode);
   }
 
   /**
@@ -482,7 +469,7 @@ final class LocalTtsCommands extends DrushCommands {
     $this->output()->writeln('');
 
     // Extract text from entity.
-    $text = $this->extractTextFromEntity($entity, $options['field']);
+    $text = $this->ttsService->extractTextFromEntity($entity, !empty($options['field']) ? [$options['field']] : []);
 
     if (empty($text)) {
       $this->logger()->error('No text content found in entity.');
@@ -504,7 +491,7 @@ final class LocalTtsCommands extends DrushCommands {
 
     $config = $this->configFactory->get('local_tts.settings');
     $language = $options['language'] ?? $entity_language ?? 'en';
-    $voice = $options['voice'] ?? $this->getDefaultVoiceForLanguage($language);
+    $voice = $options['voice'] ?? $this->ttsService->getDefaultVoice($language);
     $speed = $options['speed'] ?? $config->get('default_speed') ?? 1.0;
 
     $this->output()->writeln("Voice: $voice");
@@ -556,78 +543,6 @@ final class LocalTtsCommands extends DrushCommands {
         $this->logger()->error('Error generating speech: @message', ['@message' => $e->getMessage()]);
       }
     }
-  }
-
-  /**
-   * Extract text content from an entity.
-   *
-   * @param \Drupal\Core\Entity\EntityInterface $entity
-   *   The entity to extract text from.
-   * @param string|null $field_name
-   *   Optional specific field name to extract.
-   *
-   * @return string
-   *   The extracted text content.
-   */
-  protected function extractTextFromEntity($entity, $field_name = NULL): string {
-    // If specific field requested, try to get it.
-    if ($field_name && $entity->hasField($field_name)) {
-      return $this->extractFieldText($entity, $field_name);
-    }
-
-    // Use the same render-based extraction as the player, so the cached
-    // file and text hash written here are the ones the player serves.
-    return $this->ttsService->extractTextFromEntity($entity);
-  }
-
-  /**
-   * Extract text from a specific field.
-   *
-   * @param \Drupal\Core\Entity\EntityInterface $entity
-   *   The entity.
-   * @param string $field_name
-   *   The field name.
-   *
-   * @return string
-   *   The extracted text.
-   */
-  protected function extractFieldText($entity, $field_name): string {
-    if (!$entity->hasField($field_name)) {
-      return '';
-    }
-
-    $field = $entity->get($field_name);
-
-    if ($field->isEmpty()) {
-      return '';
-    }
-
-    $text_parts = [];
-
-    // Handle different field types.
-    foreach ($field as $item) {
-      // Text fields with format (like body).
-      if (isset($item->value)) {
-        $text = $item->value;
-
-        // Strip HTML tags for formatted text.
-        if (isset($item->format)) {
-          $text = strip_tags($text);
-        }
-
-        $text_parts[] = $text;
-      }
-      // Plain string fields.
-      elseif (is_string($item->value)) {
-        $text_parts[] = $item->value;
-      }
-      // Entity reference fields - get labels.
-      elseif (method_exists($item, 'entity') && $item->entity) {
-        $text_parts[] = $item->entity->label();
-      }
-    }
-
-    return implode(' ', $text_parts);
   }
 
   /**
@@ -767,7 +682,7 @@ final class LocalTtsCommands extends DrushCommands {
         }
 
         // Extract text.
-        $text = $this->extractTextFromEntity($entity, NULL);
+        $text = $this->ttsService->extractTextFromEntity($entity);
 
         if (empty($text)) {
           $errors[] = "No text content for {$entity_data['entity_type']}:{$entity_data['entity_id']}.";
@@ -778,7 +693,7 @@ final class LocalTtsCommands extends DrushCommands {
         $this->output()->write("[$processed/$total] Processing {$entity_data['entity_type']}:{$entity_data['entity_id']} ($langcode)... ");
 
         $config = $this->configFactory->get('local_tts.settings');
-        $default_voice = $this->getDefaultVoiceForLanguage($langcode);
+        $default_voice = $this->ttsService->getDefaultVoice($langcode);
 
         $tts_options = [
           'language' => $langcode,
@@ -788,7 +703,6 @@ final class LocalTtsCommands extends DrushCommands {
           'entity_id' => $entity_data['entity_id'],
           'use_cache' => TRUE,
           'force_refresh' => (bool) $options['force'],
-          'skip_access_check' => FALSE,
         ];
 
         $audio_uri = $this->ttsService->generateSpeech($text, $tts_options);
@@ -823,34 +737,6 @@ final class LocalTtsCommands extends DrushCommands {
         $this->output()->writeln("  - $error");
       }
     }
-  }
-
-  /**
-   * Get the default voice for a given language.
-   *
-   * @param string $langcode
-   *   The language code.
-   *
-   * @return string
-   *   The default voice code for the language.
-   */
-  protected function getDefaultVoiceForLanguage(string $langcode): string {
-    $config = $this->configFactory->get('local_tts.settings');
-    $default_voices = $config->get('default_voices') ?? [];
-
-    // Check language-specific default first.
-    if (isset($default_voices[$langcode])) {
-      return $default_voices[$langcode];
-    }
-
-    // Fall back to first available voice for this language.
-    $available_voices = $this->ttsService->getAvailableVoices($langcode);
-    if (!empty($available_voices)) {
-      return array_key_first($available_voices);
-    }
-
-    // Final fallback to af_sky.
-    return 'af_sky';
   }
 
 }
