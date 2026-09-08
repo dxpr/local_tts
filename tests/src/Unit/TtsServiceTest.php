@@ -3,11 +3,17 @@
 namespace Drupal\Tests\local_tts\Unit;
 
 use Drupal\local_tts\TtsService;
+use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\ImmutableConfig;
+use Drupal\Core\Database\Connection;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Extension\ModuleExtensionList;
+use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelInterface;
+use Drupal\Core\Render\RendererInterface;
 use Drupal\Tests\UnitTestCase;
 
 /**
@@ -83,11 +89,21 @@ class TtsServiceTest extends UnitTestCase {
       ->with('local_tts')
       ->willReturn($this->logger);
 
+    $extension_list = $this->createMock(ModuleExtensionList::class);
+    // A path without bundled files, so binary checks fail deterministically.
+    $extension_list->method('getPath')->willReturn('modules/custom/local_tts_missing');
+
     // Create service instance.
     $this->ttsService = new TtsService(
       $this->configFactory,
       $this->fileSystem,
-      $this->loggerFactory
+      $this->loggerFactory,
+      $extension_list,
+      $this->createMock(TimeInterface::class),
+      $this->createMock(Connection::class),
+      $this->createMock(EntityTypeManagerInterface::class),
+      $this->createMock(RendererInterface::class),
+      $this->createMock(ModuleHandlerInterface::class)
     );
   }
 
@@ -161,7 +177,10 @@ class TtsServiceTest extends UnitTestCase {
     $this->expectException(\InvalidArgumentException::class);
     $this->expectExceptionMessage('Invalid voice');
 
-    $this->ttsService->generateSpeech('Test text', ['voice' => 'invalid_voice']);
+    $this->ttsService->generateSpeech('Test text', [
+      'voice' => 'invalid_voice',
+      'use_cache' => FALSE,
+    ]);
   }
 
   /**
@@ -181,13 +200,16 @@ class TtsServiceTest extends UnitTestCase {
     $this->expectException(\InvalidArgumentException::class);
     $this->expectExceptionMessage('Invalid speed');
 
-    $this->ttsService->generateSpeech('Test text', ['speed' => $speed]);
+    $this->ttsService->generateSpeech('Test text', [
+      'speed' => $speed,
+      'use_cache' => FALSE,
+    ]);
   }
 
   /**
    * Data provider for invalid speeds.
    */
-  public function invalidSpeedProvider() {
+  public static function invalidSpeedProvider() {
     return [
       'too low' => [0.3],
       'too high' => [2.5],
@@ -213,7 +235,7 @@ class TtsServiceTest extends UnitTestCase {
     $this->expectExceptionMessage('exceeds maximum');
 
     $long_text = str_repeat('a', 101);
-    $this->ttsService->generateSpeech($long_text);
+    $this->ttsService->generateSpeech($long_text, ['use_cache' => FALSE]);
   }
 
   /**
@@ -228,7 +250,7 @@ class TtsServiceTest extends UnitTestCase {
       ['default_speed', 1.0],
       ['cache_audio', TRUE],
       ['audio_directory', 'public://local-tts'],
-      ['koko_binary_path', '/fake/path'],
+      ['max_server_load', 0],
     ]);
 
     $this->fileSystem->method('realpath')->willReturn('/tmp/test');
@@ -242,7 +264,7 @@ class TtsServiceTest extends UnitTestCase {
     $this->expectException(\RuntimeException::class);
     $this->expectExceptionMessage('binary');
 
-    $this->ttsService->generateSpeech($long_text);
+    $this->ttsService->generateSpeech($long_text, ['use_cache' => FALSE]);
   }
 
   /**
@@ -263,7 +285,7 @@ class TtsServiceTest extends UnitTestCase {
   /**
    * Data provider for voice language detection.
    */
-  public function voiceLanguageProvider() {
+  public static function voiceLanguageProvider() {
     return [
       'American English' => ['af_sky', 'en'],
       'British English' => ['bf_emma', 'en-gb'],
