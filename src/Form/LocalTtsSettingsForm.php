@@ -7,6 +7,7 @@ use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Language\LanguageManagerInterface;
+use Drupal\Core\StringTranslation\ByteSizeMarkup;
 use Drupal\Core\Url;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -86,6 +87,64 @@ final class LocalTtsSettingsForm extends ConfigFormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
     $config = $this->config('local_tts.settings');
+
+    $health = $this->ttsService->checkHealth();
+    $has_errors = FALSE;
+    foreach ($health as $check) {
+      if ($check['status'] === 'error') {
+        $has_errors = TRUE;
+        break;
+      }
+    }
+
+    $form['health'] = [
+      '#type' => 'details',
+      '#title' => $has_errors ? $this->t('System health: issues detected') : $this->t('System health: all checks passed'),
+      '#open' => $has_errors,
+    ];
+
+    $header = [
+      'component' => $this->t('Component'),
+      'status' => $this->t('Status'),
+      'details' => $this->t('Details'),
+    ];
+
+    $rows = [];
+    $status_labels = [
+      'ok' => $this->t('OK'),
+      'warning' => $this->t('Warning'),
+      'error' => $this->t('Error'),
+    ];
+    foreach ($health as $key => $check) {
+      $status_class = 'color--' . ($check['status'] === 'ok' ? 'success' : ($check['status'] === 'warning' ? 'warning' : 'error'));
+      $detail = $check['message'];
+      if (!empty($check['path'])) {
+        $detail .= ' (' . $check['path'] . ')';
+      }
+      if ($key === 'disk_usage' && isset($check['total_size'])) {
+        $detail .= ' ' . $this->t('@size in @count files (@percent% of @limit)', [
+          '@size' => ByteSizeMarkup::create($check['total_size']),
+          '@count' => $check['file_count'],
+          '@percent' => $check['percent'],
+          '@limit' => ByteSizeMarkup::create($check['max_size']),
+        ]);
+      }
+      $rows[] = [
+        'component' => $check['label'] ?? $key,
+        'status' => [
+          'data' => $status_labels[$check['status']] ?? $check['status'],
+          'class' => [$status_class],
+        ],
+        'details' => $detail,
+      ];
+    }
+
+    $form['health']['table'] = [
+      '#type' => 'table',
+      '#header' => $header,
+      '#rows' => $rows,
+      '#empty' => $this->t('No health checks available.'),
+    ];
 
     // eSpeak NG Configuration.
     $form['espeak'] = [
@@ -176,6 +235,9 @@ final class LocalTtsSettingsForm extends ConfigFormBase {
     $form['caching'] = [
       '#type' => 'fieldset',
       '#title' => $this->t('Caching Settings'),
+      '#description' => $this->t('Audio files are cached to avoid regenerating the same content. See <a href=":cache_url">cache overview</a> for current usage.', [
+        ':cache_url' => Url::fromRoute('local_tts.cache_overview')->toString(),
+      ]),
     ];
 
     $form['caching']['cache_audio'] = [

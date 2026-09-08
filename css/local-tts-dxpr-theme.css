@@ -1,0 +1,14 @@
+/**
+ * @file
+ * DXPR theme integration for Local TTS player.
+ *
+ * Maps --ltt-* design tokens to dxpr_theme runtime CSS custom
+ * properties so the player inherits the site's configured accent
+ * colour automatically.
+ */
+
+.local-tts-container {
+  --ltt-color-focus: var(--dxpr-theme-accent-color, #0678be);
+  --ltt-color-focus-ring: var(--dxpr-theme-accent-color, #0678be);
+  --ltt-color-thumb: var(--dxpr-theme-accent-color, #0678be);
+}

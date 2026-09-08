@@ -1,0 +1,22 @@
+/**
+ * @file
+ * Gin/Claro admin theme integration for Local TTS player.
+ *
+ * Maps --ltt-* design tokens to Gin and Claro runtime CSS custom
+ * properties so the player inherits the admin theme's accent colours,
+ * surface tones, and dark mode automatically.
+ */
+
+.local-tts-container {
+  --ltt-color-text: var(--gin-color-text, var(--color-text, #222330));
+  --ltt-color-text-muted: var(--gin-color-text-light, var(--color-gray-600, #5a5a5a));
+  --ltt-color-focus: var(--gin-color-primary, var(--color-absolutezero, #003cc5));
+  --ltt-color-focus-ring: var(--gin-color-focus, var(--color-focus, #003cc5));
+  --ltt-color-focus-offset: var(--gin-bg-layer, #fff);
+  --ltt-color-border: var(--gin-border-color, var(--color-gray-200, #d3d4d9));
+  --ltt-color-border-hover: var(--gin-border-color-layer, var(--color-gray-500, #8e929c));
+  --ltt-color-track: var(--gin-border-color, var(--color-gray-200, #d3d4d9));
+  --ltt-color-thumb: var(--gin-color-primary, var(--color-absolutezero, #003cc5));
+  --ltt-color-select-bg: var(--gin-bg-layer, #fff);
+  --ltt-color-select-disabled-bg: var(--gin-bg-layer2, var(--color-gray-050, #f3f4f9));
+}

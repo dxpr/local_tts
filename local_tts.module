@@ -527,3 +527,19 @@ function local_tts_form_node_form_alter(&$form, FormStateInterface $form_state, 
     $form[$tts_field_key]['#group'] = 'local_tts_options';
   }
 }
+
+/**
+ * Implements hook_page_attachments_alter().
+ */
+function local_tts_page_attachments_alter(array &$attachments) {
+  $theme = \Drupal::theme()->getActiveTheme()->getName();
+  $base_themes = array_keys(\Drupal::theme()->getActiveTheme()->getBaseThemeExtensions());
+
+  if ($theme === 'gin' || in_array('gin', $base_themes, TRUE)
+      || $theme === 'claro' || in_array('claro', $base_themes, TRUE)) {
+    $attachments['#attached']['library'][] = 'local_tts/player-gin';
+  }
+  elseif ($theme === 'dxpr_theme' || in_array('dxpr_theme', $base_themes, TRUE)) {
+    $attachments['#attached']['library'][] = 'local_tts/player-dxpr-theme';
+  }
+}

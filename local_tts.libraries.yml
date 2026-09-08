@@ -1,5 +1,5 @@
 player:
-  version: 2.0
+  version: 2.3
   css:
     theme:
       css/local-tts-player.css: {}
@@ -9,6 +9,22 @@ player:
     - core/drupal
     - core/drupalSettings
     - core/once
+
+player-gin:
+  version: 1.0
+  css:
+    theme:
+      css/local-tts-gin.css: {}
+  dependencies:
+    - local_tts/player
+
+player-dxpr-theme:
+  version: 1.0
+  css:
+    theme:
+      css/local-tts-dxpr-theme.css: {}
+  dependencies:
+    - local_tts/player
 
 voice-preview:
   version: 1.0

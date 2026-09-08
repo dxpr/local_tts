@@ -182,12 +182,16 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
       return [];
     }
 
+    if (!$this->ttsService->isBinaryAvailable()) {
+      return [];
+    }
+
     $available_voices = $this->ttsService->getAvailableVoices($langcode);
     if (empty($available_voices)) {
       return [];
     }
 
-    $container_classes = ['local-tts-container'];
+    $container_classes = ['local-tts-container', 'local-tts-initializing'];
     $custom_classes = trim($settings['wrapper_classes']);
     if (!empty($custom_classes)) {
       $additional_classes = array_filter(explode(' ', $custom_classes));
@@ -210,15 +214,17 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
     ];
 
     $build['play_wrapper']['play_button'] = [
-      '#type' => 'button',
-      '#value' => '',
+      '#type' => 'html_tag',
+      '#tag' => 'button',
       '#attributes' => [
+        'type' => 'button',
         'id' => 'local-tts-play-button-' . $id_suffix,
-        'class' => ['local-tts-button', 'local-tts-play-button'],
+        'class' => ['local-tts-play-button'],
         'aria-label' => $this->t('Listen to this article'),
         'aria-pressed' => 'false',
         'aria-controls' => 'local-tts-audio-' . $id_suffix,
       ],
+      '#value' => '',
     ];
 
     $build['play_wrapper']['content'] = [
@@ -263,9 +269,22 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
       ],
     ];
 
+    $build['play_wrapper']['content']['playback_controls']['skip_back'] = [
+      '#type' => 'html_tag',
+      '#tag' => 'button',
+      '#weight' => -10,
+      '#attributes' => [
+        'type' => 'button',
+        'class' => ['local-tts-skip-button', 'local-tts-skip-back'],
+        'aria-label' => $this->t('Skip back 10 seconds'),
+      ],
+      '#value' => '',
+    ];
+
     $build['play_wrapper']['content']['playback_controls']['current_time'] = [
       '#type' => 'html_tag',
       '#tag' => 'span',
+      '#weight' => 0,
       '#attributes' => [
         'id' => 'local-tts-current-time-' . $id_suffix,
         'class' => ['local-tts-current-time'],
@@ -277,6 +296,7 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
     $build['play_wrapper']['content']['playback_controls']['scrubber'] = [
       '#type' => 'html_tag',
       '#tag' => 'input',
+      '#weight' => 10,
       '#attributes' => [
         'type' => 'range',
         'id' => 'local-tts-scrubber-' . $id_suffix,
@@ -298,6 +318,7 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
     $build['play_wrapper']['content']['playback_controls']['remaining_time'] = [
       '#type' => 'html_tag',
       '#tag' => 'span',
+      '#weight' => 20,
       '#attributes' => [
         'id' => 'local-tts-remaining-time-' . $id_suffix,
         'class' => ['local-tts-remaining-time'],
@@ -305,9 +326,22 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
       '#value' => '',
     ];
 
+    $build['play_wrapper']['content']['playback_controls']['skip_forward'] = [
+      '#type' => 'html_tag',
+      '#tag' => 'button',
+      '#weight' => 25,
+      '#attributes' => [
+        'type' => 'button',
+        'class' => ['local-tts-skip-button', 'local-tts-skip-forward'],
+        'aria-label' => $this->t('Skip forward 10 seconds'),
+      ],
+      '#value' => '',
+    ];
+
     if ($settings['show_volume_control']) {
       $build['play_wrapper']['content']['playback_controls']['volume_wrapper'] = [
         '#type' => 'container',
+        '#weight' => 30,
         '#attributes' => [
           'class' => ['local-tts-volume-wrapper'],
         ],
@@ -374,21 +408,22 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
         $global_config->get('default_speed') ?: '1'
       );
 
-      $build['play_wrapper']['settings']['speed_control'] = [
+      $speed_options = [
+        '0.8' => '0.8×',
+        '1' => '1×',
+        '1.5' => '1.5×',
+        '2' => '2×',
+      ];
+
+      $build['play_wrapper']['settings']['speed_select'] = [
         '#type' => 'select',
         '#title' => $this->t('Speed'),
-        '#options' => [
-          '0.8' => $this->t('0.8x'),
-          '1' => $this->t('1x (Normal)'),
-          '1.2' => $this->t('1.2x'),
-          '1.5' => $this->t('1.5x'),
-          '2' => $this->t('2x'),
-        ],
+        '#options' => $speed_options,
         '#value' => $default_speed,
         '#attributes' => [
-          'id' => 'local-tts-speed-input-' . $id_suffix,
-          'class' => ['local-tts-speed-input'],
-          'aria-label' => $this->t('Adjust speech speed'),
+          'id' => 'local-tts-speed-select-' . $id_suffix,
+          'class' => ['local-tts-speed-select'],
+          'aria-label' => $this->t('Playback speed'),
         ],
       ];
     }
@@ -446,6 +481,7 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
               'entityId' => $entity->id(),
               'fields' => array_values(array_filter($settings['fields'] ?? [])),
               'showDownload' => (bool) $show_download,
+              'wordCount' => ($entity instanceof FieldableEntityInterface) ? $this->ttsService->estimateWordCount($entity, $settings['fields'] ?? []) : 0,
             ],
           ],
         ],
