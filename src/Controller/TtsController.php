@@ -2,9 +2,7 @@
 
 namespace Drupal\local_tts\Controller;
 
-use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Controller\ControllerBase;
-use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\Core\Flood\FloodInterface;
@@ -57,25 +55,11 @@ final class TtsController extends ControllerBase {
   protected $flood;
 
   /**
-   * The time service.
-   *
-   * @var \Drupal\Component\Datetime\TimeInterface
-   */
-  protected $time;
-
-  /**
    * The entity type manager.
    *
    * @var \Drupal\Core\Entity\EntityTypeManagerInterface
    */
   protected $entityTypeManager;
-
-  /**
-   * The database connection.
-   *
-   * @var \Drupal\Core\Database\Connection
-   */
-  protected $database;
 
   /**
    * The queue factory.
@@ -95,12 +79,8 @@ final class TtsController extends ControllerBase {
    *   The current user.
    * @param \Drupal\Core\Flood\FloodInterface $flood
    *   The flood service.
-   * @param \Drupal\Component\Datetime\TimeInterface $time
-   *   The time service.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
    *   The entity type manager.
-   * @param \Drupal\Core\Database\Connection $database
-   *   The database connection.
    * @param \Drupal\Core\Queue\QueueFactory $queue_factory
    *   The queue factory.
    */
@@ -109,18 +89,14 @@ final class TtsController extends ControllerBase {
     FileUrlGeneratorInterface $file_url_generator,
     AccountProxyInterface $current_user,
     FloodInterface $flood,
-    TimeInterface $time,
     EntityTypeManagerInterface $entity_type_manager,
-    Connection $database,
     QueueFactory $queue_factory,
   ) {
     $this->ttsService = $tts_service;
     $this->fileUrlGenerator = $file_url_generator;
     $this->currentUser = $current_user;
     $this->flood = $flood;
-    $this->time = $time;
     $this->entityTypeManager = $entity_type_manager;
-    $this->database = $database;
     $this->queueFactory = $queue_factory;
   }
 
@@ -133,9 +109,7 @@ final class TtsController extends ControllerBase {
       $container->get('file_url_generator'),
       $container->get('current_user'),
       $container->get('flood'),
-      $container->get('datetime.time'),
       $container->get('entity_type.manager'),
-      $container->get('database'),
       $container->get('queue')
     );
   }

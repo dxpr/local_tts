@@ -85,7 +85,6 @@ final class VoicePreviewController extends ControllerBase {
         'speed' => (float) $speed,
         'language' => $language,
         'use_cache' => FALSE,
-        'skip_access_check' => TRUE,
       ]);
     }
     catch (\InvalidArgumentException $e) {

@@ -9,7 +9,6 @@ use Drupal\Core\Entity\EntityRepositoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Security\TrustedCallbackInterface;
-use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\TypedData\TranslatableInterface;
@@ -58,13 +57,6 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
   protected $ttsService;
 
   /**
-   * The current user.
-   *
-   * @var \Drupal\Core\Session\AccountProxyInterface
-   */
-  protected $currentUser;
-
-  /**
    * The entity type manager.
    *
    * @var \Drupal\Core\Entity\EntityTypeManagerInterface
@@ -85,8 +77,6 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
    *   Config factory.
    * @param \Drupal\local_tts\TtsService $tts_service
    *   TTS service.
-   * @param \Drupal\Core\Session\AccountProxyInterface $current_user
-   *   The current user.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
    *   The entity type manager.
    * @param \Drupal\Core\Entity\EntityRepositoryInterface|null $entity_repository
@@ -95,13 +85,11 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
   public function __construct(
     ConfigFactoryInterface $config_factory,
     TtsService $tts_service,
-    AccountProxyInterface $current_user,
     EntityTypeManagerInterface $entity_type_manager,
     ?EntityRepositoryInterface $entity_repository = NULL,
   ) {
     $this->configFactory = $config_factory;
     $this->ttsService = $tts_service;
-    $this->currentUser = $current_user;
     $this->entityTypeManager = $entity_type_manager;
     $this->entityRepository = $entity_repository;
   }
@@ -446,20 +434,12 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
 
     $js_default_voice = $this->getValidDefaultVoice($available_voices, $langcode);
 
-    // Build status polling base URL by stripping the placeholder key.
-    $dummy_key = str_repeat('0', 32);
-    $status_url = Url::fromRoute('local_tts.status', ['cache_key' => $dummy_key])->toString();
-    $status_base_url = str_replace($dummy_key, '', $status_url);
-
     // SECURITY: Pass only entity reference to JavaScript, NOT the content.
     $build['#attached'] = [
       'library' => ['local_tts/player'],
       'drupalSettings' => [
         'aiTts' => [
           'generateUrl' => Url::fromRoute('local_tts.generate')->toString(),
-          'statusBaseUrl' => $status_base_url,
-          'isAdmin' => (bool) $this->currentUser->hasPermission('administer local tts settings'),
-          'settingsUrl' => Url::fromRoute('local_tts.settings')->toString(),
           'instances' => [
             $id_suffix => [
               'defaultVoice' => $js_default_voice,

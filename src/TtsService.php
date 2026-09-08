@@ -257,7 +257,6 @@ class TtsService {
     $voice = $options['voice'] ?? $defaults[$default_language] ?? $config->get('default_voice') ?? array_key_first($this->getAvailableVoices($default_language)) ?? 'af_sky';
     $speed = $options['speed'] ?? $config->get('default_speed');
     $language = $options['language'] ?? $this->detectLanguageFromVoice($voice);
-    $use_cache = $options['use_cache'] ?? $config->get('cache_audio');
 
     // Security: Validate voice against allowed list.
     $available_voices = array_keys($this->getAvailableVoices());

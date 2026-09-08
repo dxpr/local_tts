@@ -385,17 +385,6 @@ final class LocalTtsSettingsForm extends ConfigFormBase {
   }
 
   /**
-   * Get available Kokoro voices.
-   *
-   * @return array
-   *   Array of voice options.
-   */
-  protected function getAvailableVoices() {
-    // Get voices from the TTS service.
-    return $this->ttsService->getAvailableVoices();
-  }
-
-  /**
    * Auto-detect the eSpeak NG data directory.
    *
    * @return string|null

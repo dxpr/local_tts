@@ -35,34 +35,12 @@ final class LocalTtsPlayerFormatter extends FormatterBase implements ContainerFa
   /**
    * Allowed field types for TTS processing.
    */
-  const ALLOWED_FIELD_TYPES = [
-    'string',
-    'string_long',
-    'text',
-    'text_long',
-    'text_with_summary',
-    'text_plain',
-    'email',
-    'telephone',
-  ];
+  const ALLOWED_FIELD_TYPES = TtsPlayerBuilder::ALLOWED_FIELD_TYPES;
 
   /**
    * Base fields to exclude from TTS.
    */
-  const EXCLUDED_BASE_FIELDS = [
-    'nid', 'uuid', 'vid', 'langcode', 'type', 'revision_timestamp',
-    'revision_uid', 'revision_log', 'status', 'uid', 'created', 'changed',
-    'promote', 'sticky', 'default_langcode', 'revision_default',
-    'revision_translation_affected', 'metatag', 'path', 'menu_link',
-    'tid', 'weight', 'parent', 'description__format',
-  ];
-
-  /**
-   * The TTS player builder service.
-   *
-   * @var \Drupal\local_tts\TtsPlayerBuilder
-   */
-  protected $playerBuilder;
+  const EXCLUDED_BASE_FIELDS = TtsPlayerBuilder::EXCLUDED_BASE_FIELDS;
 
   /**
    * The entity field manager.
@@ -95,16 +73,13 @@ final class LocalTtsPlayerFormatter extends FormatterBase implements ContainerFa
    *   The view mode.
    * @param array $third_party_settings
    *   Any third party settings.
-   * @param \Drupal\local_tts\TtsPlayerBuilder $player_builder
-   *   The TTS player builder service.
    * @param \Drupal\Core\Entity\EntityFieldManagerInterface $entity_field_manager
    *   The entity field manager.
    * @param \Drupal\local_tts\TtsService $tts_service
    *   The TTS service.
    */
-  public function __construct($plugin_id, $plugin_definition, FieldDefinitionInterface $field_definition, array $settings, $label, $view_mode, array $third_party_settings, TtsPlayerBuilder $player_builder, EntityFieldManagerInterface $entity_field_manager, TtsService $tts_service) {
+  public function __construct($plugin_id, $plugin_definition, FieldDefinitionInterface $field_definition, array $settings, $label, $view_mode, array $third_party_settings, EntityFieldManagerInterface $entity_field_manager, TtsService $tts_service) {
     parent::__construct($plugin_id, $plugin_definition, $field_definition, $settings, $label, $view_mode, $third_party_settings);
-    $this->playerBuilder = $player_builder;
     $this->entityFieldManager = $entity_field_manager;
     $this->ttsService = $tts_service;
   }
@@ -121,7 +96,6 @@ final class LocalTtsPlayerFormatter extends FormatterBase implements ContainerFa
       $configuration['label'] ?? 'hidden',
       $configuration['view_mode'] ?? 'default',
       $configuration['third_party_settings'] ?? [],
-      $container->get('local_tts.player_builder'),
       $container->get('entity_field.manager'),
       $container->get('local_tts.tts_service')
     );

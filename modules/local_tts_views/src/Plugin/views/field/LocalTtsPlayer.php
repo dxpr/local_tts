@@ -2,12 +2,10 @@
 
 namespace Drupal\local_tts_views\Plugin\views\field;
 
-use Drupal\local_tts\TtsPlayerBuilder;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\views\Attribute\ViewsField;
 use Drupal\views\Plugin\views\field\FieldPluginBase;
 use Drupal\views\ResultRow;
-use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Renders a TTS player for the entity in a Views row.
@@ -16,22 +14,6 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  */
 #[ViewsField("local_tts_player")]
 class LocalTtsPlayer extends FieldPluginBase {
-
-  /**
-   * The TTS player builder.
-   *
-   * @var \Drupal\local_tts\TtsPlayerBuilder
-   */
-  protected TtsPlayerBuilder $playerBuilder;
-
-  /**
-   * {@inheritdoc}
-   */
-  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
-    $instance = parent::create($container, $configuration, $plugin_id, $plugin_definition);
-    $instance->playerBuilder = $container->get('local_tts.player_builder');
-    return $instance;
-  }
 
   /**
    * {@inheritdoc}
