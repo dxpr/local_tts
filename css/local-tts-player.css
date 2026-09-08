@@ -571,7 +571,8 @@
   font-size: var(--ltt-font-size-sm);
 }
 
-.local-tts-compact .local-tts-settings {
+.local-tts-compact .local-tts-settings,
+.local-tts-compact .local-tts-volume-wrapper {
   display: none;
 }
 

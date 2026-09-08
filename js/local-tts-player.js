@@ -232,10 +232,9 @@
 
         function showPlaybackControls() {
           if (labelContainer) {
-            labelContainer.hidden = true;
+            labelContainer.style.display = 'none';
           }
           if (playbackControls) {
-            playbackControls.hidden = false;
             playbackControls.style.display = '';
           }
           setTimeout(function () { playButton.focus(); }, 100);
@@ -243,11 +242,10 @@
 
         function hidePlaybackControls() {
           if (playbackControls) {
-            playbackControls.hidden = true;
             playbackControls.style.display = 'none';
           }
           if (labelContainer) {
-            labelContainer.hidden = false;
+            labelContainer.style.display = '';
           }
         }
 
