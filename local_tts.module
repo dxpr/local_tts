@@ -5,6 +5,7 @@
  * Local Text-to-Speech module.
  */
 
+use Drupal\Core\TypedData\TranslatableInterface;
 use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
 use Drupal\Core\Entity\EntityFormInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
@@ -117,22 +118,35 @@ function local_tts_cron() {
  * Compares text hash to avoid unnecessary regeneration.
  */
 function local_tts_entity_update(EntityInterface $entity) {
-  // Check if any text fields changed by comparing to original.
   $original = method_exists($entity, 'getOriginal') ? $entity->getOriginal() : ($entity->original ?? NULL);
-  if ($original && !_local_tts_text_content_changed($entity, $original)) {
-    return;
-  }
-
-  // Invalidate only the changed translation's cached audio.
   $tts_service = \Drupal::service('local_tts.tts_service');
-  $langcode = $entity->language()->getId();
-  $tts_service->deleteAudioForEntityTranslation(
-    $entity->getEntityTypeId(),
-    $entity->id(),
-    $langcode
-  );
+  $translations = $entity instanceof
+  TranslatableInterface ? $entity->getTranslationLanguages() : [$entity->language()->getId() => $entity->language()];
+  foreach ($translations as $langcode => $language) {
+    $translation = $entity instanceof
+    TranslatableInterface ? $entity->getTranslation($langcode) : $entity;
+    $previous = $original;
+    if ($original instanceof TranslatableInterface) {
+      $previous = $original->hasTranslation($langcode) ? $original->getTranslation($langcode) : NULL;
+    }
+    // Publication/access changes matter even when the text itself is identical.
+    if ($translation->access('view', new AnonymousUserSession()) && $previous
+      && _local_tts_text_content_changed($translation, $previous) === FALSE
+      && $previous->access('view', new AnonymousUserSession())) {
+      continue;
+    }
+    $tts_service->deleteAudioForEntityTranslation($entity->getEntityTypeId(), $entity->id(), $langcode);
+    _local_tts_auto_generate($translation);
+  }
+}
 
-  _local_tts_auto_generate($entity);
+/**
+ * Implements hook_entity_translation_delete().
+ */
+function local_tts_entity_translation_delete(EntityInterface $translation) {
+  \Drupal::service('local_tts.tts_service')->deleteAudioForEntityTranslation(
+    $translation->getEntityTypeId(), $translation->id(), $translation->language()->getId()
+  );
 }
 
 /**
@@ -385,8 +399,6 @@ function _local_tts_cleanup_orphan_files() {
     return;
   }
 
-  // Limit to 500 files per run to avoid timeout.
-  $files = array_slice($files, 0, 500);
   $now = \Drupal::time()->getRequestTime();
 
   // Build a set of all known cache keys from the database.
@@ -408,6 +420,9 @@ function _local_tts_cleanup_orphan_files() {
     if (!isset($known_keys[$cache_key])) {
       @unlink($file_path);
       $deleted++;
+      if ($deleted >= 500) {
+        break;
+      }
     }
   }
 

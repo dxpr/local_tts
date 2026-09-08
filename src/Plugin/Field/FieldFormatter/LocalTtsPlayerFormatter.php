@@ -3,6 +3,7 @@
 namespace Drupal\local_tts\Plugin\Field\FieldFormatter;
 
 use Drupal\local_tts\TtsPlayerBuilder;
+use Drupal\local_tts\TtsService;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Field\Attribute\FieldFormatter;
 use Drupal\Core\Field\FieldDefinitionInterface;
@@ -71,6 +72,13 @@ final class LocalTtsPlayerFormatter extends FormatterBase implements ContainerFa
   protected $entityFieldManager;
 
   /**
+   * The TTS service.
+   *
+   * @var \Drupal\local_tts\TtsService
+   */
+  protected $ttsService;
+
+  /**
    * Constructs an LocalTtsPlayerFormatter object.
    *
    * @param string $plugin_id
@@ -91,11 +99,14 @@ final class LocalTtsPlayerFormatter extends FormatterBase implements ContainerFa
    *   The TTS player builder service.
    * @param \Drupal\Core\Entity\EntityFieldManagerInterface $entity_field_manager
    *   The entity field manager.
+   * @param \Drupal\local_tts\TtsService $tts_service
+   *   The TTS service.
    */
-  public function __construct($plugin_id, $plugin_definition, FieldDefinitionInterface $field_definition, array $settings, $label, $view_mode, array $third_party_settings, TtsPlayerBuilder $player_builder, EntityFieldManagerInterface $entity_field_manager) {
+  public function __construct($plugin_id, $plugin_definition, FieldDefinitionInterface $field_definition, array $settings, $label, $view_mode, array $third_party_settings, TtsPlayerBuilder $player_builder, EntityFieldManagerInterface $entity_field_manager, TtsService $tts_service) {
     parent::__construct($plugin_id, $plugin_definition, $field_definition, $settings, $label, $view_mode, $third_party_settings);
     $this->playerBuilder = $player_builder;
     $this->entityFieldManager = $entity_field_manager;
+    $this->ttsService = $tts_service;
   }
 
   /**
@@ -111,7 +122,8 @@ final class LocalTtsPlayerFormatter extends FormatterBase implements ContainerFa
       $configuration['view_mode'] ?? 'default',
       $configuration['third_party_settings'] ?? [],
       $container->get('local_tts.player_builder'),
-      $container->get('entity_field.manager')
+      $container->get('entity_field.manager'),
+      $container->get('local_tts.tts_service')
     );
   }
 
@@ -205,6 +217,13 @@ final class LocalTtsPlayerFormatter extends FormatterBase implements ContainerFa
    */
   public function viewElements(FieldItemListInterface $items, $langcode) {
     $elements = [];
+
+    // A text field using this formatter still contributes its text to speech.
+    // Rendering another player here would suppress the field during extraction.
+    if ($this->fieldDefinition->getType() !== 'local_tts_player'
+      && $this->ttsService->isExtracting()) {
+      return $items->view(['label' => 'hidden']);
+    }
 
     if (!empty($items[0]->value)) {
       $entity = $items->getEntity();
