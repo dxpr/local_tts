@@ -6,8 +6,8 @@
   "keywords": ["drupal", "tts", "text-to-speech", "ai", "kokoro", "audio"],
   "homepage": "https://github.com/lucasjinreal/Kokoros",
   "require": {
-    "php": ">=7.4",
-    "drupal/core": "^9 || ^10 || ^11"
+    "php": ">=8.1",
+    "drupal/core": "^10.3 || ^11"
   },
   "require-dev": {
     "drush/drush": "^11 || ^12",

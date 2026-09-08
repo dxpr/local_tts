@@ -138,8 +138,9 @@ class TtsService {
       throw new \InvalidArgumentException(sprintf('Invalid voice: %s', $voice));
     }
 
+    $numericSpeed = is_numeric($speed);
     $speed = (float) $speed;
-    if (!is_finite($speed) || $speed < 0.5 || $speed > 2.0) {
+    if (!$numericSpeed || !is_finite($speed) || $speed < 0.5 || $speed > 2.0) {
       $this->logger->error('Invalid speed: @speed (must be between 0.5 and 2.0)', ['@speed' => $speed]);
       throw new \InvalidArgumentException(sprintf('Invalid speed: %s (must be between 0.5 and 2.0)', $speed));
     }

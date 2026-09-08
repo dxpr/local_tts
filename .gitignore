@@ -17,9 +17,3 @@ node_modules/
 
 # Composer lock file (for modules, typically not committed)
 composer.lock
-
-# Linter config and lock files
-.eslintrc.json
-.stylelintrc.json
-package.json
-package-lock.json

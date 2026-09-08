@@ -20,7 +20,7 @@
   }
 
   function formatDuration(seconds) {
-    if (!seconds || !isFinite(seconds)) {
+    if (!isFinite(seconds) || seconds < 0) {
       return '';
     }
     const mins = Math.floor(seconds / 60);
@@ -108,6 +108,9 @@
     this.lastProgressSave = 0;
     this.previousVolume = 1;
     this.generationTimer = null;
+    this.pollTimer = null;
+    this.focusTimer = null;
+    this.resumeTimer = null;
     this.lastAnnounce = 0;
     this.currentBlobUrl = null;
     this.isFileMode = !!this.config.audioUrl;
@@ -195,8 +198,19 @@
       this.playbackControls.removeAttribute('style');
       this.playbackControls.hidden = false;
     }
-    const btn = this.playButton;
-    setTimeout(function () { btn.focus(); }, 100);
+    this._focusSoon(this.playButton);
+  };
+
+  LocalTtsPlayer.prototype._focusSoon = function (element) {
+    clearTimeout(this.focusTimer);
+    this.focusTimer = setTimeout(function () { element.focus(); }, 100);
+  };
+
+  LocalTtsPlayer.prototype._clearDeferredActions = function () {
+    clearTimeout(this.focusTimer);
+    clearTimeout(this.resumeTimer);
+    this.focusTimer = null;
+    this.resumeTimer = null;
   };
 
   LocalTtsPlayer.prototype._hidePlaybackControls = function () {
@@ -281,7 +295,7 @@
 
     this.statusDiv.appendChild(wrapper);
     this.statusDiv.appendChild(retryBtn);
-    setTimeout(function () { retryBtn.focus(); }, 100);
+    this._focusSoon(retryBtn);
   };
 
   LocalTtsPlayer.prototype._updateDurationEstimate = function () {
@@ -397,6 +411,7 @@
   // -- Audio lifecycle --
 
   LocalTtsPlayer.prototype._startGenerationTimer = function () {
+    this._stopGenerationTimer();
     const self = this;
     const startTime = Date.now();
     this.generationTimer = setInterval(function () {
@@ -409,6 +424,8 @@
   };
 
   LocalTtsPlayer.prototype._stopGenerationTimer = function () {
+    clearTimeout(this.pollTimer);
+    this.pollTimer = null;
     if (this.generationTimer) {
       clearInterval(this.generationTimer);
       this.generationTimer = null;
@@ -462,15 +479,17 @@
             self._playSpeech(data.audio_url, requestId);
           }
           else {
-            setTimeout(poll, POLL_INTERVAL_MS);
+            self.pollTimer = setTimeout(poll, POLL_INTERVAL_MS);
           }
         })
         .catch(function () {
-          setTimeout(poll, POLL_INTERVAL_MS);
+          if (requestId === self.generationId) {
+            self.pollTimer = setTimeout(poll, POLL_INTERVAL_MS);
+          }
         });
     }
 
-    setTimeout(poll, POLL_INTERVAL_MS);
+    this.pollTimer = setTimeout(poll, POLL_INTERVAL_MS);
   };
 
   LocalTtsPlayer.prototype._generateSpeech = function () {
@@ -615,7 +634,8 @@
 
       if (savedPosition > 5 && isFinite(savedPosition) && savedPosition < self.audioElement.duration - 5) {
         self._showResumePrompt(savedPosition);
-        setTimeout(function () {
+        clearTimeout(self.resumeTimer);
+        self.resumeTimer = setTimeout(function () {
           if (self.statusDiv.querySelector('.local-tts-resume')) {
             self._updateStatus('', 'status');
             self._clearSavedProgress();
@@ -646,19 +666,27 @@
         this._generateSpeech();
       }
       else {
+        const requestId = this.generationId;
         this.audioElement.play().then(function () {
+          if (requestId !== self.generationId) {
+            return;
+          }
           self.isPlaying = true;
           self.setButtonState('playing');
           self._showPlaybackControls();
           self._updateStatus('', 'status');
           self._announceToScreenReader(Drupal.t('Playback started'));
         }).catch(function () {
+          if (requestId !== self.generationId) {
+            return;
+          }
           self.isPlaying = false;
           self._handleError(Drupal.t('Error playing audio.'));
         });
       }
     }
     else {
+      this.generationId++;
       this.audioElement.pause();
       this.isPlaying = false;
       this.setButtonState('paused');
@@ -670,6 +698,7 @@
 
   LocalTtsPlayer.prototype.stopPlayback = function () {
     this.generationId++;
+    this._clearDeferredActions();
     this._stopGenerationTimer();
     if (this.cancelAudioLoad) {
       this.cancelAudioLoad();
@@ -772,13 +801,16 @@
     };
 
     h.audioPause = function () {
-      if (!self.audioElement.ended && self.audioElement.currentTime > 0) {
+      if (self.audioElement.paused && !self.audioElement.ended) {
         self.isPlaying = false;
         self.setButtonState('paused');
       }
     };
 
     h.audioPlay = function () {
+      if (self.audioElement.paused) {
+        return;
+      }
       self.isPlaying = true;
       self.setButtonState('playing');
       self._showPlaybackControls();
@@ -808,6 +840,8 @@
       self._updateScrubberFill(percentage);
       if (self.scrubberInput) {
         self.scrubberInput.value = ct;
+        self.scrubberInput.setAttribute('aria-valuenow', ct.toString());
+        self.scrubberInput.setAttribute('aria-valuetext', getAriaTimeText(ct, dur));
       }
       if (self.currentTimeDisplay) {
         self.currentTimeDisplay.textContent = formatDuration(ct);
@@ -831,6 +865,7 @@
 
     if (this.scrubberInput) {
       let wasPlayingBeforeScrub = false;
+      let scrubGenerationId;
 
       h.scrubberInput = function () {
         const newTime = parseFloat(self.scrubberInput.value);
@@ -856,21 +891,28 @@
 
       h.scrubberMousedown = function () {
         wasPlayingBeforeScrub = !self.audioElement.paused;
+        scrubGenerationId = self.generationId;
+        document.addEventListener('mouseup', h.scrubberMouseup);
         if (wasPlayingBeforeScrub) {
           self.audioElement.pause();
         }
       };
 
       h.scrubberMouseup = function () {
-        if (wasPlayingBeforeScrub) {
-          self.audioElement.play();
+        document.removeEventListener('mouseup', h.scrubberMouseup);
+        if (wasPlayingBeforeScrub && scrubGenerationId === self.generationId) {
+          self.audioElement.play().catch(function () {
+            if (scrubGenerationId === self.generationId) {
+              self._handleError(Drupal.t('Error playing audio.'));
+            }
+          });
         }
+        wasPlayingBeforeScrub = false;
       };
 
       this.scrubberInput.addEventListener('input', h.scrubberInput);
       this.scrubberInput.addEventListener('focus', h.scrubberFocus);
       this.scrubberInput.addEventListener('mousedown', h.scrubberMousedown);
-      this.scrubberInput.addEventListener('mouseup', h.scrubberMouseup);
     }
 
     if (this.muteButton) {
@@ -959,7 +1001,7 @@
       this.scrubberInput.removeEventListener('input', h.scrubberInput);
       this.scrubberInput.removeEventListener('focus', h.scrubberFocus);
       this.scrubberInput.removeEventListener('mousedown', h.scrubberMousedown);
-      this.scrubberInput.removeEventListener('mouseup', h.scrubberMouseup);
+      document.removeEventListener('mouseup', h.scrubberMouseup);
     }
 
     if (this.muteButton && h.muteClick) {
@@ -979,17 +1021,19 @@
   // -- Cleanup --
 
   LocalTtsPlayer.prototype.destroy = function () {
+    this.generationId++;
+    this._clearDeferredActions();
     this._stopGenerationTimer();
     if (this.cancelAudioLoad) {
       this.cancelAudioLoad();
     }
+    this._unbindEvents();
     if (this.audioElement) {
       this.audioElement.pause();
       this.audioElement.removeAttribute('src');
       this.audioElement.load();
     }
     this._revokeBlobUrl();
-    this._unbindEvents();
     this.isPlaying = false;
     this.currentAudioUrl = null;
   };

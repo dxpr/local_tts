@@ -22,6 +22,7 @@
       const form = forms[0];
       let currentAudio = null;
       let currentButton = null;
+      let generationId = 0;
 
       const selects = form.querySelectorAll('select[name^="voice_settings["]');
 
@@ -44,9 +45,9 @@
             return;
           }
 
-          if (currentAudio) {
-            stopPreview();
-          }
+          stopPreview();
+          const requestId = generationId;
+          currentButton = button;
 
           const voice = select.value;
           const speedSelect = form.querySelector(
@@ -72,6 +73,9 @@
               });
             })
             .then(function (result) {
+              if (requestId !== generationId) {
+                return;
+              }
               if (result.ok && result.data.success && result.data.audio_url) {
                 playPreview(result.data.audio_url, button);
               }
@@ -83,7 +87,9 @@
               }
             })
             .catch(function (err) {
-              showError(button, err.message || Drupal.t('Could not connect to the server.'));
+              if (requestId === generationId) {
+                showError(button, err.message || Drupal.t('Could not connect to the server.'));
+              }
             });
         });
       });
@@ -98,15 +104,23 @@
         button.classList.add('is-active');
 
         audio.addEventListener('ended', function () {
-          cleanupPreview(button);
+          if (currentAudio === audio) {
+            cleanupPreview(button);
+          }
         });
 
         audio.addEventListener('error', function () {
+          if (currentAudio !== audio) {
+            return;
+          }
           showError(button, Drupal.t('Audio playback failed. The file may be corrupted.'));
           cleanupPreview(button);
         });
 
         audio.play().catch(function () {
+          if (currentAudio !== audio) {
+            return;
+          }
           showError(button, Drupal.t('Audio playback was blocked by the browser.'));
           cleanupPreview(button);
         });
@@ -119,6 +133,7 @@
       }
 
       function stopPreview() {
+        generationId++;
         if (currentAudio) {
           currentAudio.pause();
           currentAudio.currentTime = 0;
@@ -142,6 +157,25 @@
         messenger.clear();
         messenger.add(message, {type: 'error'});
       }
+
+      form._localTtsPreviewCleanup = function () {
+        stopPreview();
+        form.querySelectorAll('.local-tts-preview-btn').forEach(function (button) {
+          button.remove();
+        });
+      };
+    },
+
+    detach: function (context, settings, trigger) {
+      if (trigger !== 'unload') {
+        return;
+      }
+      once.remove('local-tts-voice-preview', '#local-tts-voice-settings-form', context).forEach(function (form) {
+        if (form._localTtsPreviewCleanup) {
+          form._localTtsPreviewCleanup();
+          delete form._localTtsPreviewCleanup;
+        }
+      });
     }
   };
 

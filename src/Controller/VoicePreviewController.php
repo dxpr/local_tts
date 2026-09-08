@@ -82,7 +82,7 @@ final class VoicePreviewController extends ControllerBase {
     try {
       $audio_uri = $this->ttsService->generateSpeech($text, [
         'voice' => $voice,
-        'speed' => (float) $speed,
+        'speed' => $speed,
         'language' => $language,
         'use_cache' => FALSE,
       ]);

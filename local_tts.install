@@ -75,6 +75,9 @@ function local_tts_schema() {
       ],
     ],
     'primary key' => ['id'],
+    'unique keys' => [
+      'entity_variant' => ['entity_type', 'entity_id', 'language', 'cache_key'],
+    ],
     'indexes' => [
       'cache_key' => ['cache_key'],
       'entity' => ['entity_type', 'entity_id'],
@@ -558,6 +561,49 @@ function local_tts_update_10002() {
   if (!$schema->indexExists('local_tts_cache', 'cache_key')) {
     $spec = local_tts_schema()['local_tts_cache'];
     $schema->addIndex('local_tts_cache', 'cache_key', ['cache_key'], $spec);
+  }
+}
+
+/**
+ * Prevent concurrent requests from duplicating an entity's audio reference.
+ */
+function local_tts_update_10003() {
+  $database = \Drupal::database();
+  $query = $database->select('local_tts_cache', 'c');
+  $keys = ['entity_type', 'entity_id', 'language', 'cache_key'];
+  $query->fields('c', $keys);
+  foreach ($keys as $key) {
+    $query->groupBy($key);
+  }
+  $query->addExpression('MIN(id)', 'keep_id');
+  $query->addExpression('MIN(created)', 'first_created');
+  $query->addExpression('MAX(accessed)', 'last_accessed');
+  $query->addExpression('MAX(file_size)', 'file_size');
+  $query->having('COUNT(*) > 1');
+
+  foreach ($query->execute()->fetchAll() as $duplicate) {
+    $database->update('local_tts_cache')
+      ->fields([
+        'created' => $duplicate->first_created,
+        'accessed' => $duplicate->last_accessed,
+        'file_size' => $duplicate->file_size,
+      ])
+      ->condition('id', $duplicate->keep_id)
+      ->execute();
+    $delete = $database->delete('local_tts_cache');
+    foreach ($keys as $key) {
+      if ($duplicate->$key === NULL) {
+        $delete->isNull($key);
+      }
+      else {
+        $delete->condition($key, $duplicate->$key);
+      }
+    }
+    $delete->condition('id', $duplicate->keep_id, '<>')->execute();
+  }
+
+  if (!$database->schema()->indexExists('local_tts_cache', 'entity_variant')) {
+    $database->schema()->addUniqueKey('local_tts_cache', 'entity_variant', $keys);
   }
 }
 

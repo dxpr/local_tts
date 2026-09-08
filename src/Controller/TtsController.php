@@ -224,8 +224,9 @@ final class TtsController extends ControllerBase {
         'message' => 'Invalid voice',
       ], 400);
     }
-    $resolved_speed = $speed !== NULL && $speed !== '' ? (float) $speed : (float) ($config->get('default_speed') ?: 1);
-    if (!is_finite($resolved_speed) || $resolved_speed < 0.5 || $resolved_speed > 2.0) {
+    $speed = $speed !== NULL && $speed !== '' ? $speed : ($config->get('default_speed') ?: 1);
+    $resolved_speed = (float) $speed;
+    if (!is_numeric($speed) || !is_finite($resolved_speed) || $resolved_speed < 0.5 || $resolved_speed > 2.0) {
       return new JsonResponse([
         'error' => 'Bad Request',
         'message' => 'Invalid speed (must be between 0.5 and 2.0)',

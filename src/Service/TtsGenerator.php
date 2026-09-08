@@ -115,11 +115,29 @@ class TtsGenerator {
    * Split text into chunks at sentence boundaries.
    */
   public function splitIntoChunks(string $text, int $maxLength = self::CHUNK_SIZE): array {
+    if ($maxLength < 1) {
+      throw new \InvalidArgumentException('Chunk size must be at least one character.');
+    }
     $sentences = preg_split('/(?<=[.!?])\s+/', $text, -1, PREG_SPLIT_NO_EMPTY);
     $chunks = [];
     $currentChunk = '';
 
     foreach ($sentences as $sentence) {
+      // A single sentence (or text without punctuation) can exceed the limit.
+      // Prefer word boundaries, but also bound unbroken and CJK text.
+      if (mb_strlen($sentence) > $maxLength) {
+        if ($currentChunk !== '') {
+          $chunks[] = $currentChunk;
+          $currentChunk = '';
+        }
+        while (mb_strlen($sentence) > $maxLength) {
+          $prefix = mb_substr($sentence, 0, $maxLength);
+          $boundary = mb_strrpos($prefix, ' ');
+          $length = $boundary !== FALSE && $boundary > 0 ? $boundary : $maxLength;
+          $chunks[] = mb_substr($sentence, 0, $length);
+          $sentence = ltrim(mb_substr($sentence, $length));
+        }
+      }
       $candidate = $currentChunk === '' ? $sentence : $currentChunk . ' ' . $sentence;
       if (mb_strlen($candidate) <= $maxLength) {
         $currentChunk = $candidate;

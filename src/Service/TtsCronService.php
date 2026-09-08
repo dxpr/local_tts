@@ -207,7 +207,7 @@ class TtsCronService {
         continue;
       }
       $cacheKey = explode('.', basename($filePath))[0];
-      if (!isset($knownKeys[$cacheKey])) {
+      if (pathinfo($filePath, PATHINFO_EXTENSION) === 'part' || !isset($knownKeys[$cacheKey])) {
         @unlink($filePath);
         $deleted++;
         if ($deleted >= 500) {

@@ -56,7 +56,6 @@ class TtsCacheManager {
       'speed' => $speed,
       'language' => $options['language'] ?? 'en',
       'file_size' => $fileSize,
-      'created' => $now,
       'accessed' => $now,
     ];
 
@@ -90,7 +89,8 @@ class TtsCacheManager {
 
     $this->database->merge('local_tts_cache')
       ->keys($mergeKeys)
-      ->fields($record)
+      ->insertFields($record + ['created' => $now])
+      ->updateFields($record)
       ->execute();
   }
 
@@ -160,7 +160,11 @@ class TtsCacheManager {
    */
   public function getDiskUsage(): array {
     try {
-      $query = $this->database->select('local_tts_cache', 'c');
+      $files = $this->database->select('local_tts_cache', 'c');
+      $files->fields('c', ['cache_key']);
+      $files->addExpression('MAX(file_size)', 'file_size');
+      $files->groupBy('cache_key');
+      $query = $this->database->select($files, 'files');
       $query->addExpression('COALESCE(SUM(file_size), 0)', 'total_size');
       $query->addExpression('COUNT(DISTINCT cache_key)', 'file_count');
       $result = $query->execute()->fetchObject();

@@ -260,7 +260,7 @@ final class LocalTtsBatchForm extends FormBase {
       '#type' => 'checkbox',
       '#title' => $this->t('Enable server load checking'),
       '#description' => $this->t('Check server load before processing each batch. Disable to skip load checks entirely (not recommended for shared hosting).'),
-      '#default_value' => TRUE,
+      '#default_value' => $configured_threshold > 0,
     ];
 
     $form['load_management']['max_load_threshold'] = [
@@ -270,9 +270,9 @@ final class LocalTtsBatchForm extends FormBase {
         '@load' => $current_load,
         '@default' => $configured_threshold,
       ]),
-      '#default_value' => $configured_threshold,
+      '#default_value' => $configured_threshold > 0 ? $configured_threshold : 2.0,
       '#min' => 0.1,
-      '#max' => 20.0,
+      '#max' => 100.0,
       '#step' => 0.1,
       '#states' => [
         'visible' => [
