@@ -595,82 +595,42 @@
       self.cancelAudioLoad = null;
     };
 
-    fetch(audioUrl, {credentials: 'same-origin'})
-      .then(function (response) {
-        if (!response.ok) {
-          throw new Error('HTTP ' + response.status);
-        }
-        return response.blob();
-      })
-      .then(function (blob) {
-        if (cancelled || requestId !== self.generationId) {
-          return;
-        }
-        self._revokeBlobUrl();
-        const blobUrl = URL.createObjectURL(blob);
-        self.currentBlobUrl = blobUrl;
-        self.audioElement.src = blobUrl;
-        self.audioElement.load();
+    this._revokeBlobUrl();
+    this.audioElement.src = audioUrl;
+    const savedPosition = this._getSavedProgress();
 
-        function onReady() {
-          self.audioElement.removeEventListener('canplay', onReady);
-          self.audioElement.removeEventListener('error', onLoadError);
-          if (cancelled || requestId !== self.generationId) {
-            return;
-          }
-          self.cancelAudioLoad = null;
-          const savedPosition = self._getSavedProgress();
+    this.audioElement.play().then(function () {
+      if (cancelled || requestId !== self.generationId) {
+        return;
+      }
+      self.cancelAudioLoad = null;
+      self.isPlaying = true;
+      self._applyPlaybackRate();
+      self.setButtonState('playing');
+      self._showPlaybackControls();
+      self._updateStatus('', 'status');
+      self._updateDownloadButton(audioUrl);
+      self._announceToScreenReader(Drupal.t('Playback started'));
+      self._dispatchAnalytics('play');
 
-          self.audioElement.play().then(function () {
-            if (requestId !== self.generationId) {
-              return;
-            }
-            self.isPlaying = true;
-            self._applyPlaybackRate();
-            self.setButtonState('playing');
-            self._showPlaybackControls();
+      if (savedPosition > 5 && isFinite(savedPosition) && savedPosition < self.audioElement.duration - 5) {
+        self._showResumePrompt(savedPosition);
+        setTimeout(function () {
+          if (self.statusDiv.querySelector('.local-tts-resume')) {
             self._updateStatus('', 'status');
-            self._updateDownloadButton(audioUrl);
-            self._announceToScreenReader(Drupal.t('Playback started'));
-            self._dispatchAnalytics('play');
-
-            if (savedPosition > 5 && isFinite(savedPosition) && savedPosition < self.audioElement.duration - 5) {
-              self._showResumePrompt(savedPosition);
-              setTimeout(function () {
-                if (self.statusDiv.querySelector('.local-tts-resume')) {
-                  self._updateStatus('', 'status');
-                  self._clearSavedProgress();
-                }
-              }, RESUME_TIMEOUT_MS);
-            }
-          }).catch(function () {
-            if (requestId !== self.generationId) {
-              return;
-            }
-            self.isPlaying = false;
-            self._handleError(Drupal.t('Error playing audio.'));
-          });
-        }
-
-        function onLoadError() {
-          self.audioElement.removeEventListener('canplay', onReady);
-          self.audioElement.removeEventListener('error', onLoadError);
-          self.cancelAudioLoad = null;
-          self.currentAudioUrl = null;
-          self._handleError(Drupal.t('Audio could not be loaded. The file may be corrupted.'));
-        }
-
-        self.audioElement.addEventListener('canplay', onReady, {once: true});
-        self.audioElement.addEventListener('error', onLoadError, {once: true});
-      })
-      .catch(function () {
-        if (cancelled || requestId !== self.generationId) {
-          return;
-        }
-        self.cancelAudioLoad = null;
-        self.currentAudioUrl = null;
-        self._handleError(Drupal.t('Audio could not be loaded. Try refreshing the page.'));
-      });
+            self._clearSavedProgress();
+          }
+        }, RESUME_TIMEOUT_MS);
+      }
+    }).catch(function () {
+      if (cancelled || requestId !== self.generationId) {
+        return;
+      }
+      self.cancelAudioLoad = null;
+      self.currentAudioUrl = null;
+      self.isPlaying = false;
+      self._handleError(Drupal.t('Audio could not be loaded. Try refreshing the page.'));
+    });
   };
 
   LocalTtsPlayer.prototype.togglePlay = function () {

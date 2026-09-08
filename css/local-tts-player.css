@@ -50,6 +50,11 @@
   color: var(--ltt-color-text);
 }
 
+/* Drupal themes may not ship [hidden]{display:none!important} */
+.local-tts-container [hidden] {
+  display: none;
+}
+
 /* Skeleton: hide content until JS initialises */
 .local-tts-initializing .local-tts-play-wrapper {
   opacity: 0;
@@ -424,10 +429,6 @@
   font-size: var(--ltt-font-size-sm);
   cursor: pointer;
   white-space: nowrap;
-}
-
-.local-tts-container .local-tts-download-button[hidden] {
-  display: none;
 }
 
 .local-tts-container .local-tts-download-button:hover {
