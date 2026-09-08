@@ -580,7 +580,10 @@
   margin-left: calc(var(--ltt-btn-size) + 0.375rem);
 }
 
-/* Dark mode */
+/*
+ * Dark mode tokens (two rules required: @media for system preference,
+ * [data-theme] for explicit toggle; keep values identical).
+ */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .local-tts-container {
     --ltt-color-text: #e5e5e5;
@@ -604,6 +607,7 @@
   }
 }
 
+/* Explicit dark toggle (same tokens as @media block above). */
 :root[data-theme="dark"] .local-tts-container {
   --ltt-color-text: #e5e5e5;
   --ltt-color-text-muted: #e5e5e5;
