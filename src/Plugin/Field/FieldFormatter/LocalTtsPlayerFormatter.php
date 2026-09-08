@@ -108,6 +108,7 @@ final class LocalTtsPlayerFormatter extends FormatterBase implements ContainerFa
     return [
       'show_voice_selector' => TRUE,
       'show_speed_control' => TRUE,
+      'show_volume_control' => TRUE,
       'fields' => [],
       'wrapper_classes' => '',
     ] + parent::defaultSettings();
@@ -131,6 +132,13 @@ final class LocalTtsPlayerFormatter extends FormatterBase implements ContainerFa
       '#title' => $this->t('Show playback speed control'),
       '#default_value' => $this->getSetting('show_speed_control'),
       '#description' => $this->t('Let visitors adjust how fast the content is read.'),
+    ];
+
+    $elements['show_volume_control'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Show volume control'),
+      '#default_value' => $this->getSetting('show_volume_control'),
+      '#description' => $this->t('Show volume slider and mute button during playback.'),
     ];
 
     $elements['wrapper_classes'] = [
@@ -169,6 +177,10 @@ final class LocalTtsPlayerFormatter extends FormatterBase implements ContainerFa
     $summary[] = $this->getSetting('show_speed_control')
       ? $this->t('Speed control: Shown')
       : $this->t('Speed control: Hidden');
+
+    $summary[] = $this->getSetting('show_volume_control')
+      ? $this->t('Volume control: Shown')
+      : $this->t('Volume control: Hidden');
 
     $wrapper_classes = trim($this->getSetting('wrapper_classes'));
     if (!empty($wrapper_classes)) {
