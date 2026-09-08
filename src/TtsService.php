@@ -262,7 +262,6 @@ class TtsService {
     $voice = $options['voice'] ?? $config->get('default_voice');
     $speed = $options['speed'] ?? $config->get('default_speed');
     $language = $options['language'] ?? $this->detectLanguageFromVoice($voice);
-    $use_cache = $options['use_cache'] ?? $config->get('cache_audio');
 
     // Security: Validate voice against allowed list.
     $available_voices = array_keys($this->getAvailableVoices());
@@ -391,7 +390,7 @@ class TtsService {
    *   Generation timeout in seconds.
    */
   protected function generateSingle($text, $ogg_output, $binary_path, $model_path, $data_path, $voice, $speed, $espeak_lang, $directory, $timeout) {
-    $wav_file = $directory . '/' . md5($ogg_output) . '_single.wav';
+    $wav_file = $directory . '/' . md5($ogg_output) . '_' . bin2hex(random_bytes(8)) . '_single.wav';
 
     $command = sprintf(
       '%s --lan %s --model %s --data %s --style %s --speed %s text %s --output %s 2>&1',
@@ -407,10 +406,16 @@ class TtsService {
 
     $this->logger->info('Executing TTS command for single text');
 
-    $result = $this->execWithTimeout($command, $timeout);
-    $this->handleExecResult($result, $wav_file, $timeout);
-
-    $this->transcodeToOpus($wav_file, $ogg_output);
+    try {
+      $result = $this->execWithTimeout($command, $timeout);
+      $this->handleExecResult($result, $wav_file, $timeout);
+      $this->transcodeToOpus($wav_file, $ogg_output);
+    }
+    finally {
+      if (file_exists($wav_file)) {
+        @unlink($wav_file);
+      }
+    }
   }
 
   /**
@@ -443,6 +448,7 @@ class TtsService {
    *   Generation timeout in seconds per chunk.
    */
   protected function generateChunked($text, $ogg_output, $binary_path, $model_path, $data_path, $voice, $speed, $espeak_lang, $cache_key, $directory, $timeout) {
+    $cache_key .= '_' . bin2hex(random_bytes(8));
     $chunks = $this->splitIntoChunks($text);
     $chunk_files = [];
 
@@ -543,7 +549,7 @@ class TtsService {
     }
     file_put_contents($list_file, implode("\n", $lines));
 
-    $partial_output = $ogg_output . '.part';
+    $partial_output = $ogg_output . '.' . bin2hex(random_bytes(8)) . '.part';
     $command = sprintf(
       '%s -y -f concat -safe 0 -i %s -c:a libopus -b:a 48k -f ogg %s 2>&1',
       escapeshellarg($this->findFfmpeg()),
@@ -601,7 +607,7 @@ class TtsService {
    *   When ffmpeg fails or the output file is not created.
    */
   protected function transcodeToOpus($wav_path, $ogg_path) {
-    $partial_output = $ogg_path . '.part';
+    $partial_output = $ogg_path . '.' . bin2hex(random_bytes(8)) . '.part';
     $command = sprintf(
       '%s -y -i %s -c:a libopus -b:a 48k -f ogg %s 2>&1',
       escapeshellarg($this->findFfmpeg()),

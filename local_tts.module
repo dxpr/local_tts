@@ -378,7 +378,7 @@ function _local_tts_cleanup_orphan_files() {
   $files = array_merge(
     glob($directory . '/*.ogg') ?: [],
     glob($directory . '/*.wav') ?: [],
-    glob($directory . '/*.ogg.part') ?: []
+    glob($directory . '/*.part') ?: []
   );
 
   if (empty($files)) {
