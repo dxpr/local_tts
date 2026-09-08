@@ -1,10 +1,22 @@
 services:
+  local_tts.tts_generator:
+    class: Drupal\local_tts\Service\TtsGenerator
+    arguments: ['@config.factory', '@file_system', '@logger.factory', '@extension.list.module']
+  local_tts.cache_manager:
+    class: Drupal\local_tts\Service\TtsCacheManager
+    arguments: ['@config.factory', '@file_system', '@database', '@datetime.time', '@logger.factory']
+  local_tts.text_extractor:
+    class: Drupal\local_tts\Service\TtsTextExtractor
+    arguments: ['@entity_type.manager', '@renderer', '@module_handler', '@account_switcher', '@logger.factory']
+  local_tts.cron_service:
+    class: Drupal\local_tts\Service\TtsCronService
+    arguments: ['@config.factory', '@database', '@entity_type.manager', '@file_system', '@local_tts.cache_manager', '@datetime.time', '@state', '@logger.factory']
   local_tts.tts_service:
     class: Drupal\local_tts\TtsService
-    arguments: ['@config.factory', '@file_system', '@logger.factory', '@extension.list.module', '@datetime.time', '@database', '@entity_type.manager', '@renderer', '@module_handler', '@account_switcher']
+    arguments: ['@local_tts.tts_generator', '@local_tts.cache_manager', '@local_tts.text_extractor', '@config.factory', '@file_system', '@logger.factory', '@extension.list.module', '@entity_type.manager']
   local_tts.player_builder:
     class: Drupal\local_tts\TtsPlayerBuilder
-    arguments: ['@config.factory', '@local_tts.tts_service', '@entity_type.manager', '@entity.repository']
+    arguments: ['@config.factory', '@local_tts.tts_service', '@entity_type.manager', '@entity.repository', '@entity_field.manager', '@entity_type.bundle.info']
   local_tts.batch_service:
     class: Drupal\local_tts\Service\TtsBatchService
-    arguments: ['@entity_type.manager', '@local_tts.tts_service', '@config.factory', '@entity_type.bundle.info', '@logger.factory']
+    arguments: ['@entity_type.manager', '@local_tts.tts_service', '@config.factory', '@entity_type.bundle.info', '@logger.factory', '@entity_field.manager', '@database']

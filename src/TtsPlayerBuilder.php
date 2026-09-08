@@ -4,8 +4,10 @@ namespace Drupal\local_tts;
 
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityRepositoryInterface;
+use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Security\TrustedCallbackInterface;
@@ -16,8 +18,6 @@ use Drupal\Core\Url;
 
 /**
  * Service to build TTS player render arrays.
- *
- * Shared logic between LocalTtsBlock and LocalTtsPlayerFormatter.
  */
 class TtsPlayerBuilder implements TrustedCallbackInterface {
 
@@ -42,57 +42,14 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
     'tid', 'weight', 'parent', 'description__format',
   ];
 
-  /**
-   * Config factory.
-   *
-   * @var \Drupal\Core\Config\ConfigFactoryInterface
-   */
-  protected $configFactory;
-
-  /**
-   * TTS service.
-   *
-   * @var \Drupal\local_tts\TtsService
-   */
-  protected $ttsService;
-
-  /**
-   * The entity type manager.
-   *
-   * @var \Drupal\Core\Entity\EntityTypeManagerInterface
-   */
-  protected $entityTypeManager;
-
-  /**
-   * The entity repository.
-   *
-   * @var \Drupal\Core\Entity\EntityRepositoryInterface|null
-   */
-  protected $entityRepository;
-
-  /**
-   * Constructs a TtsPlayerBuilder.
-   *
-   * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
-   *   Config factory.
-   * @param \Drupal\local_tts\TtsService $tts_service
-   *   TTS service.
-   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
-   *   The entity type manager.
-   * @param \Drupal\Core\Entity\EntityRepositoryInterface|null $entity_repository
-   *   The entity repository.
-   */
   public function __construct(
-    ConfigFactoryInterface $config_factory,
-    TtsService $tts_service,
-    EntityTypeManagerInterface $entity_type_manager,
-    ?EntityRepositoryInterface $entity_repository = NULL,
-  ) {
-    $this->configFactory = $config_factory;
-    $this->ttsService = $tts_service;
-    $this->entityTypeManager = $entity_type_manager;
-    $this->entityRepository = $entity_repository;
-  }
+    protected readonly ConfigFactoryInterface $configFactory,
+    protected readonly TtsService $ttsService,
+    protected readonly EntityTypeManagerInterface $entityTypeManager,
+    protected readonly ?EntityRepositoryInterface $entityRepository,
+    protected readonly ?EntityFieldManagerInterface $entityFieldManager = NULL,
+    protected readonly ?EntityTypeBundleInfoInterface $entityTypeBundleInfo = NULL,
+  ) {}
 
   /**
    * {@inheritdoc}
@@ -103,19 +60,6 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
 
   /**
    * Lazy builder callback for the TTS player.
-   *
-   * @param string $entity_type
-   *   The entity type ID.
-   * @param string $entity_id
-   *   The entity ID.
-   * @param string $settings_json
-   *   JSON-encoded player settings.
-   * @param string|null $langcode
-   *   The language of the translation being displayed. When omitted, the
-   *   translation matching the current content language is used.
-   *
-   * @return array
-   *   The player render array.
    */
   public function buildPlayerLazy(string $entity_type, string $entity_id, string $settings_json, ?string $langcode = NULL): array {
     $entity = $this->entityTypeManager->getStorage($entity_type)->load($entity_id);
@@ -238,118 +182,206 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
    * Build the shared player widget render array.
    */
   protected function buildPlayerWidget(array $settings, ?string $langcode, array $available_voices, array $instance_settings, array $global_drupal_settings): array {
-    $id_suffix = substr(md5(microtime() . random_bytes(8)), 0, 8);
+    $id = substr(md5(microtime() . random_bytes(8)), 0, 8);
     $global_config = $this->configFactory->get('local_tts.settings');
     $show_download = $global_config->get('show_download') ?? FALSE;
 
-    $container_classes = ['local-tts-container', 'local-tts-initializing'];
-    $custom_classes = trim($settings['wrapper_classes'] ?? '');
-    if (!empty($custom_classes)) {
-      foreach (array_filter(explode(' ', $custom_classes)) as $class) {
-        $container_classes[] = Html::cleanCssIdentifier($class);
-      }
-    }
-
-    $build = [
-      '#type' => 'container',
-      '#attributes' => [
-        'class' => $container_classes,
-        'data-tts-id' => $id_suffix,
+    $build = $this->buildContainer($settings, $id);
+    $build['play_wrapper'] = $this->buildPlayWrapper($settings, $id, $langcode, $available_voices, $show_download);
+    $build['status'] = $this->buildStatusArea($id);
+    $build['audio'] = $this->buildAudioElement($id);
+    $build['#attached'] = [
+      'library' => ['local_tts/player'],
+      'drupalSettings' => [
+        'localTts' => $global_drupal_settings + [
+          'instances' => [
+            $id => $instance_settings,
+          ],
+        ],
       ],
     ];
 
-    $build['play_wrapper'] = [
+    return $build;
+  }
+
+  /**
+   * Build the outer container with CSS classes.
+   */
+  protected function buildContainer(array $settings, string $id): array {
+    $classes = ['local-tts-container', 'local-tts-initializing'];
+    $custom = trim($settings['wrapper_classes'] ?? '');
+    if (!empty($custom)) {
+      foreach (array_filter(explode(' ', $custom)) as $class) {
+        $classes[] = Html::cleanCssIdentifier($class);
+      }
+    }
+
+    return [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => $classes,
+        'data-tts-id' => $id,
+      ],
+    ];
+  }
+
+  /**
+   * Build the play wrapper containing button, content, and settings.
+   */
+  protected function buildPlayWrapper(array $settings, string $id, ?string $langcode, array $available_voices, bool $show_download): array {
+    $wrapper = [
       '#type' => 'container',
       '#attributes' => ['class' => ['local-tts-play-wrapper']],
     ];
 
-    $build['play_wrapper']['play_button'] = [
+    $wrapper['play_button'] = $this->buildPlayButton($id);
+    $wrapper['content'] = $this->buildContentArea($settings, $id);
+    $wrapper['settings'] = $this->buildSettingsPanel($settings, $id, $langcode, $available_voices, $show_download);
+
+    return $wrapper;
+  }
+
+  /**
+   * Build the play/pause button.
+   */
+  protected function buildPlayButton(string $id): array {
+    return [
       '#type' => 'html_tag',
       '#tag' => 'button',
       '#attributes' => [
         'type' => 'button',
-        'id' => 'local-tts-play-button-' . $id_suffix,
+        'id' => 'local-tts-play-button-' . $id,
         'class' => ['local-tts-play-button'],
         'aria-label' => $this->t('Listen to this article'),
         'aria-pressed' => 'false',
-        'aria-controls' => 'local-tts-audio-' . $id_suffix,
+        'aria-controls' => 'local-tts-audio-' . $id,
       ],
       '#value' => '',
     ];
+  }
 
-    $build['play_wrapper']['content'] = [
+  /**
+   * Build the content area: label and playback controls.
+   */
+  protected function buildContentArea(array $settings, string $id): array {
+    $content = [
       '#type' => 'container',
       '#attributes' => ['class' => ['local-tts-content']],
     ];
 
-    $build['play_wrapper']['content']['label'] = [
+    $content['label'] = $this->buildLabelArea($id);
+    $content['playback_controls'] = $this->buildPlaybackControls($settings, $id);
+
+    return $content;
+  }
+
+  /**
+   * Build the label with text and duration.
+   */
+  protected function buildLabelArea(string $id): array {
+    return [
       '#type' => 'container',
       '#attributes' => [
-        'id' => 'local-tts-label-' . $id_suffix,
+        'id' => 'local-tts-label-' . $id,
         'class' => ['local-tts-label'],
       ],
-    ];
-
-    $build['play_wrapper']['content']['label']['text'] = [
-      '#type' => 'html_tag',
-      '#tag' => 'span',
-      '#attributes' => [
-        'id' => 'local-tts-label-text-' . $id_suffix,
-        'class' => ['local-tts-label-text'],
+      'text' => [
+        '#type' => 'html_tag',
+        '#tag' => 'span',
+        '#attributes' => [
+          'id' => 'local-tts-label-text-' . $id,
+          'class' => ['local-tts-label-text'],
+        ],
+        '#value' => $this->t('Listen to this article'),
       ],
-      '#value' => $this->t('Listen to this article'),
-    ];
-
-    $build['play_wrapper']['content']['label']['duration_text'] = [
-      '#type' => 'html_tag',
-      '#tag' => 'span',
-      '#attributes' => [
-        'id' => 'local-tts-label-duration-' . $id_suffix,
-        'class' => ['local-tts-label-duration'],
+      'duration_text' => [
+        '#type' => 'html_tag',
+        '#tag' => 'span',
+        '#attributes' => [
+          'id' => 'local-tts-label-duration-' . $id,
+          'class' => ['local-tts-label-duration'],
+        ],
+        '#value' => '',
       ],
-      '#value' => '',
     ];
+  }
 
-    $build['play_wrapper']['content']['playback_controls'] = [
+  /**
+   * Build playback controls: skip, scrubber, time, volume.
+   */
+  protected function buildPlaybackControls(array $settings, string $id): array {
+    $controls = [
       '#type' => 'container',
       '#attributes' => [
-        'id' => 'local-tts-playback-controls-' . $id_suffix,
+        'id' => 'local-tts-playback-controls-' . $id,
         'class' => ['local-tts-playback-controls'],
-        'style' => 'display: none;',
+        'hidden' => 'hidden',
       ],
     ];
 
-    $build['play_wrapper']['content']['playback_controls']['skip_back'] = [
+    $controls['skip_back'] = $this->buildSkipButton('back', $id, -10);
+    $controls['current_time'] = $this->buildTimeDisplay('current', $id, 0);
+    $controls['scrubber'] = $this->buildScrubber($id, 10);
+    $controls['remaining_time'] = $this->buildTimeDisplay('remaining', $id, 20);
+    $controls['skip_forward'] = $this->buildSkipButton('forward', $id, 25);
+
+    if (!empty($settings['show_volume_control'])) {
+      $controls['volume_wrapper'] = $this->buildVolumeControls($id, 30);
+    }
+
+    return $controls;
+  }
+
+  /**
+   * Build a skip button (back or forward).
+   */
+  protected function buildSkipButton(string $direction, string $id, int $weight): array {
+    $label = $direction === 'back'
+      ? $this->t('Skip back 10 seconds')
+      : $this->t('Skip forward 10 seconds');
+
+    return [
       '#type' => 'html_tag',
       '#tag' => 'button',
-      '#weight' => -10,
+      '#weight' => $weight,
       '#attributes' => [
         'type' => 'button',
-        'class' => ['local-tts-skip-button', 'local-tts-skip-back'],
-        'aria-label' => $this->t('Skip back 10 seconds'),
+        'class' => ['local-tts-skip-button', 'local-tts-skip-' . $direction],
+        'aria-label' => $label,
       ],
       '#value' => '',
     ];
+  }
 
-    $build['play_wrapper']['content']['playback_controls']['current_time'] = [
+  /**
+   * Build a time display element (current or remaining).
+   */
+  protected function buildTimeDisplay(string $type, string $id, int $weight): array {
+    $isCurrent = $type === 'current';
+
+    return [
       '#type' => 'html_tag',
       '#tag' => 'span',
-      '#weight' => 0,
+      '#weight' => $weight,
       '#attributes' => [
-        'id' => 'local-tts-current-time-' . $id_suffix,
-        'class' => ['local-tts-current-time'],
-        'aria-live' => 'off',
-      ],
-      '#value' => '0:00',
+        'id' => 'local-tts-' . $type . '-time-' . $id,
+        'class' => ['local-tts-' . $type . '-time'],
+      ] + ($isCurrent ? ['aria-live' => 'off'] : []),
+      '#value' => $isCurrent ? '0:00' : '',
     ];
+  }
 
-    $build['play_wrapper']['content']['playback_controls']['scrubber'] = [
+  /**
+   * Build the scrubber range input.
+   */
+  protected function buildScrubber(string $id, int $weight): array {
+    return [
       '#type' => 'html_tag',
       '#tag' => 'input',
-      '#weight' => 10,
+      '#weight' => $weight,
       '#attributes' => [
         'type' => 'range',
-        'id' => 'local-tts-scrubber-' . $id_suffix,
+        'id' => 'local-tts-scrubber-' . $id,
         'class' => ['local-tts-scrubber'],
         'min' => '0',
         'max' => '100',
@@ -364,38 +396,17 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
         'disabled' => 'disabled',
       ],
     ];
+  }
 
-    $build['play_wrapper']['content']['playback_controls']['remaining_time'] = [
-      '#type' => 'html_tag',
-      '#tag' => 'span',
-      '#weight' => 20,
-      '#attributes' => [
-        'id' => 'local-tts-remaining-time-' . $id_suffix,
-        'class' => ['local-tts-remaining-time'],
-      ],
-      '#value' => '',
-    ];
-
-    $build['play_wrapper']['content']['playback_controls']['skip_forward'] = [
-      '#type' => 'html_tag',
-      '#tag' => 'button',
-      '#weight' => 25,
-      '#attributes' => [
-        'type' => 'button',
-        'class' => ['local-tts-skip-button', 'local-tts-skip-forward'],
-        'aria-label' => $this->t('Skip forward 10 seconds'),
-      ],
-      '#value' => '',
-    ];
-
-    if (!empty($settings['show_volume_control'])) {
-      $build['play_wrapper']['content']['playback_controls']['volume_wrapper'] = [
-        '#type' => 'container',
-        '#weight' => 30,
-        '#attributes' => ['class' => ['local-tts-volume-wrapper']],
-      ];
-
-      $build['play_wrapper']['content']['playback_controls']['volume_wrapper']['mute_button'] = [
+  /**
+   * Build volume controls: mute button and volume slider.
+   */
+  protected function buildVolumeControls(string $id, int $weight): array {
+    return [
+      '#type' => 'container',
+      '#weight' => $weight,
+      '#attributes' => ['class' => ['local-tts-volume-wrapper']],
+      'mute_button' => [
         '#type' => 'html_tag',
         '#tag' => 'button',
         '#attributes' => [
@@ -405,9 +416,8 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
           'aria-pressed' => 'false',
         ],
         '#value' => '',
-      ];
-
-      $build['play_wrapper']['content']['playback_controls']['volume_wrapper']['volume_slider'] = [
+      ],
+      'volume_slider' => [
         '#type' => 'html_tag',
         '#tag' => 'input',
         '#attributes' => [
@@ -424,27 +434,31 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
           'aria-valuenow' => '100',
           'aria-valuetext' => $this->t('Volume 100%'),
         ],
-      ];
-    }
+      ],
+    ];
+  }
 
-    $build['play_wrapper']['settings'] = [
+  /**
+   * Build the settings panel: voice, speed, download.
+   */
+  protected function buildSettingsPanel(array $settings, string $id, ?string $langcode, array $available_voices, bool $show_download): array {
+    $panel = [
       '#type' => 'container',
       '#attributes' => [
-        'id' => 'local-tts-settings-' . $id_suffix,
+        'id' => 'local-tts-settings-' . $id,
         'class' => ['local-tts-settings'],
       ],
     ];
 
     if (!empty($settings['show_voice_selector']) && !empty($available_voices)) {
       $default_voice = $this->ttsService->getDefaultVoice($langcode);
-
-      $build['play_wrapper']['settings']['voice_select'] = [
+      $panel['voice_select'] = [
         '#type' => 'select',
         '#title' => $this->t('Voice'),
         '#options' => $available_voices,
         '#value' => $default_voice,
         '#attributes' => [
-          'id' => 'local-tts-voice-select-' . $id_suffix,
+          'id' => 'local-tts-voice-select-' . $id,
           'class' => ['local-tts-voice-select'],
           'aria-label' => $this->t('Select voice'),
         ],
@@ -452,11 +466,12 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
     }
 
     if (!empty($settings['show_speed_control'])) {
+      $global_config = $this->configFactory->get('local_tts.settings');
       $default_speed = $this->ttsService->normalizeSpeed(
         $global_config->get('default_speed') ?: '1'
       );
 
-      $build['play_wrapper']['settings']['speed_select'] = [
+      $panel['speed_select'] = [
         '#type' => 'select',
         '#title' => $this->t('Speed'),
         '#options' => [
@@ -468,7 +483,7 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
         ],
         '#value' => $default_speed,
         '#attributes' => [
-          'id' => 'local-tts-speed-select-' . $id_suffix,
+          'id' => 'local-tts-speed-select-' . $id,
           'class' => ['local-tts-speed-select'],
           'aria-label' => $this->t('Playback speed'),
         ],
@@ -476,7 +491,7 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
     }
 
     if ($show_download) {
-      $build['play_wrapper']['settings']['download_button'] = [
+      $panel['download_button'] = [
         '#type' => 'html_tag',
         '#tag' => 'a',
         '#attributes' => [
@@ -490,50 +505,75 @@ class TtsPlayerBuilder implements TrustedCallbackInterface {
       ];
     }
 
-    $build['status'] = [
+    return $panel;
+  }
+
+  /**
+   * Build the status area.
+   */
+  protected function buildStatusArea(string $id): array {
+    return [
       '#type' => 'container',
       '#attributes' => [
-        'id' => 'local-tts-status-' . $id_suffix,
+        'id' => 'local-tts-status-' . $id,
         'class' => ['local-tts-status'],
         'role' => 'status',
         'aria-live' => 'polite',
         'aria-atomic' => 'true',
       ],
     ];
+  }
 
-    $build['audio'] = [
+  /**
+   * Build the audio element.
+   */
+  protected function buildAudioElement(string $id): array {
+    return [
       '#type' => 'html_tag',
       '#tag' => 'audio',
       '#attributes' => [
-        'id' => 'local-tts-audio-' . $id_suffix,
+        'id' => 'local-tts-audio-' . $id,
         'preload' => 'none',
       ],
     ];
+  }
 
-    $build['#attached'] = [
-      'library' => ['local_tts/player'],
-      'drupalSettings' => [
-        'localTts' => $global_drupal_settings + [
-          'instances' => [
-            $id_suffix => $instance_settings,
-          ],
-        ],
-      ],
-    ];
+  /**
+   * Get text field options across all fieldable entity types.
+   *
+   * Used by the block and Views player plugins to build field checkboxes.
+   */
+  public function getAllTextFieldOptions(): array {
+    if (!$this->entityFieldManager || !$this->entityTypeBundleInfo) {
+      return [];
+    }
 
-    return $build;
+    $options = [];
+    foreach ($this->entityTypeManager->getDefinitions() as $entityTypeId => $entityType) {
+      if (!$entityType->entityClassImplements(FieldableEntityInterface::class)) {
+        continue;
+      }
+      if (!$entityType->hasViewBuilderClass()) {
+        continue;
+      }
+      $bundles = $this->entityTypeBundleInfo->getBundleInfo($entityTypeId);
+      foreach (array_keys($bundles) as $bundle) {
+        $definitions = $this->entityFieldManager->getFieldDefinitions($entityTypeId, $bundle);
+        foreach ($definitions as $fieldName => $definition) {
+          $type = $definition->getType();
+          if (in_array($type, self::ALLOWED_FIELD_TYPES, TRUE)) {
+            $options[$fieldName] = $definition->getLabel() . ' (' . $fieldName . ')';
+          }
+        }
+      }
+    }
+    ksort($options);
+
+    return $options;
   }
 
   /**
    * Check whether an entity has non-empty text content.
-   *
-   * @param \Drupal\Core\Entity\EntityInterface $entity
-   *   The entity to check.
-   * @param array $field_filter
-   *   Field names to check (empty = all text fields).
-   *
-   * @return bool
-   *   TRUE if the entity has text content.
    */
   protected function entityHasTextContent(EntityInterface $entity, array $field_filter = []): bool {
     if (!($entity instanceof FieldableEntityInterface)) {

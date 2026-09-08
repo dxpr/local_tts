@@ -13,7 +13,6 @@ use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Session\AnonymousUserSession;
-use Drupal\Core\StringTranslation\ByteSizeMarkup;
 use Drupal\local_tts\TtsPlayerBuilder;
 
 /**
@@ -100,22 +99,13 @@ function local_tts_entity_view(array &$build, EntityInterface $entity, EntityVie
  * Implements hook_cron().
  */
 function local_tts_cron() {
-  $config = \Drupal::config('local_tts.settings');
-
-  _local_tts_cleanup_stale_content();
-
-  if ($config->get('cache_size_limit_enabled')) {
-    _local_tts_enforce_size_limit();
-  }
-
-  _local_tts_cleanup_orphan_files();
+  \Drupal::service('local_tts.cron_service')->run();
 }
 
 /**
  * Implements hook_entity_update().
  *
- * Smart invalidation: Only delete audio if text content actually changed.
- * Compares text hash to avoid unnecessary regeneration.
+ * Smart invalidation: only delete audio if text content actually changed.
  */
 function local_tts_entity_update(EntityInterface $entity) {
   $original = method_exists($entity, 'getOriginal') ? $entity->getOriginal() : ($entity->original ?? NULL);
@@ -129,7 +119,6 @@ function local_tts_entity_update(EntityInterface $entity) {
     if ($original instanceof TranslatableInterface) {
       $previous = $original->hasTranslation($langcode) ? $original->getTranslation($langcode) : NULL;
     }
-    // Publication/access changes matter even when the text itself is identical.
     if ($translation->access('view', new AnonymousUserSession()) && $previous
       && _local_tts_text_content_changed($translation, $previous) === FALSE
       && $previous->access('view', new AnonymousUserSession())) {
@@ -167,11 +156,13 @@ function _local_tts_auto_generate(EntityInterface $entity) {
   if (!($entity instanceof FieldableEntityInterface)) {
     return;
   }
-  if (!_local_tts_bundle_allowed($entity->getEntityTypeId(), $entity->bundle())) {
+
+  /** @var \Drupal\local_tts\Service\TtsCronService $cron_service */
+  $cron_service = \Drupal::service('local_tts.cron_service');
+  if (!$cron_service->isBundleAllowed($entity->getEntityTypeId(), $entity->bundle())) {
     return;
   }
-  // Audio is only ever generated for publicly viewable content; queueing
-  // anything else produces a job that fails on every cron run.
+
   if (!$entity->access('view', new AnonymousUserSession())) {
     return;
   }
@@ -211,14 +202,6 @@ function local_tts_entity_delete(EntityInterface $entity) {
 
 /**
  * Check if text content changed between entity versions.
- *
- * @param \Drupal\Core\Entity\EntityInterface $entity
- *   The updated entity.
- * @param \Drupal\Core\Entity\EntityInterface $original
- *   The original entity.
- *
- * @return bool
- *   TRUE if text content changed, FALSE otherwise.
  */
 function _local_tts_text_content_changed($entity, $original) {
   if (!($entity instanceof FieldableEntityInterface) || !($original instanceof FieldableEntityInterface)) {
@@ -246,243 +229,13 @@ function _local_tts_text_content_changed($entity, $original) {
 }
 
 /**
- * Clean up audio references whose source entities have been deleted.
- */
-function _local_tts_cleanup_stale_content() {
-  $deleted = 0;
-  $records = \Drupal::database()->select('local_tts_cache', 'a')
-    ->fields('a', ['entity_type', 'entity_id'])
-    ->distinct()
-    ->isNotNull('entity_type')
-    ->isNotNull('entity_id')
-    ->execute()
-    ->fetchAll();
-
-  // Group records by entity type for batch loading.
-  $grouped = [];
-  foreach ($records as $record) {
-    $grouped[$record->entity_type][$record->entity_id][] = $record;
-  }
-
-  $entity_type_manager = \Drupal::entityTypeManager();
-  $stale_records = [];
-
-  foreach ($grouped as $entity_type => $id_records) {
-    try {
-      $storage = $entity_type_manager->getStorage($entity_type);
-      $ids = array_keys($id_records);
-      $loaded = $storage->loadMultiple($ids);
-
-      foreach ($ids as $id) {
-        if (!isset($loaded[$id])) {
-          foreach ($id_records[$id] as $record) {
-            $stale_records[] = $record;
-          }
-        }
-      }
-    }
-    catch (\Exception $e) {
-      // Storage unavailable; mark all records for this type as stale.
-      foreach ($id_records as $entity_records) {
-        foreach ($entity_records as $record) {
-          $stale_records[] = $record;
-        }
-      }
-    }
-  }
-
-  $tts_service = \Drupal::service('local_tts.tts_service');
-  foreach ($stale_records as $record) {
-    $deleted += $tts_service->deleteAudioForEntity($record->entity_type, $record->entity_id);
-  }
-
-  if ($deleted > 0) {
-    \Drupal::logger('local_tts')->info('Deleted @count stale audio files', [
-      '@count' => $deleted,
-    ]);
-  }
-}
-
-/**
- * Enforce size limit by deleting least recently accessed files.
- */
-function _local_tts_enforce_size_limit() {
-  $config = \Drupal::config('local_tts.settings');
-  $max_size = $config->get('cache_max_size') ?: 1073741824;
-  $directory = _local_tts_get_audio_directory();
-
-  if (!$directory) {
-    return;
-  }
-
-  // Metadata contains one row per entity/variant, but files may be shared.
-  // Count disk bytes once per key and use the most recent access by any entity.
-  $query = \Drupal::database()->select('local_tts_cache', 'a');
-  $query->fields('a', ['cache_key']);
-  $query->addExpression('MAX(accessed)', 'last_accessed');
-  $records = $query->groupBy('cache_key')
-    ->orderBy('last_accessed', 'ASC')
-    ->execute()
-    ->fetchAll();
-  $current_size = 0;
-  foreach ($records as $record) {
-    $record->files = [];
-    foreach (['.ogg', '.wav'] as $extension) {
-      $path = $directory . '/' . $record->cache_key . $extension;
-      if (file_exists($path)) {
-        $size = (int) filesize($path);
-        $record->files[$path] = $size;
-        $current_size += $size;
-      }
-    }
-  }
-
-  $bytes_freed = 0;
-  $deleted = 0;
-  foreach ($records as $record) {
-    if ($current_size - $bytes_freed <= $max_size) {
-      break;
-    }
-    $removed = TRUE;
-    foreach ($record->files as $path => $size) {
-      if (@unlink($path)) {
-        $bytes_freed += $size;
-        $deleted++;
-      }
-      else {
-        $removed = FALSE;
-      }
-    }
-    if ($removed) {
-      \Drupal::database()->delete('local_tts_cache')
-        ->condition('cache_key', $record->cache_key)
-        ->execute();
-    }
-  }
-
-  if ($deleted > 0) {
-    \Drupal::logger('local_tts')->info('Deleted @count files (@size freed)', [
-      '@count' => $deleted,
-      '@size' => ByteSizeMarkup::create($bytes_freed),
-    ]);
-  }
-}
-
-/**
- * Remove disk files that have no corresponding database record.
- *
- * Catches orphans left by voice previews, failed generation, manual
- * database truncation, or race conditions during concurrent generation.
- * Rate-limited to run at most once every 6 hours.
- */
-function _local_tts_cleanup_orphan_files() {
-  $state = \Drupal::state();
-  $last_run = $state->get('local_tts.orphan_cleanup_last_run', 0);
-  if (\Drupal::time()->getRequestTime() - $last_run < 21600) {
-    return;
-  }
-  $state->set('local_tts.orphan_cleanup_last_run', \Drupal::time()->getRequestTime());
-
-  $directory = _local_tts_get_audio_directory();
-  if (!$directory) {
-    return;
-  }
-
-  // Scan .ogg and legacy .wav files, plus leftovers of interrupted writes.
-  $files = array_merge(
-    glob($directory . '/*.ogg') ?: [],
-    glob($directory . '/*.wav') ?: [],
-    glob($directory . '/*.part') ?: []
-  );
-
-  if (empty($files)) {
-    return;
-  }
-
-  $now = \Drupal::time()->getRequestTime();
-
-  // Build a set of all known cache keys from the database.
-  $known_keys = \Drupal::database()->select('local_tts_cache', 'a')
-    ->fields('a', ['cache_key'])
-    ->execute()
-    ->fetchCol();
-  $known_keys = array_flip($known_keys);
-
-  $deleted = 0;
-  foreach ($files as $file_path) {
-    // Files still being written (or just finished, but whose metadata row is
-    // not saved yet) must not be treated as orphans.
-    $mtime = @filemtime($file_path);
-    if ($mtime !== FALSE && $now - $mtime < 3600) {
-      continue;
-    }
-    $cache_key = explode('.', basename($file_path))[0];
-    if (!isset($known_keys[$cache_key])) {
-      @unlink($file_path);
-      $deleted++;
-      if ($deleted >= 500) {
-        break;
-      }
-    }
-  }
-
-  if ($deleted > 0) {
-    \Drupal::logger('local_tts')->info('Deleted @count orphan audio files', [
-      '@count' => $deleted,
-    ]);
-  }
-}
-
-/**
- * Check whether an entity bundle is allowed for TTS.
- *
- * @param string $entity_type
- *   Entity type ID.
- * @param string $bundle
- *   Bundle machine name.
- *
- * @return bool
- *   TRUE if allowed (or no whitelist is configured).
- */
-function _local_tts_bundle_allowed($entity_type, $bundle) {
-  $config = \Drupal::config('local_tts.settings');
-  $allowed = $config->get('allowed_bundles') ?? [];
-  if (empty($allowed)) {
-    return TRUE;
-  }
-  $key = $entity_type . ':' . $bundle;
-  return !empty($allowed[$key]);
-}
-
-/**
- * Get the real path to the audio cache directory.
- *
- * @return string|null
- *   Real filesystem path to the audio directory, or NULL if not accessible.
- */
-function _local_tts_get_audio_directory() {
-  $config = \Drupal::config('local_tts.settings');
-  $audio_dir = $config->get('audio_directory') ?: 'public://local-tts';
-  $file_system = \Drupal::service('file_system');
-  $directory = $file_system->realpath($audio_dir);
-
-  if (!$directory || !is_dir($directory)) {
-    return NULL;
-  }
-
-  return $directory;
-}
-
-/**
  * Implements hook_form_BASE_FORM_ID_alter() for node_form.
  */
 function local_tts_form_node_form_alter(&$form, FormStateInterface $form_state, $form_id) {
-  // Find Local TTS fields on this form.
   $has_tts_field = FALSE;
   $tts_field_key = NULL;
 
   foreach ($form as $key => $element) {
-    // Skip non-array elements.
     if (!is_array($element)) {
       continue;
     }
@@ -510,7 +263,6 @@ function local_tts_form_node_form_alter(&$form, FormStateInterface $form_state, 
     return;
   }
 
-  // Create Local TTS options group in sidebar.
   $form['local_tts_options'] = [
     '#type' => 'details',
     '#title' => t('Local Text-to-Speech'),
@@ -522,7 +274,6 @@ function local_tts_form_node_form_alter(&$form, FormStateInterface $form_state, 
     '#optional' => TRUE,
   ];
 
-  // Move the TTS field into the sidebar group.
   if (isset($tts_field_key)) {
     $form[$tts_field_key]['#group'] = 'local_tts_options';
   }

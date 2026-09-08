@@ -2,10 +2,6 @@
 
 namespace Drupal\local_tts\Plugin\views\field;
 
-use Drupal\Core\Entity\EntityFieldManagerInterface;
-use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\local_tts\TtsPlayerBuilder;
 use Drupal\views\Attribute\ViewsField;
@@ -20,28 +16,16 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 class LocalTtsPlayer extends FieldPluginBase {
 
   /**
-   * The entity field manager.
+   * The TTS player builder.
    */
-  protected EntityFieldManagerInterface $entityFieldManager;
-
-  /**
-   * The entity type bundle info service.
-   */
-  protected EntityTypeBundleInfoInterface $entityTypeBundleInfo;
-
-  /**
-   * The entity type manager.
-   */
-  protected EntityTypeManagerInterface $entityTypeManager;
+  protected TtsPlayerBuilder $playerBuilder;
 
   /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
     $instance = parent::create($container, $configuration, $plugin_id, $plugin_definition);
-    $instance->entityFieldManager = $container->get('entity_field.manager');
-    $instance->entityTypeBundleInfo = $container->get('entity_type.bundle.info');
-    $instance->entityTypeManager = $container->get('entity_type.manager');
+    $instance->playerBuilder = $container->get('local_tts.player_builder');
     return $instance;
   }
 
@@ -99,26 +83,7 @@ class LocalTtsPlayer extends FieldPluginBase {
       '#default_value' => $this->options['wrapper_classes'],
     ];
 
-    $field_options = [];
-    foreach ($this->entityTypeManager->getDefinitions() as $entity_type_id => $entity_type) {
-      if (!$entity_type->entityClassImplements(FieldableEntityInterface::class)) {
-        continue;
-      }
-      if (!$entity_type->hasViewBuilderClass()) {
-        continue;
-      }
-      $bundles = $this->entityTypeBundleInfo->getBundleInfo($entity_type_id);
-      foreach (array_keys($bundles) as $bundle) {
-        $definitions = $this->entityFieldManager->getFieldDefinitions($entity_type_id, $bundle);
-        foreach ($definitions as $field_name => $definition) {
-          $type = $definition->getType();
-          if (in_array($type, TtsPlayerBuilder::ALLOWED_FIELD_TYPES)) {
-            $field_options[$field_name] = $definition->getLabel() . ' (' . $field_name . ')';
-          }
-        }
-      }
-    }
-    ksort($field_options);
+    $field_options = $this->playerBuilder->getAllTextFieldOptions();
 
     $form['fields'] = [
       '#type' => 'checkboxes',

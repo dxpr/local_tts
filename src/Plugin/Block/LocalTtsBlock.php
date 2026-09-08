@@ -9,9 +9,6 @@ use Drupal\Core\Cache\Cache;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Drupal\Core\Entity\EntityFieldManagerInterface;
-use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
 
 /**
@@ -26,72 +23,23 @@ use Drupal\Core\Routing\RouteMatchInterface;
 final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
 
   /**
-   * The entity field manager.
-   *
-   * @var \Drupal\Core\Entity\EntityFieldManagerInterface
+   * The TTS player builder.
    */
-  protected $entityFieldManager;
+  protected TtsPlayerBuilder $playerBuilder;
 
   /**
-   * The entity type bundle info service.
-   *
-   * @var \Drupal\Core\Entity\EntityTypeBundleInfoInterface
+   * The current route match.
    */
-  protected $entityTypeBundleInfo;
-
-  /**
-   * The route match service.
-   *
-   * @var \Drupal\Core\Routing\RouteMatchInterface
-   */
-  protected $routeMatch;
-
-  /**
-   * The entity type manager.
-   *
-   * @var \Drupal\Core\Entity\EntityTypeManagerInterface
-   */
-  protected $entityTypeManager;
-
-  /**
-   * Constructs a new LocalTtsBlock instance.
-   *
-   * @param array $configuration
-   *   The plugin configuration.
-   * @param string $plugin_id
-   *   The plugin_id for the plugin instance.
-   * @param mixed $plugin_definition
-   *   The plugin implementation definition.
-   * @param \Drupal\Core\Entity\EntityFieldManagerInterface $entity_field_manager
-   *   The entity field manager.
-   * @param \Drupal\Core\Entity\EntityTypeBundleInfoInterface $entity_type_bundle_info
-   *   The entity type bundle info.
-   * @param \Drupal\Core\Routing\RouteMatchInterface $route_match
-   *   The route match service.
-   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
-   *   The entity type manager.
-   */
-  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityFieldManagerInterface $entity_field_manager, EntityTypeBundleInfoInterface $entity_type_bundle_info, RouteMatchInterface $route_match, EntityTypeManagerInterface $entity_type_manager) {
-    parent::__construct($configuration, $plugin_id, $plugin_definition);
-    $this->entityFieldManager = $entity_field_manager;
-    $this->entityTypeBundleInfo = $entity_type_bundle_info;
-    $this->routeMatch = $route_match;
-    $this->entityTypeManager = $entity_type_manager;
-  }
+  protected RouteMatchInterface $routeMatch;
 
   /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
-    return new static(
-      $configuration,
-      $plugin_id,
-      $plugin_definition,
-      $container->get('entity_field.manager'),
-      $container->get('entity_type.bundle.info'),
-      $container->get('current_route_match'),
-      $container->get('entity_type.manager')
-    );
+    $instance = new static($configuration, $plugin_id, $plugin_definition);
+    $instance->playerBuilder = $container->get('local_tts.player_builder');
+    $instance->routeMatch = $container->get('current_route_match');
+    return $instance;
   }
 
   /**
@@ -142,26 +90,7 @@ final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInt
       '#description' => $this->t('Add custom CSS classes to the player wrapper (space-separated).'),
     ];
 
-    $field_options = [];
-    foreach ($this->entityTypeManager->getDefinitions() as $entity_type_id => $entity_type) {
-      if (!$entity_type->entityClassImplements(FieldableEntityInterface::class)) {
-        continue;
-      }
-      if (!$entity_type->hasViewBuilderClass()) {
-        continue;
-      }
-      $bundles = $this->entityTypeBundleInfo->getBundleInfo($entity_type_id);
-      foreach (array_keys($bundles) as $bundle) {
-        $definitions = $this->entityFieldManager->getFieldDefinitions($entity_type_id, $bundle);
-        foreach ($definitions as $field_name => $definition) {
-          $type = $definition->getType();
-          if (in_array($type, TtsPlayerBuilder::ALLOWED_FIELD_TYPES)) {
-            $field_options[$field_name] = $definition->getLabel() . ' (' . $field_name . ')';
-          }
-        }
-      }
-    }
-    ksort($field_options);
+    $field_options = $this->playerBuilder->getAllTextFieldOptions();
 
     $form['fields'] = [
       '#type' => 'checkboxes',
@@ -196,8 +125,6 @@ final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInt
    * {@inheritdoc}
    */
   public function build() {
-    // Get entity from route parameters (must be in build(), not constructor,
-    // because blocks are cached and constructor doesn't run on every request).
     $entity = NULL;
     foreach ($this->routeMatch->getParameters() as $parameter) {
       if ($parameter instanceof FieldableEntityInterface) {
