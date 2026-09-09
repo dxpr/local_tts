@@ -13,3 +13,19 @@
 [data-md-color-scheme="slate"] .md-typeset img:not(.twemoji) {
   box-shadow: 0 0.2rem 0.6rem rgb(0 0 0 / 50%);
 }
+
+/* Style embedded demo videos the same as screenshots. */
+.md-typeset video {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.2em 0;
+  border: 0.05rem solid var(--md-default-fg-color--lightest);
+  border-radius: 0.3rem;
+  box-shadow: 0 0.2rem 0.6rem rgb(0 0 0 / 12%);
+  background: var(--md-default-bg-color);
+}
+
+[data-md-color-scheme="slate"] .md-typeset video {
+  box-shadow: 0 0.2rem 0.6rem rgb(0 0 0 / 50%);
+}
