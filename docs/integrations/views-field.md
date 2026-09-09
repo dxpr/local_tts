@@ -7,7 +7,7 @@ feeds where visitors may want to listen to individual items.
 ![Views admin showing TTS Audio Cache fields](../images/views-admin.jpg)
 
 <video autoplay loop muted playsinline>
-  <source src="../videos/views-field-setup.mp4" type="video/mp4">
+  <source src="../../videos/views-field-setup.mp4" type="video/mp4">
 </video>
 
 ## Add the Views field

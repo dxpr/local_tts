@@ -8,7 +8,7 @@ formatter.
 ![TTS player field in Manage fields](../images/manage-fields.jpg)
 
 <video autoplay loop muted playsinline>
-  <source src="../videos/field-setup.mp4" type="video/mp4">
+  <source src="../../videos/field-setup.mp4" type="video/mp4">
 </video>
 
 ## Add the field

@@ -19,7 +19,7 @@ without extra configuration.
 ![Block layout showing TTS block in Content Top region](../images/block-layout.jpg)
 
 <video autoplay loop muted playsinline>
-  <source src="../videos/block-placement.mp4" type="video/mp4">
+  <source src="../../videos/block-placement.mp4" type="video/mp4">
 </video>
 
 ## Configure the block
