@@ -7,10 +7,6 @@ formatter.
 
 ![TTS player field in Manage fields](../images/manage-fields.jpg)
 
-<video autoplay loop muted playsinline>
-  <source src="../../videos/field-setup.mp4" type="video/mp4">
-</video>
-
 ## Add the field
 
 1. Go to **Structure > Content types > [Your type] > Manage fields**
@@ -40,6 +36,12 @@ per display mode:
 
 Leave Voice and Speed blank to inherit the site-wide defaults from the
 [Voices tab](../setting-up/configuration.md#voice-settings).
+
+### See it in action
+
+<video autoplay loop muted playsinline>
+  <source src="../../videos/field-setup.mp4" type="video/mp4">
+</video>
 
 ## Layout Builder
 

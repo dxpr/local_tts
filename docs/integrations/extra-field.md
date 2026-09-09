@@ -7,10 +7,6 @@ per display mode.
 
 ![Extra field in Manage Display](../images/manage-display-extra-field.jpg)
 
-<video autoplay loop muted playsinline>
-  <source src="../../videos/extra-field-setup.mp4" type="video/mp4">
-</video>
-
 ## Enable the extra field
 
 1. Go to **Structure > Content types > [Your type] > Manage display**
@@ -26,6 +22,12 @@ The extra field uses the site-wide voice and speed defaults from the
 [Voices tab](../setting-up/configuration.md#voice-settings). There
 are no per-field formatter settings; to override voice or speed per
 content type, use the [entity field](field.md) instead.
+
+### See it in action
+
+<video autoplay loop muted playsinline>
+  <source src="../../videos/extra-field-setup.mp4" type="video/mp4">
+</video>
 
 ## How it differs from the entity field
 

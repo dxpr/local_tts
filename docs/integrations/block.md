@@ -18,10 +18,6 @@ without extra configuration.
 
 ![Block layout showing TTS block in Content Top region](../images/block-layout.jpg)
 
-<video autoplay loop muted playsinline>
-  <source src="../../videos/block-placement.mp4" type="video/mp4">
-</video>
-
 ## Configure the block
 
 The block settings include:
@@ -33,6 +29,12 @@ The block settings include:
 
 Voice, speed, and volume settings come from the site-wide defaults on
 the [Voices tab](../setting-up/configuration.md#voice-settings).
+
+### See it in action
+
+<video autoplay loop muted playsinline>
+  <source src="../../videos/block-placement.mp4" type="video/mp4">
+</video>
 
 ## How it works
 

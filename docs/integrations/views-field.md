@@ -6,10 +6,6 @@ feeds where visitors may want to listen to individual items.
 
 ![Views admin showing TTS Audio Cache fields](../images/views-admin.jpg)
 
-<video autoplay loop muted playsinline>
-  <source src="../../videos/views-field-setup.mp4" type="video/mp4">
-</video>
-
 ## Add the Views field
 
 1. Edit or create a View at **Structure > Views**
@@ -18,6 +14,12 @@ feeds where visitors may want to listen to individual items.
 3. Search for **TTS Player** and add it
 4. Configure the field label and position, then click **Apply**
 5. Save the View
+
+### See it in action
+
+<video autoplay loop muted playsinline>
+  <source src="../../videos/views-field-setup.mp4" type="video/mp4">
+</video>
 
 ## How it works
 
