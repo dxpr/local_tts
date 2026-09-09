@@ -2,7 +2,6 @@
 
 namespace Drupal\local_tts\Plugin\Block;
 
-use Drupal\local_tts\TtsPlayerBuilder;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Block\BlockBase;
 use Drupal\Core\Cache\Cache;
@@ -12,20 +11,16 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
 
 /**
- * Provides an Local TTS block.
+ * Provides a Local TTS block.
  *
  * @Block(
  *   id = "local_tts_block",
- *   admin_label = @Translation("Local Text-to-Speech"),
+ *   admin_label = @Translation("Local Text-to-Speech (TTS)"),
+ *   description = @Translation("Reads the current page's main content aloud. Extracts text from the primary entity (node, taxonomy term, etc.) and generates a speech audio player. Does not read text from other blocks on the page."),
  *   category = @Translation("Media")
  * )
  */
 final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInterface {
-
-  /**
-   * The TTS player builder.
-   */
-  protected TtsPlayerBuilder $playerBuilder;
 
   /**
    * The current route match.
@@ -37,7 +32,6 @@ final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInt
    */
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
     $instance = new static($configuration, $plugin_id, $plugin_definition);
-    $instance->playerBuilder = $container->get('local_tts.player_builder');
     $instance->routeMatch = $container->get('current_route_match');
     return $instance;
   }
@@ -50,7 +44,6 @@ final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInt
       'show_voice_selector' => TRUE,
       'show_speed_control' => TRUE,
       'show_volume_control' => TRUE,
-      'fields' => [],
       'wrapper_classes' => '',
     ] + parent::defaultConfiguration();
   }
@@ -90,16 +83,6 @@ final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInt
       '#description' => $this->t('Add custom CSS classes to the player wrapper (space-separated).'),
     ];
 
-    $field_options = $this->playerBuilder->getAllTextFieldOptions();
-
-    $form['fields'] = [
-      '#type' => 'checkboxes',
-      '#title' => $this->t('Fields to include'),
-      '#description' => $this->t('Select the text fields that should be read.'),
-      '#options' => $field_options,
-      '#default_value' => $config['fields'],
-    ];
-
     return $form;
   }
 
@@ -110,7 +93,6 @@ final class LocalTtsBlock extends BlockBase implements ContainerFactoryPluginInt
     $this->configuration['show_voice_selector'] = $form_state->getValue('show_voice_selector');
     $this->configuration['show_speed_control'] = $form_state->getValue('show_speed_control');
     $this->configuration['show_volume_control'] = $form_state->getValue('show_volume_control');
-    $this->configuration['fields'] = array_filter($form_state->getValue('fields') ?? []);
     $this->configuration['wrapper_classes'] = $form_state->getValue('wrapper_classes');
   }
 
