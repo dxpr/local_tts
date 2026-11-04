@@ -32,6 +32,7 @@ function setup(preview = false) {
   w.clearTimeout = w.clearInterval = (id) => timers.delete(id);
   w.Drupal = {
     behaviors: {},
+    url: (path) => "/" + path,
     t: (s, args = {}) =>
       Object.entries(args).reduce((s, [k, v]) => s.replace(k, v), s),
     Message: class {
@@ -59,8 +60,16 @@ function setup(preview = false) {
   w.once.remove = (id, selector, ctx) =>
     [...ctx.querySelectorAll(selector)].filter((el) => seen.delete(el));
   const requests = [];
-  w.fetch = () =>
-    new Promise((resolve) =>
+  // The CSRF token request is answered here; API calls are queued for the test.
+  w.fetch = (url) => {
+    if (String(url).endsWith("session/token")) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve("test-token"),
+      });
+    }
+    return new Promise((resolve) =>
       requests.push((data) =>
         resolve({
           ok: true,
@@ -70,6 +79,7 @@ function setup(preview = false) {
         }),
       ),
     );
+  };
   let plays = 0;
   w.HTMLMediaElement.prototype.play = function () {
     plays++;
@@ -127,6 +137,7 @@ function setup(preview = false) {
 test("removed player ignores pending generation response", async () => {
   const s = setup();
   s.player.togglePlay();
+  await flush();
   s.behavior.detach(s.w.document, {}, "unload");
   s.requests[0]({ success: true, audio_url: "/audio.ogg" });
   await flush();
@@ -162,10 +173,11 @@ test("timeline shows zero and keeps ARIA position in sync", () => {
   assert.equal(s.player.scrubberInput.getAttribute("aria-valuenow"), "12");
   s.dom.window.close();
 });
-test("reattaching behavior does not duplicate players", () => {
+test("reattaching behavior does not duplicate players", async () => {
   const s = setup();
   s.behavior.attach(s.w.document);
   s.player.playButton.click();
+  await flush();
   assert.equal(s.requests.length, 1);
   s.dom.window.close();
 });
@@ -208,6 +220,7 @@ test("preview detach stops audio and invalidates pending requests", async () => 
 test("detach clears poll, focus, and resume timers", async () => {
   const s = setup();
   s.player.togglePlay();
+  await flush();
   s.requests[0]({ status: "processing", poll_url: "/poll" });
   await flush();
   s.behavior.detach(s.w.document, {}, "unload");
@@ -217,6 +230,7 @@ test("detach clears poll, focus, and resume timers", async () => {
 test("late polling response after detach never starts audio", async () => {
   const s = setup();
   s.player.togglePlay();
+  await flush();
   s.requests[0]({ status: "processing", poll_url: "/poll" });
   await flush();
   const [id, timer] = [...s.timers].find(([, timer]) => timer.delay === 3000);
@@ -251,6 +265,7 @@ test("100 simultaneous players detach without timers or late playback", async ()
   s.behavior.attach(s.w.document);
   for (const el of s.w.document.querySelectorAll(".local-tts-container"))
     el._localTtsPlayer.togglePlay();
+  await flush();
   assert.equal(s.requests.length, 100);
   for (const resolve of s.requests)
     resolve({ status: "processing", poll_url: "/poll" });
