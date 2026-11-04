@@ -5,16 +5,11 @@ echo "$COMPOSER_HOME: $COMPOSER_HOME"
 # Allow the plugin installer
 composer global config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
 
-# Install Drupal coding standards
-composer global require drupal/coder
-
-# Install PHP compatibility checker
-composer global require phpcompatibility/php-compatibility
+# Install Drupal coding standards, the PHP compatibility checker and the PHPCS plugin
+# installer in one resolve, so the packages agree on the PHP_CodeSniffer version.
+composer global require drupal/coder:^8.3 squizlabs/php_codesniffer:^3.7 phpcompatibility/php-compatibility:^9.3 dealerdirect/phpcodesniffer-composer-installer:^1.0
 
 export PATH="$PATH:$COMPOSER_HOME/vendor/bin"
-
-# Install PHPCS plugin installer
-composer global require dealerdirect/phpcodesniffer-composer-installer
 
 composer global show -P
 phpcs -i

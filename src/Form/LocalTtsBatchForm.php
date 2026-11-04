@@ -420,6 +420,8 @@ final class LocalTtsBatchForm extends FormBase {
       ];
     }
 
+    // batch_set() is void; PHPStan treats it as pure, so suppress the check.
+    // @phpstan-ignore-next-line function.resultUnused
     batch_set($batch);
   }
 

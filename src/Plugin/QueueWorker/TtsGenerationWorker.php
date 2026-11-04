@@ -2,6 +2,7 @@
 
 namespace Drupal\local_tts\Plugin\QueueWorker;
 
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Drupal\Core\Queue\Attribute\QueueWorker;
@@ -37,6 +38,13 @@ final class TtsGenerationWorker extends QueueWorkerBase implements ContainerFact
   protected LoggerChannelInterface $logger;
 
   /**
+   * The entity type manager.
+   *
+   * @var \Drupal\Core\Entity\EntityTypeManagerInterface
+   */
+  protected EntityTypeManagerInterface $entityTypeManager;
+
+  /**
    * Constructs a TtsGenerationWorker object.
    *
    * @param array $configuration
@@ -49,6 +57,8 @@ final class TtsGenerationWorker extends QueueWorkerBase implements ContainerFact
    *   The TTS service.
    * @param \Drupal\Core\Logger\LoggerChannelInterface $logger
    *   The logger channel.
+   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
+   *   The entity type manager.
    */
   public function __construct(
     array $configuration,
@@ -56,10 +66,12 @@ final class TtsGenerationWorker extends QueueWorkerBase implements ContainerFact
     $plugin_definition,
     TtsService $tts_service,
     LoggerChannelInterface $logger,
+    EntityTypeManagerInterface $entity_type_manager,
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->ttsService = $tts_service;
     $this->logger = $logger;
+    $this->entityTypeManager = $entity_type_manager;
   }
 
   /**
@@ -71,7 +83,8 @@ final class TtsGenerationWorker extends QueueWorkerBase implements ContainerFact
       $plugin_id,
       $plugin_definition,
       $container->get('local_tts.tts_service'),
-      $container->get('logger.factory')->get('local_tts')
+      $container->get('logger.factory')->get('local_tts'),
+      $container->get('entity_type.manager')
     );
   }
 
@@ -139,7 +152,7 @@ final class TtsGenerationWorker extends QueueWorkerBase implements ContainerFact
    */
   protected function extractTextForQueueItem(array $data): string {
     try {
-      $entity = \Drupal::entityTypeManager()
+      $entity = $this->entityTypeManager
         ->getStorage($data['entity_type'])
         ->load($data['entity_id']);
 

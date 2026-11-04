@@ -1,0 +1,17 @@
+{
+  "name": "local_tts",
+  "private": true,
+  "devDependencies": {
+    "eslint": "^8.57.1",
+    "jsdom": "^26.1.0",
+    "stylelint": "^16.23.1",
+    "stylelint-config-standard": "^38.0.0"
+  },
+  "scripts": {
+    "lint:js": "eslint js/",
+    "lint:js:fix": "eslint js/ --fix",
+    "lint:css": "stylelint css/",
+    "lint:css:fix": "stylelint css/ --fix",
+    "test": "node --test tests/js/*.test.cjs"
+  }
+}

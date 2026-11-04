@@ -108,7 +108,7 @@ function local_tts_cron() {
  * Smart invalidation: only delete audio if text content actually changed.
  */
 function local_tts_entity_update(EntityInterface $entity) {
-  $original = method_exists($entity, 'getOriginal') ? $entity->getOriginal() : ($entity->original ?? NULL);
+  $original = $entity->getOriginal();
   $tts_service = \Drupal::service('local_tts.tts_service');
   $translations = $entity instanceof
   TranslatableInterface ? $entity->getTranslationLanguages() : [$entity->language()->getId() => $entity->language()];

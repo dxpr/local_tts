@@ -169,8 +169,8 @@ class TtsCacheManager {
       $query->addExpression('COUNT(DISTINCT cache_key)', 'file_count');
       $result = $query->execute()->fetchObject();
       return [
-        'total_size' => (int) $result->total_size,
-        'file_count' => (int) $result->file_count,
+        'total_size' => (int) ($result ? $result->total_size : 0),
+        'file_count' => (int) ($result ? $result->file_count : 0),
       ];
     }
     catch (\Exception $e) {

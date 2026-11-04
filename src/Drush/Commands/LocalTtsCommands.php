@@ -8,6 +8,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Extension\ModuleExtensionList;
 use Drupal\Core\File\FileSystemInterface;
+use Drupal\Core\TypedData\TranslatableInterface;
 use Drush\Attributes as CLI;
 use Drush\Commands\DrushCommands;
 
@@ -494,7 +495,7 @@ final class LocalTtsCommands extends DrushCommands {
 
     // Get language from entity if available.
     $entity_language = NULL;
-    if (method_exists($entity, 'language')) {
+    if ($entity instanceof TranslatableInterface) {
       $entity_language = $entity->language()->getId();
     }
 
@@ -686,7 +687,7 @@ final class LocalTtsCommands extends DrushCommands {
 
         // Get translation.
         $langcode = $entity_data['langcode'] ?? $entity->language()->getId();
-        if ($entity->hasTranslation($langcode)) {
+        if ($entity instanceof TranslatableInterface && $entity->hasTranslation($langcode)) {
           $entity = $entity->getTranslation($langcode);
         }
 
