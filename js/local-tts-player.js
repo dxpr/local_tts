@@ -19,6 +19,18 @@
     }
   }
 
+  let csrfTokenPromise = null;
+
+  function getCsrfToken() {
+    if (!csrfTokenPromise) {
+      csrfTokenPromise = fetch(Drupal.url('session/token'), {credentials: 'same-origin'})
+        .then(function (response) {
+          return response.text();
+        });
+    }
+    return csrfTokenPromise;
+  }
+
   function formatDuration(seconds) {
     if (!isFinite(seconds) || seconds < 0) {
       return '';
@@ -519,11 +531,15 @@
       formData.append('fields', JSON.stringify(this.config.fields));
     }
 
-    fetch(this.config.generateUrl, {
-      method: 'POST',
-      body: formData,
-      credentials: 'same-origin',
-    })
+    getCsrfToken()
+      .then(function (token) {
+        return fetch(self.config.generateUrl, {
+          method: 'POST',
+          headers: {'X-CSRF-Token': token},
+          body: formData,
+          credentials: 'same-origin',
+        });
+      })
       .then(function (response) {
         const contentType = response.headers.get('content-type') || '';
         if (contentType.indexOf('application/json') === -1) {
