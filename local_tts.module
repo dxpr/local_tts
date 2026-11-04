@@ -108,7 +108,7 @@ function local_tts_cron() {
  * Smart invalidation: only delete audio if text content actually changed.
  */
 function local_tts_entity_update(EntityInterface $entity) {
-  $original = method_exists($entity, 'getOriginal') ? $entity->getOriginal() : ($entity->original ?? NULL);
+  $original = _local_tts_get_original($entity);
   $tts_service = \Drupal::service('local_tts.tts_service');
   $translations = $entity instanceof
   TranslatableInterface ? $entity->getTranslationLanguages() : [$entity->language()->getId() => $entity->language()];
@@ -127,6 +127,18 @@ function local_tts_entity_update(EntityInterface $entity) {
     $tts_service->deleteAudioForEntityTranslation($entity->getEntityTypeId(), $entity->id(), $langcode);
     _local_tts_auto_generate($translation);
   }
+}
+
+/**
+ * Returns the entity as it was before the save.
+ */
+function _local_tts_get_original(object $entity): ?EntityInterface {
+  // getOriginal() exists from Drupal 11.2; older cores only set ->original.
+  // Typed as object so PHPStan does not flag method_exists() as always true.
+  if (method_exists($entity, 'getOriginal')) {
+    return $entity->getOriginal();
+  }
+  return $entity->original ?? NULL;
 }
 
 /**

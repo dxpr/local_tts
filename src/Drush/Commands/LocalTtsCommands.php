@@ -8,6 +8,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Extension\ModuleExtensionList;
 use Drupal\Core\File\FileSystemInterface;
+use Drupal\Core\TypedData\TranslatableInterface;
 use Drush\Attributes as CLI;
 use Drush\Commands\DrushCommands;
 
@@ -492,14 +493,11 @@ final class LocalTtsCommands extends DrushCommands {
     $this->output()->writeln("Length: " . mb_strlen($text) . " characters");
     $this->output()->writeln('');
 
-    // Get language from entity if available.
-    $entity_language = NULL;
-    if (method_exists($entity, 'language')) {
-      $entity_language = $entity->language()->getId();
-    }
+    // Get language from entity.
+    $entity_language = $entity->language()->getId();
 
     $config = $this->configFactory->get('local_tts.settings');
-    $language = $options['language'] ?? $entity_language ?? 'en';
+    $language = $options['language'] ?? $entity_language;
     $voice = $options['voice'] ?? $this->ttsService->getDefaultVoice($language);
     $speed = $options['speed'] ?? $config->get('default_speed') ?? 1.0;
 
@@ -686,7 +684,7 @@ final class LocalTtsCommands extends DrushCommands {
 
         // Get translation.
         $langcode = $entity_data['langcode'] ?? $entity->language()->getId();
-        if ($entity->hasTranslation($langcode)) {
+        if ($entity instanceof TranslatableInterface && $entity->hasTranslation($langcode)) {
           $entity = $entity->getTranslation($langcode);
         }
 

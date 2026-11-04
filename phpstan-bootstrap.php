@@ -23,6 +23,6 @@ if (!function_exists('batch_set')) {
   /**
    * Stub for batch_set() during static analysis.
    */
-  function batch_set($batch_definition) {}
+  function batch_set($batch_definition): void {}
 
 }
