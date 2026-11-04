@@ -16,6 +16,12 @@ use Drupal\Core\Config\MemoryStorage;
 use Drupal\local_tts\Service\TtsCacheManager;
 use Drupal\local_tts\Service\TtsCronService;
 
+// Refuse to run unless this is a sandbox site.
+if (getenv('LOCAL_TTS_INTEGRATION_SANDBOX') !== '1') {
+  fwrite(STDERR, 'Set LOCAL_TTS_INTEGRATION_SANDBOX=1 on a sandbox site to run this check.' . PHP_EOL);
+  exit(1);
+}
+
 $failures = [];
 $check = static function ($condition, $label) use (&$failures) {
   echo ($condition ? 'PASS ' : 'FAIL ') . $label . PHP_EOL;
