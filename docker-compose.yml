@@ -25,6 +25,8 @@ services:
     working_dir: /
     command: bash -c "/src/scripts/linters/run-drupal-check.sh"
     tty: true
+    environment:
+      TARGET_DRUPAL_CORE_VERSION: ${TARGET_DRUPAL_CORE_VERSION:-11}
     volumes:
       - .:/src
 
