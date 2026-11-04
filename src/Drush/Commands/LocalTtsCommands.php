@@ -493,14 +493,11 @@ final class LocalTtsCommands extends DrushCommands {
     $this->output()->writeln("Length: " . mb_strlen($text) . " characters");
     $this->output()->writeln('');
 
-    // Get language from entity if available.
-    $entity_language = NULL;
-    if ($entity instanceof TranslatableInterface) {
-      $entity_language = $entity->language()->getId();
-    }
+    // Get language from entity.
+    $entity_language = $entity->language()->getId();
 
     $config = $this->configFactory->get('local_tts.settings');
-    $language = $options['language'] ?? $entity_language ?? 'en';
+    $language = $options['language'] ?? $entity_language;
     $voice = $options['voice'] ?? $this->ttsService->getDefaultVoice($language);
     $speed = $options['speed'] ?? $config->get('default_speed') ?? 1.0;
 
