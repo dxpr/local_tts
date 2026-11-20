@@ -5,6 +5,9 @@
  * Install, update and uninstall functions for the Local TTS module.
  */
 
+use Drupal\Core\Hook\Attribute\LegacyRequirementsHook;
+use Drupal\Core\Extension\Requirement\RequirementSeverity;
+
 use Drupal\Core\StringTranslation\ByteSizeMarkup;
 use Drupal\Core\Url;
 use Drupal\Core\File\FileSystemInterface;
@@ -91,6 +94,7 @@ function local_tts_schema() {
 /**
  * Implements hook_requirements().
  */
+#[LegacyRequirementsHook]
 function local_tts_requirements($phase) {
   $requirements = [];
 
@@ -107,7 +111,7 @@ function local_tts_requirements($phase) {
         'description' => t('The eSpeak NG data path must be set at <a href="@url">Local TTS settings</a> before audio generation will work.', [
           '@url' => Url::fromRoute('local_tts.settings')->toString(),
         ]),
-        'severity' => REQUIREMENT_ERROR,
+        'severity' => (enum_exists(RequirementSeverity::class) ? RequirementSeverity::Error : REQUIREMENT_ERROR),
       ];
     }
     elseif (!is_dir($espeak_path)) {
@@ -118,14 +122,14 @@ function local_tts_requirements($phase) {
           '@path' => $espeak_path,
           '@url' => Url::fromRoute('local_tts.settings')->toString(),
         ]),
-        'severity' => REQUIREMENT_ERROR,
+        'severity' => (enum_exists(RequirementSeverity::class) ? RequirementSeverity::Error : REQUIREMENT_ERROR),
       ];
     }
     else {
       $requirements['local_tts_espeak'] = [
         'title' => t('Local TTS: eSpeak NG'),
         'value' => t('Installed (@path)', ['@path' => $espeak_path]),
-        'severity' => REQUIREMENT_OK,
+        'severity' => (enum_exists(RequirementSeverity::class) ? RequirementSeverity::OK : REQUIREMENT_OK),
       ];
     }
 
@@ -177,7 +181,7 @@ function local_tts_requirements($phase) {
         t('Run: <code>cd @module && composer run download-files</code>', [
           '@module' => $module_path,
         ]),
-        'severity' => REQUIREMENT_ERROR,
+        'severity' => (enum_exists(RequirementSeverity::class) ? RequirementSeverity::Error : REQUIREMENT_ERROR),
       ];
     }
     else {
@@ -186,7 +190,7 @@ function local_tts_requirements($phase) {
         'value' => t('Installed (@details)', [
           '@details' => implode(', ', $details),
         ]),
-        'severity' => REQUIREMENT_OK,
+        'severity' => (enum_exists(RequirementSeverity::class) ? RequirementSeverity::OK : REQUIREMENT_OK),
       ];
     }
 
@@ -199,7 +203,7 @@ function local_tts_requirements($phase) {
         'title' => t('Local TTS: ffmpeg'),
         'value' => t('Not found'),
         'description' => t('ffmpeg is required for transcoding audio to OGG Opus. Install it with your system package manager (e.g. <code>apt install ffmpeg</code>).'),
-        'severity' => REQUIREMENT_ERROR,
+        'severity' => (enum_exists(RequirementSeverity::class) ? RequirementSeverity::Error : REQUIREMENT_ERROR),
       ];
     }
     else {
@@ -207,7 +211,7 @@ function local_tts_requirements($phase) {
       $requirements['local_tts_ffmpeg'] = [
         'title' => t('Local TTS: ffmpeg'),
         'value' => $version_line,
-        'severity' => REQUIREMENT_OK,
+        'severity' => (enum_exists(RequirementSeverity::class) ? RequirementSeverity::OK : REQUIREMENT_OK),
       ];
     }
 
@@ -270,7 +274,7 @@ function local_tts_requirements($phase) {
             '#markup' => '<p>' . t('<strong>Apache:</strong> Enable AllowOverride and mod_rewrite. <strong>Nginx:</strong> Add location blocks. See README for details.') . '</p>',
           ],
         ],
-        'severity' => REQUIREMENT_WARNING,
+        'severity' => (enum_exists(RequirementSeverity::class) ? RequirementSeverity::Warning : REQUIREMENT_WARNING),
       ];
     }
     else {
@@ -280,7 +284,7 @@ function local_tts_requirements($phase) {
         'title' => t('Local TTS file protection'),
         'value' => t('Protected'),
         'description' => $htaccess_ok,
-        'severity' => REQUIREMENT_OK,
+        'severity' => (enum_exists(RequirementSeverity::class) ? RequirementSeverity::OK : REQUIREMENT_OK),
       ];
     }
 
@@ -301,7 +305,7 @@ function local_tts_requirements($phase) {
           'title' => t('Local TTS cache directory'),
           'value' => t('Not writable'),
           'description' => t('Failed to create directory. Check web server permissions.'),
-          'severity' => REQUIREMENT_ERROR,
+          'severity' => (enum_exists(RequirementSeverity::class) ? RequirementSeverity::Error : REQUIREMENT_ERROR),
         ];
       }
     }
@@ -312,7 +316,7 @@ function local_tts_requirements($phase) {
         'description' => t('Directory exists but is not writable. Run: <code>chmod 755 @path</code>', [
           '@path' => $real_path,
         ]),
-        'severity' => REQUIREMENT_ERROR,
+        'severity' => (enum_exists(RequirementSeverity::class) ? RequirementSeverity::Error : REQUIREMENT_ERROR),
       ];
     }
     else {
@@ -349,7 +353,7 @@ function local_tts_requirements($phase) {
 
         // Warn if over 80% of limit.
         if ($percent_used > 80) {
-          $requirements['local_tts_cache_size']['severity'] = REQUIREMENT_WARNING;
+          $requirements['local_tts_cache_size']['severity'] = (enum_exists(RequirementSeverity::class) ? RequirementSeverity::Warning : REQUIREMENT_WARNING);
           $requirements['local_tts_cache_size']['description'] = t('Cache is nearly full. Consider running <code>drush local-tts:cache-clear</code>');
         }
       }
@@ -359,7 +363,7 @@ function local_tts_requirements($phase) {
         'title' => t('Local TTS cache size'),
         'value' => t('Unknown'),
         'description' => t('Cache directory not accessible.'),
-        'severity' => REQUIREMENT_WARNING,
+        'severity' => (enum_exists(RequirementSeverity::class) ? RequirementSeverity::Warning : REQUIREMENT_WARNING),
       ];
     }
 
@@ -405,7 +409,7 @@ function local_tts_requirements($phase) {
         'title' => t('Local TTS security'),
         'value' => t('Review recommended'),
         'description' => implode(' ', $security_warnings),
-        'severity' => REQUIREMENT_WARNING,
+        'severity' => (enum_exists(RequirementSeverity::class) ? RequirementSeverity::Warning : REQUIREMENT_WARNING),
       ];
     }
 
@@ -429,7 +433,7 @@ function local_tts_requirements($phase) {
               '@max' => number_format($max_server_load, 2),
               '@url' => $settings_url,
             ]),
-            'severity' => REQUIREMENT_WARNING,
+            'severity' => (enum_exists(RequirementSeverity::class) ? RequirementSeverity::Warning : REQUIREMENT_WARNING),
           ];
         }
         else {
@@ -439,7 +443,7 @@ function local_tts_requirements($phase) {
               '@current' => number_format($current_load, 2),
               '@max' => number_format($max_server_load, 2),
             ]),
-            'severity' => REQUIREMENT_OK,
+            'severity' => (enum_exists(RequirementSeverity::class) ? RequirementSeverity::OK : REQUIREMENT_OK),
           ];
         }
       }

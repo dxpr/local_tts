@@ -20,3 +20,14 @@ services:
   local_tts.batch_service:
     class: Drupal\local_tts\Service\TtsBatchService
     arguments: ['@entity_type.manager', '@local_tts.tts_service', '@config.factory', '@entity_type.bundle.info', '@logger.factory', '@entity_field.manager', '@database']
+
+  Drupal\local_tts\Hook\LocalTtsHooks:
+    class: Drupal\local_tts\Hook\LocalTtsHooks
+    autowire: true
+    arguments:
+      - '@entity_type.bundle.info'
+      - '@local_tts.cron_service'
+      - '@local_tts.tts_service'
+      - '@entity_field.manager'
+      - '@entity_type.manager'
+      - '@theme.manager'
