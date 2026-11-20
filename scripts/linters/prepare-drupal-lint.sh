@@ -1,15 +1,14 @@
 #!/bin/bash
 
-echo "$COMPOSER_HOME: $COMPOSER_HOME"
+set -e
+
+echo "COMPOSER_HOME: $COMPOSER_HOME"
 
 # Allow the plugin installer
 composer global config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
 
-# Install Drupal coding standards
-composer global require drupal/coder
-
-# Install PHP compatibility checker
-composer global require phpcompatibility/php-compatibility
+# Resolve standards together against the supported PHPCS branch.
+composer global require drupal/coder 'phpcompatibility/php-compatibility:^9.3' 'squizlabs/php_codesniffer:^3.13' --with-all-dependencies
 
 export PATH="$PATH:$COMPOSER_HOME/vendor/bin"
 
