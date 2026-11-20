@@ -7,9 +7,7 @@
 
 use Drupal\Core\Hook\Attribute\LegacyHook;
 use Drupal\local_tts\Hook\LocalTtsHooks;
-use Drupal\Core\TypedData\TranslatableInterface;
 use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
-use Drupal\Core\Entity\EntityFormInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Form\FormStateInterface;
@@ -170,4 +168,16 @@ function local_tts_form_node_form_alter(&$form, FormStateInterface $form_state, 
 #[LegacyHook]
 function local_tts_page_attachments_alter(array &$attachments) {
   \Drupal::service(LocalTtsHooks::class)->pageAttachmentsAlter($attachments);
+}
+
+/**
+ * Implements hook_runtime_requirements().
+ */
+function local_tts_runtime_requirements(): array {
+  // Drupal 11.2 still invokes the legacy requirements hook.
+  if (version_compare(\Drupal::VERSION, '11.3.0', '<')) {
+    return [];
+  }
+  \Drupal::moduleHandler()->loadInclude('local_tts', 'install');
+  return local_tts_requirements('runtime');
 }

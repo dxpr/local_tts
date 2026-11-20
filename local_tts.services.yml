@@ -24,3 +24,10 @@ services:
   Drupal\local_tts\Hook\LocalTtsHooks:
     class: Drupal\local_tts\Hook\LocalTtsHooks
     autowire: true
+    arguments:
+      - '@entity_type.bundle.info'
+      - '@local_tts.cron_service'
+      - '@local_tts.tts_service'
+      - '@entity_field.manager'
+      - '@entity_type.manager'
+      - '@theme.manager'

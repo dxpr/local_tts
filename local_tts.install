@@ -5,6 +5,7 @@
  * Install, update and uninstall functions for the Local TTS module.
  */
 
+use Drupal\Core\Hook\Attribute\LegacyRequirementsHook;
 use Drupal\Core\Extension\Requirement\RequirementSeverity;
 
 use Drupal\Core\StringTranslation\ByteSizeMarkup;
@@ -93,6 +94,7 @@ function local_tts_schema() {
 /**
  * Implements hook_requirements().
  */
+#[LegacyRequirementsHook]
 function local_tts_requirements($phase) {
   $requirements = [];
 

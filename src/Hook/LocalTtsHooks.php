@@ -2,6 +2,13 @@
 
 namespace Drupal\local_tts\Hook;
 
+use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
+use Drupal\local_tts\Service\TtsCronService;
+use Drupal\local_tts\TtsService;
+use Drupal\Core\Entity\EntityFieldManagerInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Theme\ThemeManagerInterface;
+
 use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\Core\TypedData\TranslatableInterface;
 use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
@@ -11,12 +18,23 @@ use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Session\AnonymousUserSession;
-use Drupal\local_tts\TtsPlayerBuilder;
 
 /**
  * Hook implementations for local_tts.
  */
 final class LocalTtsHooks {
+
+  /**
+   * Constructs the hook service.
+   */
+  public function __construct(
+    protected EntityTypeBundleInfoInterface $bundleInfo,
+    protected TtsCronService $localTtsCronService,
+    protected TtsService $localTtsTtsService,
+    protected EntityFieldManagerInterface $entityFieldManager,
+    protected EntityTypeManagerInterface $entityTypeManager,
+    protected ThemeManagerInterface $themeManager,
+  ) {}
 
   /**
    * Implements hook_help().
@@ -45,8 +63,8 @@ final class LocalTtsHooks {
   public function entityExtraFieldInfo() {
     $extra = [];
 
-    $entity_types = \Drupal::entityTypeManager()->getDefinitions();
-    $bundle_info = \Drupal::service('entity_type.bundle.info');
+    $entity_types = $this->entityTypeManager->getDefinitions();
+    $bundle_info = $this->bundleInfo;
 
     foreach ($entity_types as $entity_type_id => $entity_type) {
       if (!$entity_type->entityClassImplements(FieldableEntityInterface::class)) {
@@ -106,7 +124,7 @@ final class LocalTtsHooks {
    */
   #[Hook('cron')]
   public function cron() {
-    \Drupal::service('local_tts.cron_service')->run();
+    $this->localTtsCronService->run();
   }
 
   /**
@@ -115,7 +133,7 @@ final class LocalTtsHooks {
   #[Hook('entity_update')]
   public function entityUpdate(EntityInterface $entity) {
     $original = method_exists($entity, 'getOriginal') ? $entity->getOriginal() : ($entity->original ?? NULL);
-    $tts_service = \Drupal::service('local_tts.tts_service');
+    $tts_service = $this->localTtsTtsService;
     $translations = $entity instanceof
     TranslatableInterface ? $entity->getTranslationLanguages() : [$entity->language()->getId() => $entity->language()];
     foreach ($translations as $langcode => $language) {
@@ -140,7 +158,7 @@ final class LocalTtsHooks {
    */
   #[Hook('entity_translation_delete')]
   public function entityTranslationDelete(EntityInterface $translation) {
-    \Drupal::service('local_tts.tts_service')->deleteAudioForEntityTranslation(
+    $this->localTtsTtsService->deleteAudioForEntityTranslation(
       $translation->getEntityTypeId(), $translation->id(), $translation->language()->getId()
     );
   }
@@ -158,7 +176,7 @@ final class LocalTtsHooks {
    */
   #[Hook('entity_delete')]
   public function entityDelete(EntityInterface $entity) {
-    \Drupal::service('local_tts.tts_service')->deleteAudioForEntity(
+    $this->localTtsTtsService->deleteAudioForEntity(
       $entity->getEntityTypeId(),
       $entity->id()
     );
@@ -184,7 +202,7 @@ final class LocalTtsHooks {
           if (!($form_object instanceof EntityFormInterface)) {
             continue;
           }
-          $field_definitions = \Drupal::service('entity_field.manager')
+          $field_definitions = $this->entityFieldManager
             ->getFieldDefinitions('node', $form_object->getEntity()->bundle());
 
           if (isset($field_definitions[$field_name]) && $field_definitions[$field_name]->getType() === 'local_tts_player') {
@@ -221,8 +239,8 @@ final class LocalTtsHooks {
    */
   #[Hook('page_attachments_alter')]
   public function pageAttachmentsAlter(array &$attachments) {
-    $theme = \Drupal::theme()->getActiveTheme()->getName();
-    $base_themes = array_keys(\Drupal::theme()->getActiveTheme()->getBaseThemeExtensions());
+    $theme = $this->themeManager->getActiveTheme()->getName();
+    $base_themes = array_keys($this->themeManager->getActiveTheme()->getBaseThemeExtensions());
 
     if ($theme === 'gin' || in_array('gin', $base_themes, TRUE)
         || $theme === 'claro' || in_array('claro', $base_themes, TRUE)) {
